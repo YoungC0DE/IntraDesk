@@ -126,10 +126,10 @@ Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
   portátil** (`%LOCALAPPDATA%\rustdesk`). Nunca encerre processos `rustdesk.exe`
   nem altere `%APPDATA%\RustDesk` ou `%LOCALAPPDATA%\rustdesk`: isso derruba o
   acesso do usuário.
-- Até T2.7 estar concluída, **não execute o build do IntraDesk nesta máquina**:
-  ele ainda usa o mesmo nome, pasta de extração, configuração, pipe IPC e
-  portas do RustDesk e entraria em conflito com a sessão remota. Teste em
-  outros PCs.
+- Desde T2.7 o IntraDesk usa nome, pastas, pipes e executável próprios e pode
+  rodar ao lado do RustDesk (validado). Ainda assim, só abra o IntraDesk nesta
+  máquina com o usuário avisado e, ao fechar, encerre apenas processos
+  `IntraDesk.exe`. As portas 21118/21119 são as mesmas do RustDesk.
 
 ### Segurança (inegociável)
 - Toda conexão exige senha. Não crie modo "sem senha".

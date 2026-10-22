@@ -113,7 +113,7 @@ try {
     Invoke-Native 'python' (@('build.py') + $BuildArgs)
     $releaseDir = 'flutter\build\windows\x64\runner\Release'
     if ($NoPack) {
-        Write-Host "Pronto: $RepoRoot\$releaseDir\rustdesk.exe" -ForegroundColor Green
+        Write-Host "Pronto: $RepoRoot\$releaseDir\IntraDesk.exe" -ForegroundColor Green
         return
     }
 
@@ -132,7 +132,7 @@ try {
         try {
             Invoke-Native 'python' @('-m', 'pip', 'install', '-q', '-r', 'requirements.txt')
             Invoke-Native 'python' @('.\generate.py', '-f', "..\..\$releaseDir\", '-o', '.',
-                '-e', "..\..\$releaseDir\rustdesk.exe")
+                '-e', "..\..\$releaseDir\IntraDesk.exe")
         } finally {
             Pop-Location
         }

@@ -122,7 +122,7 @@ jobs:
           if [ -n "$runner_res" ]; then cp "$runner_res" ./libs/portable/Runner.res; fi
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../intradesk/ -o . -e ../../intradesk/rustdesk.exe
+          python3 ./generate.py -f ../../intradesk/ -o . -e ../../intradesk/IntraDesk.exe
           popd
           mkdir -p ./dist
           mv ./target/release/rustdesk-portable-packer.exe ./dist/IntraDesk-${GITHUB_SHA::7}.exe

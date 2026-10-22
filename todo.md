@@ -39,7 +39,7 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
 - [ ] **D6** Senha: só temporária (muda a cada execução) ou permitir senha fixa nas configurações? *(sugestão: as duas, como no AnyDesk)*
 - [ ] **D7** Elevação: pedir privilégio de administrador ao abrir? Sem admin, a sessão não controla janelas elevadas (UAC) nem a tela de login. *(sugestão: botão "Executar como administrador" opcional, não forçado)*
 - [ ] **D8** Idiomas da UI: só pt-BR, ou pt-BR + inglês? *(sugestão: pt-BR + en; remover os demais arquivos de `src/lang`)*
-- [ ] **D9** Onde salvar a configuração: `%APPDATA%\IntraDesk` (padrão) ou ao lado do .exe (100% portátil, ex.: pendrive)?
+- [x] **D9** Onde salvar a configuração → **`%APPDATA%\IntraDesk`** (decidido em 22/10/2026).
 
 ---
 
@@ -55,6 +55,7 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   - `cargo test --lib`: 217 ok, **1 falha pré-existente**: `platform::windows::installer_handoff::directory::tests::protected_directory_enforces_creator_permissions` (`fs::remove_dir` → "Acesso negado" ao apagar o diretório protegido em `%TEMP%`; depende das permissões da máquina, sem admin). Código do instalador, que sai em T1.10.
   - `cargo test -p clipboard`: 2 ok.
   - `flutter test`: 127 ok, 1 pulado.
+  - `cargo test -p hbb_common` (rodado na T2.7): 104 unitários ok; **1 falha pré-existente** no teste de integração `proxy_transport::https_reconnects_for_tls_fallback` (falha igual sem nenhuma mudança nossa).
   dep: T0.3 · Área: este arquivo · @dono: claude
 - [ ] **T0.5** Teste manual de base: dois PCs Windows na mesma LAN, sem internet, usando o acesso direto por IP do RustDesk original (habilitar "Permitir acesso direto por IP"). Registrar o que funciona e o que falha.
   dep: T0.3 · Área: este arquivo · @dono:
@@ -108,9 +109,11 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   dep: T2.4, T0.6 · Área: `src/lan.rs`, `libs/hbb_common/protos` · @dono:
 - [ ] **T2.6** Remover o indicador "Pronto / Conectando à rede" da tela inicial (depende do rendezvous) e trocar por "Visível na rede: IP x.x.x.x".
   dep: T2.1 · Área: `desktop_home_page.dart` · @dono:
-- [ ] **T2.7** Renomear o app no núcleo: `APP_NAME` = IntraDesk, pasta de config conforme D9, nome do pipe IPC e do mutex de instância única, nome do `rustdesk.exe` e a pasta de extração do portátil (`libs/portable`, hoje `%LOCALAPPDATA%\rustdesk`). Objetivo: o IntraDesk roda ao lado de um RustDesk aberto sem conflito. **Prioridade alta**: o notebook de desenvolvimento é acessado por RustDesk portátil e não pode rodar o build antes disso.
-  Aceite: com o RustDesk portátil aberto, abrir e fechar o `IntraDesk.exe` não afeta o RustDesk (sessão, ID, senha, config).
-  dep: T0.4, T0.6, D9 · Área: `libs/hbb_common/src/config.rs`, `src/ipc.rs`, `libs/portable`, `flutter/windows/runner`, `build.py` · @dono:
+- [x] **T2.7** App renomeado no núcleo: `APP_NAME` = `IntraDesk` (config em `%APPDATA%\IntraDesk`, logs, pipe `\.\pipe\IntraDesk\query`, memória compartilhada e alvo dos `kill` passam a usar esse nome), executável `IntraDesk.exe` (extração do portátil em `%LOCALAPPDATA%\intradesk`) e `RuntimeBroker_intradesk.exe`. Efeitos de "cliente customizado" (nome ≠ RustDesk): sem checagem de atualização do RustDesk, textos da UI trocam RustDesk → IntraDesk, aparece "Powered by RustDesk".
+  Aceite validado em 22/10/2026 no notebook de dev com o RustDesk portátil aberto e em uso: abrir e fechar o IntraDesk não alterou processos, config (hash dos 4 arquivos), pasta nem pipes do RustDesk; a sessão remota seguiu funcionando.
+  Limite conhecido: portas 21118/21119 continuam iguais às do RustDesk; se os dois escutarem ao mesmo tempo, só um consegue (o RustDesk do notebook hoje não escuta nelas).
+  Build local: depois de renomear o executável, apague `flutter\build\windows` (o cache do CMake guarda o alvo antigo).
+  dep: T0.4, T0.6, D9 · Área: `libs/hbb_common/src/config.rs`, `libs/portable`, `flutter/windows/CMakeLists.txt`, `build.py`, `scripts/build.ps1`, CI · @dono: claude
 - [ ] **T2.8** Firewall: detectar se as portas estão bloqueadas e mostrar aviso com botão "Liberar no firewall" (pede elevação e cria a regra com `netsh` só para redes privadas).
   dep: T2.2 · Área: `src/platform/windows.rs` (função nova), tela inicial · @dono:
 

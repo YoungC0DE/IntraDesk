@@ -1,13 +1,11 @@
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{clipboard_listener, update_clipboard, ClipboardSide};
 #[cfg(not(any(target_os = "ios")))]
-use crate::{audio_service, clipboard::CLIPBOARD_INTERVAL, ConnInner, CLIENT_SERVER};
+use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::{
     client::{
-        self, new_voice_call_request, Client, Data, Interface, MediaData, MediaSender,
-        QualityStatus, MILLI1, SEC30,
+        self, Client, Data, Interface, MediaData, MediaSender, QualityStatus, MILLI1, SEC30,
     },
-    common::get_default_sound_input,
     ui_session_interface::{InvokeUiSession, Session},
 };
 
@@ -41,12 +39,10 @@ use base::{
 ))]
 use clipboard::ContextSend;
 use crossbeam_queue::ArrayQueue;
-#[cfg(not(target_os = "ios"))]
-use hbb_common::tokio::sync::mpsc::error::TryRecvError;
 use hbb_common::{
     allow_err,
     config::{self, LocalConfig, PeerConfig, TransferSerde},
-    get_time, log,
+    log,
     protobuf::Message as _,
     rendezvous_proto::ConnType,
     timeout,
@@ -63,7 +59,6 @@ use scrap::CodecFormat;
 use std::{
     collections::{HashMap, HashSet},
     ffi::c_void,
-    num::NonZeroI64,
     path::PathBuf,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -76,9 +71,6 @@ pub struct Remote<T: InvokeUiSession> {
     audio_sender: MediaSender,
     receiver: mpsc::UnboundedReceiver<Data>,
     sender: mpsc::UnboundedSender<Data>,
-    // Stop sending local audio to remote client.
-    stop_voice_call_sender: Option<std::sync::mpsc::Sender<()>>,
-    voice_call_request_timestamp: Option<NonZeroI64>,
     read_jobs: Vec<fs::TransferJob>,
     write_jobs: Vec<fs::TransferJob>,
     remove_jobs: HashMap<i32, RemoveJob>,
@@ -144,8 +136,6 @@ impl<T: InvokeUiSession> Remote<T> {
             client_conn_id: 0,
             data_count: Arc::new(AtomicUsize::new(0)),
             video_format: CodecFormat::Unknown,
-            stop_voice_call_sender: None,
-            voice_call_request_timestamp: None,
             elevation_requested: false,
             peer_info: Default::default(),
             video_threads: Default::default(),
@@ -399,10 +389,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 log::debug!("Exit io_loop of id={}", self.handler.get_id());
-                // Stop client audio server.
-                if let Some(s) = self.stop_voice_call_sender.take() {
-                    s.send(()).ok();
-                }
                 if kcp.is_some() {
                     // Attempted rather than skipped even here: if the loss was one-way the peer
                     // does get it, and drops its side instead of waiting out its own timeout.
@@ -533,96 +519,6 @@ impl<T: InvokeUiSession> Remote<T> {
             self.handler.job_error(id, err, file_num);
         } else {
             self.handler.job_done(id, file_num);
-        }
-    }
-
-    fn stop_voice_call(&mut self) {
-        let voice_call_sender = std::mem::replace(&mut self.stop_voice_call_sender, None);
-        if let Some(stopper) = voice_call_sender {
-            let _ = stopper.send(());
-        }
-    }
-
-    // Start a voice call recorder, records audio and send to remote
-    fn start_voice_call(&mut self) -> Option<std::sync::mpsc::Sender<()>> {
-        if self.handler.is_file_transfer()
-            || self.handler.is_port_forward()
-            || self.handler.is_terminal()
-        {
-            return None;
-        }
-        // iOS does not have this server.
-        #[cfg(not(any(target_os = "ios")))]
-        {
-            // NOTE:
-            // The client server and --server both use the same sound input device.
-            // It's better to distinguish the server side and client side.
-            // But it' not necessary for now, because it's not a common case.
-            // And it is immediately known when the input device is changed.
-            crate::audio_service::set_voice_call_input_device(get_default_sound_input(), false);
-            // Create a channel to receive error or closed message
-            let (tx, rx) = std::sync::mpsc::channel();
-            let (tx_audio_data, mut rx_audio_data) =
-                hbb_common::tokio::sync::mpsc::unbounded_channel();
-            // Create a stand-alone inner, add subscribe to audio service
-            let conn_id = CLIENT_SERVER.write().unwrap().get_new_id();
-            let client_conn_inner = ConnInner::new(conn_id.clone(), Some(tx_audio_data), None);
-            // now we subscribe
-            CLIENT_SERVER.write().unwrap().subscribe(
-                audio_service::NAME,
-                client_conn_inner.clone(),
-                true,
-            );
-            let tx_audio = self.sender.clone();
-            std::thread::spawn(move || {
-                loop {
-                    // check if client is closed
-                    match rx.try_recv() {
-                        Ok(_) | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                            log::debug!("Exit voice call audio service of client");
-                            // unsubscribe
-                            CLIENT_SERVER.write().unwrap().subscribe(
-                                audio_service::NAME,
-                                client_conn_inner,
-                                false,
-                            );
-                            crate::audio_service::set_voice_call_input_device(None, true);
-                            break;
-                        }
-                        _ => {}
-                    }
-                    match rx_audio_data.try_recv() {
-                        Ok((_instant, msg)) => match &msg.union {
-                            Some(message::Union::AudioFrame(frame)) => {
-                                let mut msg = Message::new();
-                                msg.set_audio_frame(frame.clone());
-                                tx_audio.send(Data::Message(msg)).ok();
-                            }
-                            Some(message::Union::Misc(misc)) => {
-                                let mut msg = Message::new();
-                                msg.set_misc(misc.clone());
-                                tx_audio.send(Data::Message(msg)).ok();
-                            }
-                            _ => {}
-                        },
-                        Err(err) => {
-                            if err == TryRecvError::Empty {
-                                // ignore
-                            } else {
-                                log::debug!("Failed to record local audio channel: {}", err);
-                            }
-                            // Both arms fall through with nothing else in this loop blocking, so
-                            // without a pause the thread spun a core for the whole voice call.
-                            std::thread::sleep(std::time::Duration::from_millis(1));
-                        }
-                    }
-                }
-            });
-            return Some(tx);
-        }
-        #[cfg(target_os = "ios")]
-        {
-            None
         }
     }
 
@@ -1178,23 +1074,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 msg.set_misc(misc);
                 allow_err!(peer.send(&msg).await);
                 self.elevation_requested = true;
-            }
-            Data::NewVoiceCall => {
-                let msg = new_voice_call_request(true);
-                // Save the voice call request timestamp for the further validation.
-                self.voice_call_request_timestamp = Some(
-                    NonZeroI64::new(msg.voice_call_request().req_timestamp)
-                        .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
-                );
-                allow_err!(peer.send(&msg).await);
-                self.handler.on_voice_call_waiting();
-            }
-            Data::CloseVoiceCall => {
-                self.stop_voice_call();
-                let msg = new_voice_call_request(false);
-                self.handler
-                    .on_voice_call_closed("Closed manually by the peer");
-                allow_err!(peer.send(&msg).await);
             }
             Data::ResetDecoder(display) => match display {
                 Some(display) => {
@@ -2035,9 +1914,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     Some(misc::Union::AudioFormat(f)) => {
                         self.audio_sender.send(MediaData::AudioFormat(f)).ok();
                     }
-                    Some(misc::Union::ChatMessage(c)) => {
-                        self.handler.new_message(c.text);
-                    }
                     Some(misc::Union::PermissionInfo(p)) => {
                         log::info!("Change permission {:?} -> {}", p.permission, p.enabled);
                         // https://github.com/rustdesk/rustdesk/issues/3703#issuecomment-1474734754
@@ -2263,34 +2139,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                     self.handler
                         .msgbox(&msgbox.msgtype, &msgbox.title, &msgbox.text, &link);
-                }
-                Some(message::Union::VoiceCallRequest(request)) => {
-                    if request.is_connect {
-                        // TODO: maybe we will do a voice call from the peer in the future.
-                    } else {
-                        log::debug!("The remote has requested to close the voice call");
-                        if let Some(sender) = self.stop_voice_call_sender.take() {
-                            allow_err!(sender.send(()));
-                            self.handler.on_voice_call_closed("");
-                        }
-                    }
-                }
-                Some(message::Union::VoiceCallResponse(response)) => {
-                    let ts = std::mem::replace(&mut self.voice_call_request_timestamp, None);
-                    if let Some(ts) = ts {
-                        if response.req_timestamp != ts.get() {
-                            log::debug!("Possible encountering a voice call attack.");
-                        } else {
-                            if response.accepted {
-                                // The peer accepted the voice call.
-                                self.handler.on_voice_call_started();
-                                self.stop_voice_call_sender = self.start_voice_call();
-                            } else {
-                                // The peer refused the voice call.
-                                self.handler.on_voice_call_closed("");
-                            }
-                        }
-                    }
                 }
                 Some(message::Union::PeerInfo(pi)) => {
                     self.handler.set_displays(&pi.displays);

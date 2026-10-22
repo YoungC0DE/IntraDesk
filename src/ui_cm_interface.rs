@@ -146,8 +146,6 @@ pub struct Client {
     pub block_input: bool,
     pub privacy_mode: bool,
     pub from_switch: bool,
-    pub in_voice_call: bool,
-    pub incoming_voice_call: bool,
     #[serde(skip)]
     #[cfg(not(any(target_os = "ios")))]
     tx: UnboundedSender<Data>,
@@ -186,15 +184,11 @@ pub trait InvokeUiCM: Send + Clone + 'static + Sized {
 
     fn remove_connection(&self, id: i32, close: bool);
 
-    fn new_message(&self, id: i32, text: String);
-
     fn change_theme(&self, dark: String);
 
     fn change_language(&self);
 
     fn show_elevation(&self, show: bool);
-
-    fn update_voice_call_state(&self, client: &Client);
 
     fn file_transfer_log(&self, action: &str, log: &str);
 }
@@ -256,8 +250,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             from_switch,
             #[cfg(not(any(target_os = "ios")))]
             tx,
-            in_voice_call: false,
-            incoming_voice_call: false,
         };
         CLIENTS
             .write()
@@ -317,33 +309,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
     fn show_elevation(&self, show: bool) {
         self.ui_handler.show_elevation(show);
     }
-
-    #[cfg(not(target_os = "ios"))]
-    fn voice_call_started(&self, id: i32) {
-        if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
-            client.incoming_voice_call = false;
-            client.in_voice_call = true;
-            self.ui_handler.update_voice_call_state(client);
-        }
-    }
-
-    #[cfg(not(target_os = "ios"))]
-    fn voice_call_incoming(&self, id: i32) {
-        if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
-            client.incoming_voice_call = true;
-            client.in_voice_call = false;
-            self.ui_handler.update_voice_call_state(client);
-        }
-    }
-
-    #[cfg(not(target_os = "ios"))]
-    fn voice_call_closed(&self, id: i32, _reason: &str) {
-        if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
-            client.incoming_voice_call = false;
-            client.in_voice_call = false;
-            self.ui_handler.update_voice_call_state(client);
-        }
-    }
 }
 
 #[inline]
@@ -388,16 +353,6 @@ pub fn close_window(id: i32) {
 #[inline]
 pub fn remove(id: i32) {
     CLIENTS.write().unwrap().remove(&id);
-}
-
-// server mode send chat to peer
-#[inline]
-#[cfg(not(any(target_os = "ios")))]
-pub fn send_chat(id: i32, text: String) {
-    let clients = CLIENTS.read().unwrap();
-    if let Some(client) = clients.get(&id) {
-        allow_err!(client.tx.send(Data::ChatMessage { text }));
-    }
 }
 
 #[inline]
@@ -578,9 +533,6 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                 Data::ClickTime(ms) => {
                                     CLICK_TIME.store(ms, Ordering::SeqCst);
                                 }
-                                Data::ChatMessage { text } => {
-                                    self.cm.new_message(self.conn_id, text);
-                                }
                                 Data::SwitchPermission { name, enabled } => {
                                     // Keep this branch scoped to privacy mode rollback.
                                     // Other CM permission toggles are updated optimistically by the UI itself.
@@ -660,15 +612,6 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                 }
                                 Data::DataPortableService(ipc::DataPortableService::CmShowElevation(show)) => {
                                     self.cm.show_elevation(show);
-                                }
-                                Data::StartVoiceCall => {
-                                    self.cm.voice_call_started(self.conn_id);
-                                }
-                                Data::VoiceCallIncoming => {
-                                    self.cm.voice_call_incoming(self.conn_id);
-                                }
-                                Data::CloseVoiceCall(reason) => {
-                                    self.cm.voice_call_closed(self.conn_id, reason.as_str());
                                 }
                                 #[cfg(target_os = "windows")]
                                 Data::ClipboardNonFile(_) => {
@@ -928,9 +871,6 @@ pub async fn start_listen<T: InvokeUiCM>(
                     tx.clone(),
                 );
             }
-            Some(Data::ChatMessage { text }) => {
-                cm.new_message(current_id, text);
-            }
             Some(Data::FS(fs)) => {
                 // Android doesn't need CM-side file reading (no need_validate_file_read_access)
                 let mut read_jobs_placeholder: Vec<fs::TransferJob> = Vec::new();
@@ -946,15 +886,6 @@ pub async fn start_listen<T: InvokeUiCM>(
             }
             Some(Data::Close) => {
                 break;
-            }
-            Some(Data::StartVoiceCall) => {
-                cm.voice_call_started(current_id);
-            }
-            Some(Data::VoiceCallIncoming) => {
-                cm.voice_call_incoming(current_id);
-            }
-            Some(Data::CloseVoiceCall(reason)) => {
-                cm.voice_call_closed(current_id, reason.as_str());
             }
             None => {
                 break;
@@ -1726,26 +1657,6 @@ pub fn elevate_portable(_id: i32) {
             )));
         }
     }
-}
-
-#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
-#[inline]
-pub fn handle_incoming_voice_call(id: i32, accept: bool) {
-    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
-        // Not handled in iOS yet.
-        #[cfg(not(any(target_os = "ios")))]
-        allow_err!(client.tx.send(Data::VoiceCallResponse(accept)));
-    };
-}
-
-#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
-#[inline]
-pub fn close_voice_call(id: i32) {
-    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
-        // Not handled in iOS yet.
-        #[cfg(not(any(target_os = "ios")))]
-        allow_err!(client.tx.send(Data::CloseVoiceCall("".to_owned())));
-    };
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

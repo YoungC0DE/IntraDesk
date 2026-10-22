@@ -6,9 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/common/widgets/toolbar.dart';
 import 'package:flutter_hbb/consts.dart';
-import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_keyboard_visibility/flutter_keyboard_visibility.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +16,6 @@ import '../../common/widgets/dialog.dart';
 import '../../common/widgets/remote_input.dart';
 import '../../models/input_model.dart';
 import '../../models/model.dart';
-import '../../models/platform_model.dart';
 import '../../utils/image.dart';
 
 final initText = '1' * 1024;
@@ -79,7 +76,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
 
   _ViewCameraPageState(String id) {
     initSharedStates(id);
-    gFFI.chatModel.voiceCallStatus.value = VoiceCallStatus.notStarted;
     gFFI.dialogManager.loadMobileActionsOverlayVisible();
   }
 
@@ -103,8 +99,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     _physicalFocusNode.requestFocus();
     gFFI.inputModel.listenToMouse(true);
     gFFI.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    gFFI.chatModel
-        .changeCurrentKey(MessageKey(widget.id, ChatModel.clientModeID));
     _blockableOverlayState.applyFfi(gFFI);
     gFFI.imageModel.addCallbackOnFirstImage((String peerId) {
       _disableAndroidSoftKeyboard(
@@ -133,10 +127,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         overlays: SystemUiOverlay.values);
     WakelockManager.disable(_uniqueKey);
     removeSharedStates(widget.id);
-    // `on_voice_call_closed` should be called when the connection is ended.
-    // The inner logic of `on_voice_call_closed` will check if the voice call is active.
-    // Only one client is considered here for now.
-    gFFI.chatModel.onVoiceCallClosed("End connection");
   }
 
   @override
@@ -312,25 +302,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
                       },
                     )
                   ] +
-                  (isWeb
-                      ? []
-                      : <Widget>[
-                          futureBuilder(
-                              future: gFFI.invokeMethod(
-                                  "get_value", "KEY_IS_SUPPORT_VOICE_CALL"),
-                              hasData: (isSupportVoiceCall) => IconButton(
-                                    color: Colors.white,
-                                    icon: isAndroid && isSupportVoiceCall
-                                        ? SvgPicture.asset('assets/chat.svg',
-                                            colorFilter: ColorFilter.mode(
-                                                Colors.white, BlendMode.srcIn))
-                                        : Icon(Icons.message),
-                                    onPressed: () =>
-                                        isAndroid && isSupportVoiceCall
-                                            ? showChatOptions(widget.id)
-                                            : onPressedTextChat(widget.id),
-                                  ))
-                        ]) +
                   [
                     IconButton(
                       color: Colors.white,
@@ -480,78 +451,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
         }
       }
     }();
-  }
-
-  onPressedTextChat(String id) {
-    gFFI.chatModel.changeCurrentKey(MessageKey(id, ChatModel.clientModeID));
-    gFFI.chatModel.toggleChatOverlay();
-  }
-
-  showChatOptions(String id) async {
-    onPressVoiceCall() => bind.sessionRequestVoiceCall(sessionId: sessionId);
-    onPressEndVoiceCall() => bind.sessionCloseVoiceCall(sessionId: sessionId);
-
-    makeTextMenu(String label, Widget icon, VoidCallback onPressed,
-            {TextStyle? labelStyle}) =>
-        TTextMenu(
-          child: Text(translate(label), style: labelStyle),
-          trailingIcon: Transform.scale(
-            scale: (isDesktop || isWebDesktop) ? 0.8 : 1,
-            child: IgnorePointer(
-              child: IconButton(
-                onPressed: null,
-                icon: icon,
-              ),
-            ),
-          ),
-          onPressed: onPressed,
-        );
-
-    final isInVoice = [
-      VoiceCallStatus.waitingForResponse,
-      VoiceCallStatus.connected
-    ].contains(gFFI.chatModel.voiceCallStatus.value);
-    final menus = [
-      makeTextMenu('Text chat', Icon(Icons.message, color: MyTheme.accent),
-          () => onPressedTextChat(widget.id)),
-      isInVoice
-          ? makeTextMenu(
-              'End voice call',
-              SvgPicture.asset(
-                'assets/call_wait.svg',
-                colorFilter:
-                    ColorFilter.mode(Colors.redAccent, BlendMode.srcIn),
-              ),
-              onPressEndVoiceCall,
-              labelStyle: TextStyle(color: Colors.redAccent))
-          : makeTextMenu(
-              'Voice call',
-              SvgPicture.asset(
-                'assets/call_wait.svg',
-                colorFilter: ColorFilter.mode(MyTheme.accent, BlendMode.srcIn),
-              ),
-              onPressVoiceCall),
-    ];
-
-    final menuItems = menus
-        .asMap()
-        .entries
-        .map((e) => PopupMenuItem<int>(child: e.value.getChild(), value: e.key))
-        .toList();
-    Future.delayed(Duration.zero, () async {
-      final size = MediaQuery.of(context).size;
-      final x = 120.0;
-      final y = size.height;
-      var index = await showMenu(
-        context: context,
-        position: RelativeRect.fromLTRB(x, y, x, y),
-        items: menuItems,
-        elevation: 8,
-      );
-      if (index != null && index < menus.length) {
-        menus[index].onPressed?.call();
-      }
-    });
   }
 }
 

@@ -721,17 +721,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(msg_out));
     }
 
-    pub fn send_chat(&self, text: String) {
-        let mut misc = Misc::new();
-        misc.set_chat_message(ChatMessage {
-            text,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_misc(misc);
-        self.send(Data::Message(msg_out));
-    }
-
     // Terminal methods
     pub fn open_terminal(&self, terminal_id: i32, rows: u32, cols: u32) {
         let mut action = TerminalAction::new();
@@ -1512,18 +1501,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(msg));
     }
 
-    #[inline]
-    pub fn request_voice_call(&self) {
-        #[cfg(target_os = "linux")]
-        std::thread::spawn(crate::ipc::start_pa);
-        self.send(Data::NewVoiceCall);
-    }
-
-    #[inline]
-    pub fn close_voice_call(&self) {
-        self.send(Data::CloseVoiceCall);
-    }
-
     pub fn send_selected_session_id(&self, sid: String) {
         if let Ok(sid) = sid.parse::<u32>() {
             self.lc.write().unwrap().selected_windows_session_id = Some(sid);
@@ -1610,7 +1587,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn job_error(&self, id: i32, err: String, file_num: i32);
     fn job_done(&self, id: i32, file_num: i32);
     fn clear_all_jobs(&self);
-    fn new_message(&self, msg: String);
     fn update_transfer_list(&self);
     fn load_last_job(&self, cnt: i32, job_json: &str, auto_start: bool);
     fn update_folder_files(
@@ -1640,10 +1616,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn cancel_msgbox(&self, tag: &str);
     fn switch_back(&self, id: &str);
     fn portable_service_running(&self, running: bool);
-    fn on_voice_call_started(&self);
-    fn on_voice_call_closed(&self, reason: &str);
-    fn on_voice_call_waiting(&self);
-    fn on_voice_call_incoming(&self);
     fn get_rgba(&self, display: usize) -> *const u8;
     fn next_rgba(&self, display: usize);
     #[cfg(all(feature = "vram", feature = "flutter"))]

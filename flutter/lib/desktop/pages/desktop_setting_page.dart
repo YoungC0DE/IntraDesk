@@ -788,7 +788,7 @@ class _GeneralState extends State<_General> {
       return _Card(title: 'Audio Input Device', children: [child]);
     }
 
-    return AudioInput(builder: builder, isCm: false, isVoiceCall: false);
+    return AudioInput(builder: builder);
   }
 
   Widget language() {

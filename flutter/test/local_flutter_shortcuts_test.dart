@@ -110,7 +110,6 @@ void main() {
 
   for (final action in [
     kShortcutActionToggleViewOnly,
-    kShortcutActionToggleChat,
     if (!kIsWeb) kShortcutActionSendClipboardKeystrokes,
   ]) {
     test('$action cleanup skips released keys and cancels after session close',

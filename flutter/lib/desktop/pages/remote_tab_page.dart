@@ -73,7 +73,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
         }
         WindowController.fromWindowId(params['windowId'])
             .setTitle(getWindowNameWithId(id));
-        UnreadChatCountState.find(id).value = 0;
       };
       tabController.add(TabInfo(
         key: peerId!,
@@ -188,8 +187,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
                   ).paddingOnly(right: 5),
                 ),
                 label,
-                unreadMessageCountBuilder(UnreadChatCountState.find(key))
-                    .marginOnly(left: 4),
               ],
             );
 

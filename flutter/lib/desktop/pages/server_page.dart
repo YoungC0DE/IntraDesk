@@ -4,10 +4,8 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_hbb/common/widgets/audio_input.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
-import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
@@ -17,7 +15,6 @@ import 'package:window_manager/window_manager.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../common.dart';
-import '../../common/widgets/chat_page.dart';
 import '../../models/file_model.dart';
 import '../../models/platform_model.dart';
 import '../../models/server_model.dart';
@@ -89,7 +86,6 @@ class _DesktopServerPageState extends State<DesktopServerPage>
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: gFFI.serverModel),
-        ChangeNotifierProvider.value(value: gFFI.chatModel),
       ],
       child: Consumer<ServerModel>(
         builder: (context, serverModel, child) {
@@ -133,11 +129,12 @@ class ConnectionManagerState extends State<ConnectionManager>
         final client =
             gFFI.serverModel.clients.firstWhereOrNull((e) => e.id == client_id);
         if (client != null) {
-          gFFI.chatModel.changeCurrentKey(MessageKey(client.peerId, client.id));
           if (client.unreadChatMessageCount.value > 0) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               client.unreadChatMessageCount.value = 0;
-              gFFI.chatModel.showChatPage(MessageKey(client.peerId, client.id));
+              if (!gFFI.serverModel.isShowCMSidePage) {
+                gFFI.serverModel.toggleCMSidePage();
+              }
             });
           }
           windowManager.setTitle(getWindowNameWithId(client.peerId));
@@ -145,7 +142,6 @@ class ConnectionManagerState extends State<ConnectionManager>
         }
       }
     };
-    gFFI.chatModel.isConnManager = true;
   }
 
   @override
@@ -244,16 +240,15 @@ class ConnectionManagerState extends State<ConnectionManager>
                   final row = Row(children: [
                     if (constrains.maxWidth >
                         kConnectionManagerWindowSizeClosedChat.width)
-                      Consumer<ChatModel>(
-                          builder: (_, model, child) => SizedBox(
-                                width: realChatPageWidth,
-                                child: allowRemoteCMModification()
-                                    ? buildSidePage()
-                                    : buildRemoteBlock(
-                                        child: buildSidePage(),
-                                        block: _sidePageBlock,
-                                        mask: true),
-                              )),
+                      SizedBox(
+                        width: realChatPageWidth,
+                        child: allowRemoteCMModification()
+                            ? buildSidePage()
+                            : buildRemoteBlock(
+                                child: buildSidePage(),
+                                block: _sidePageBlock,
+                                mask: true),
+                      ),
                     SizedBox(
                         width: realClosedWidth,
                         child: SizedBox(
@@ -285,7 +280,7 @@ class ConnectionManagerState extends State<ConnectionManager>
     if (clientType == ClientType.file) {
       return _FileTransferLogPage();
     } else {
-      return ChatPage(type: ChatPageType.desktopCM);
+      return Offstage();
     }
   }
 
@@ -555,22 +550,11 @@ class _CmHeaderState extends State<_CmHeader>
             ),
           ),
           Offstage(
-            offstage: !client.authorized ||
-                (client.type_() != ClientType.remote &&
-                    client.type_() != ClientType.file &&
-                    client.type_() != ClientType.camera),
+            offstage: !client.authorized || client.type_() != ClientType.file,
             child: IconButton(
-              onPressed: () => checkClickTime(client.id, () {
-                if (client.type_() == ClientType.file) {
-                  gFFI.chatModel.toggleCMFilePage();
-                } else {
-                  gFFI.chatModel
-                      .toggleCMChatPage(MessageKey(client.peerId, client.id));
-                }
-              }),
-              icon: SvgPicture.asset(client.type_() == ClientType.file
-                  ? 'assets/file_transfer.svg'
-                  : 'assets/chat2.svg'),
+              onPressed: () => checkClickTime(
+                  client.id, () => gFFI.serverModel.toggleCMSidePage()),
+              icon: SvgPicture.asset('assets/file_transfer.svg'),
               splashRadius: kDesktopIconButtonSplashRadius,
             ),
           )
@@ -859,125 +843,6 @@ class _CmControlPanel extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Offstage(
-          offstage: !client.inVoiceCall,
-          child: Row(
-            children: [
-              Expanded(
-                child: buildButton(context,
-                    color: MyTheme.accent,
-                    onClick: null, onTapDown: (details) async {
-                  final devicesInfo =
-                      await AudioInput.getDevicesInfo(true, true);
-                  List<String> devices = devicesInfo['devices'] as List<String>;
-                  if (devices.isEmpty) {
-                    msgBox(
-                      gFFI.sessionId,
-                      'custom-nocancel-info',
-                      'Prompt',
-                      'no_audio_input_device_tip',
-                      '',
-                      gFFI.dialogManager,
-                    );
-                    return;
-                  }
-
-                  String currentDevice = devicesInfo['current'] as String;
-                  final x = details.globalPosition.dx;
-                  final y = details.globalPosition.dy;
-                  final position = RelativeRect.fromLTRB(x, y, x, y);
-                  showMenu(
-                    context: context,
-                    position: position,
-                    items: devices
-                        .map((d) => PopupMenuItem<String>(
-                              value: d,
-                              height: 18,
-                              padding: EdgeInsets.zero,
-                              onTap: () => AudioInput.setDevice(d, true, true),
-                              child: IgnorePointer(
-                                  child: RadioMenuButton(
-                                value: d,
-                                groupValue: currentDevice,
-                                onChanged: (v) {
-                                  if (v != null)
-                                    AudioInput.setDevice(v, true, true);
-                                },
-                                child: Container(
-                                  child: Text(
-                                    d,
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                  constraints: BoxConstraints(
-                                      maxWidth:
-                                          kConnectionManagerWindowSizeClosedChat
-                                                  .width -
-                                              80),
-                                ),
-                              )),
-                            ))
-                        .toList(),
-                  );
-                },
-                    icon: Icon(
-                      Icons.call_rounded,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    text: "Audio input",
-                    textColor: Colors.white),
-              ),
-              Expanded(
-                child: buildButton(
-                  context,
-                  color: Colors.red,
-                  onClick: () => closeVoiceCall(),
-                  icon: Icon(
-                    Icons.call_end_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                  text: "Stop voice call",
-                  textColor: Colors.white,
-                ),
-              )
-            ],
-          ),
-        ),
-        Offstage(
-          offstage: !client.incomingVoiceCall,
-          child: Row(
-            children: [
-              Expanded(
-                child: buildButton(context,
-                    color: MyTheme.accent,
-                    onClick: () => handleVoiceCall(true),
-                    icon: Icon(
-                      Icons.call_rounded,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    text: "Accept",
-                    textColor: Colors.white),
-              ),
-              Expanded(
-                child: buildButton(
-                  context,
-                  color: Colors.red,
-                  onClick: () => handleVoiceCall(false),
-                  icon: Icon(
-                    Icons.phone_disabled_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                  text: "Dismiss",
-                  textColor: Colors.white,
-                ),
-              )
-            ],
-          ),
-        ),
-        Offstage(
           offstage: !client.fromSwitch,
           child: buildButton(context,
               color: Colors.purple,
@@ -1190,13 +1055,6 @@ class _CmControlPanel extends StatelessWidget {
     bind.cmSwitchBack(connId: client.id);
   }
 
-  void handleVoiceCall(bool accept) {
-    bind.cmHandleIncomingVoiceCall(id: client.id, accept: accept);
-  }
-
-  void closeVoiceCall() {
-    bind.cmCloseVoiceCall(id: client.id);
-  }
 }
 
 void checkClickTime(int id, Function() callback) async {

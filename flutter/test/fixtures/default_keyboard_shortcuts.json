@@ -6,6 +6,5 @@
   {"action": "screenshot",                "mods": ["primary", "alt", "shift"], "key": "p"},
   {"action": "toggle_show_remote_cursor", "mods": ["primary", "alt", "shift"], "key": "m"},
   {"action": "toggle_mute",               "mods": ["primary", "alt", "shift"], "key": "s"},
-  {"action": "toggle_block_input",        "mods": ["primary", "alt", "shift"], "key": "i"},
-  {"action": "toggle_chat",               "mods": ["primary", "alt", "shift"], "key": "c"}
+  {"action": "toggle_block_input",        "mods": ["primary", "alt", "shift"], "key": "i"}
 ]

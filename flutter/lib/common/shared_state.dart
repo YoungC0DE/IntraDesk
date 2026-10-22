@@ -316,29 +316,6 @@ class PeerStringOption {
       Get.find<RxString>(tag: tag(id, opt));
 }
 
-class UnreadChatCountState {
-  static String tag(id) => 'unread_chat_count_$id';
-
-  static void init(String id) {
-    final key = tag(id);
-    if (!Get.isRegistered<RxInt>(tag: key)) {
-      final RxInt state = RxInt(0);
-      Get.put<RxInt>(state, tag: key);
-    } else {
-      Get.find<RxInt>(tag: key).value = 0;
-    }
-  }
-
-  static void delete(String id) {
-    final key = tag(id);
-    if (Get.isRegistered<RxInt>(tag: key)) {
-      Get.delete<RxInt>(tag: key);
-    }
-  }
-
-  static RxInt find(String id) => Get.find<RxInt>(tag: tag(id));
-}
-
 initSharedStates(String id) {
   PrivacyModeState.init(id);
   BlockInputState.init(id);
@@ -349,7 +326,6 @@ initSharedStates(String id) {
   RemoteCursorMovedState.init(id);
   FingerprintState.init(id);
   PeerBoolOption.init(id, kOptionZoomCursor, () => false);
-  UnreadChatCountState.init(id);
   if (isMobile) ConnectionTypeState.init(id); // desktop in other places
 }
 
@@ -363,6 +339,5 @@ removeSharedStates(String id) {
   RemoteCursorMovedState.delete(id);
   FingerprintState.delete(id);
   PeerBoolOption.delete(id, kOptionZoomCursor);
-  UnreadChatCountState.delete(id);
   if (isMobile) ConnectionTypeState.delete(id);
 }

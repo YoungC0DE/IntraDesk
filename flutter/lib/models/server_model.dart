@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/mobile/pages/settings_page.dart';
-import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
@@ -585,8 +584,6 @@ class ServerModel with ChangeNotifier {
         cmHiddenTimer = null;
       });
     }
-    parent.target?.chatModel
-        .updateConnIdOfKey(MessageKey(client.peerId, client.id));
   }
 
   void showLoginDialog(Client client) {
@@ -603,22 +600,6 @@ class ServerModel with ChangeNotifier {
       'android_new_connection_tip',
       () => sendLoginResponse(client, false),
       () => sendLoginResponse(client, true),
-    );
-  }
-
-  handleVoiceCall(Client client, bool accept) {
-    parent.target?.invokeMethod("cancel_notification", client.id);
-    bind.cmHandleIncomingVoiceCall(id: client.id, accept: accept);
-  }
-
-  showVoiceCallDialog(Client client) {
-    showClientDialog(
-      client,
-      'Voice call',
-      'Do you accept?',
-      'android_new_voice_call_tip',
-      () => handleVoiceCall(client, false),
-      () => handleVoiceCall(client, true),
     );
   }
 
@@ -744,28 +725,33 @@ class ServerModel with ChangeNotifier {
     }
   }
 
-  void updateVoiceCallState(Map<String, dynamic> evt) {
-    try {
-      final client = Client.fromJson(jsonDecode(evt["client"]));
-      final index = _clients.indexWhere((element) => element.id == client.id);
-      if (index != -1) {
-        _clients[index].inVoiceCall = client.inVoiceCall;
-        _clients[index].incomingVoiceCall = client.incomingVoiceCall;
-        if (client.incomingVoiceCall) {
-          if (isAndroid) {
-            showVoiceCallDialog(client);
-          } else {
-            // Has incoming phone call, let's set the window on top.
-            Future.delayed(Duration.zero, () {
-              windowOnTop(null);
-            });
-          }
-        }
-        notifyListeners();
+  bool _isShowCMSidePage = false;
+  bool get isShowCMSidePage => _isShowCMSidePage;
+
+  var _togglingCMSidePage = false; // protect order for await
+  toggleCMSidePage() async {
+    if (_togglingCMSidePage) return false;
+    _togglingCMSidePage = true;
+    if (_isShowCMSidePage) {
+      _isShowCMSidePage = !_isShowCMSidePage;
+      notifyListeners();
+      await windowManager.show();
+      await windowManager.setSizeAlignment(
+          kConnectionManagerWindowSizeClosedChat, Alignment.topRight);
+    } else {
+      final currentSelectedTab = tabController.state.value.selectedTabInfo;
+      final client = _clients.firstWhereOrNull(
+          (client) => client.id.toString() == currentSelectedTab.key);
+      if (client != null) {
+        client.unreadChatMessageCount.value = 0;
       }
-    } catch (e) {
-      debugPrint("updateVoiceCallState failed: $e");
+      await windowManager.show();
+      await windowManager.setSizeAlignment(
+          kConnectionManagerWindowSizeOpenChat, Alignment.topRight);
+      _isShowCMSidePage = !_isShowCMSidePage;
+      notifyListeners();
     }
+    _togglingCMSidePage = false;
   }
 
   void androidUpdatekeepScreenOn() async {
@@ -815,8 +801,6 @@ class Client {
   bool privacyMode = false;
   bool disconnected = false;
   bool fromSwitch = false;
-  bool inVoiceCall = false;
-  bool incomingVoiceCall = false;
 
   RxInt unreadChatMessageCount = 0.obs;
 
@@ -843,8 +827,6 @@ class Client {
     privacyMode = json['privacy_mode'] ?? privacyMode;
     disconnected = json['disconnected'];
     fromSwitch = json['from_switch'];
-    inVoiceCall = json['in_voice_call'];
-    incomingVoiceCall = json['incoming_voice_call'];
   }
 
   Map<String, dynamic> toJson() {
@@ -867,8 +849,6 @@ class Client {
     data['privacy_mode'] = privacyMode;
     data['disconnected'] = disconnected;
     data['from_switch'] = fromSwitch;
-    data['in_voice_call'] = inVoiceCall;
-    data['incoming_voice_call'] = incomingVoiceCall;
     return data;
   }
 

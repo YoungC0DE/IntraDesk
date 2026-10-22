@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/mobile/widgets/dialog.dart';
-import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -686,22 +685,6 @@ class ConnectionManager extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(child: ClientInfo(client)),
-                      Expanded(
-                          flex: -1,
-                          child: client.isFileTransfer || !client.authorized
-                              ? const SizedBox.shrink()
-                              : IconButton(
-                                  onPressed: () {
-                                    gFFI.chatModel.changeCurrentKey(
-                                        MessageKey(client.peerId, client.id));
-                                    final bar = navigationBarKey.currentWidget;
-                                    if (bar != null) {
-                                      bar as BottomNavigationBar;
-                                      bar.onTap!(1);
-                                    }
-                                  },
-                                  icon: unreadTopRightBuilder(
-                                      client.unreadChatMessageCount)))
                     ],
                   ),
                   client.authorized
@@ -713,8 +696,6 @@ class ConnectionManager extends StatelessWidget {
                   client.authorized
                       ? _buildDisconnectButton(client)
                       : _buildNewConnectionHint(serverModel, client),
-                  if (client.incomingVoiceCall && !client.inVoiceCall)
-                    ..._buildNewVoiceCallHint(context, serverModel, client),
                 ])))
             .toList());
   }
@@ -730,21 +711,6 @@ class ConnectionManager extends StatelessWidget {
       label: Text(translate("Disconnect")),
     );
     final buttons = [disconnectButton];
-    if (client.inVoiceCall) {
-      buttons.insert(
-        0,
-        ElevatedButton.icon(
-          style: ButtonStyle(
-              backgroundColor: MaterialStatePropertyAll(Colors.red)),
-          icon: const Icon(Icons.phone),
-          label: Text(translate("Stop")),
-          onPressed: () {
-            bind.cmCloseVoiceCall(id: client.id);
-            gFFI.invokeMethod("cancel_notification", client.id);
-          },
-        ),
-      );
-    }
 
     if (buttons.length == 1) {
       return Container(
@@ -774,30 +740,6 @@ class ConnectionManager extends StatelessWidget {
               serverModel.sendLoginResponse(client, true);
             }),
     ]);
-  }
-
-  List<Widget> _buildNewVoiceCallHint(
-      BuildContext context, ServerModel serverModel, Client client) {
-    return [
-      Text(
-        translate("android_new_voice_call_tip"),
-        style: Theme.of(context).textTheme.bodyMedium,
-      ).marginOnly(bottom: 5),
-      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-        TextButton(
-            child: Text(translate("Dismiss")),
-            onPressed: () {
-              serverModel.handleVoiceCall(client, false);
-            }).marginOnly(right: 15),
-        if (serverModel.approveMode != 'password')
-          ElevatedButton.icon(
-              icon: const Icon(Icons.check),
-              label: Text(translate("Accept")),
-              onPressed: () {
-                serverModel.handleVoiceCall(client, true);
-              }),
-      ])
-    ];
   }
 }
 

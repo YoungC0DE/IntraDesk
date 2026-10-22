@@ -141,7 +141,7 @@ class CmFileModel {
         ..state = JobState.done);
       final currentSelectedTab =
           gFFI.serverModel.tabController.state.value.selectedTabInfo;
-      if (!(gFFI.chatModel.isShowCMSidePage &&
+      if (!(gFFI.serverModel.isShowCMSidePage &&
           currentSelectedTab.key == data.connId.toString())) {
         // Wrong number if unreadCount changes during deletion, which rarely happens
         RxInt? rx = client?.unreadChatMessageCount;
@@ -206,7 +206,7 @@ class CmFileModel {
         gFFI.serverModel.clients.firstWhereOrNull((e) => e.id == connId);
     final currentSelectedTab =
         gFFI.serverModel.tabController.state.value.selectedTabInfo;
-    if (!(gFFI.chatModel.isShowCMSidePage &&
+    if (!(gFFI.serverModel.isShowCMSidePage &&
         currentSelectedTab.key == connId.toString())) {
       client?.unreadChatMessageCount.value += 1;
     }

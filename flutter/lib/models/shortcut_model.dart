@@ -13,7 +13,6 @@ import '../common/widgets/toolbar.dart'
     show allowDisplaySwitchInPrivacyMode, showVirtualDisplayMenu;
 import '../consts.dart';
 import '../desktop/widgets/remote_toolbar.dart' show ToolbarState;
-import 'chat_model.dart' show ChatModel, MessageKey, VoiceCallStatus;
 import '../desktop/widgets/tabbar_widget.dart' show DesktopTabController;
 import '../models/model.dart';
 import '../models/platform_model.dart';
@@ -196,9 +195,6 @@ class ShortcutModel {
   ///     `DesktopTabController`; Web's `RemotePage` is invoked without one.
   ///   * Reset Canvas: only the mobile toolbar builds the menu entry
   ///     (`isDefaultConn && isMobile` in `toolbarControls`).
-  ///   * Voice Call: iOS has no audio capture implementation; Web bridge throws
-  ///     `UnimplementedError` for both `sessionRequestVoiceCall` and
-  ///     `sessionCloseVoiceCall`.
   static ShortcutPlatformCapabilities currentPlatformCapabilities() {
     final desktopLayout = isDesktop || isWeb;
     return ShortcutPlatformCapabilities(
@@ -213,7 +209,6 @@ class ShortcutModel {
       includeResetCanvasShortcut: isMobile,
       includePinToolbarShortcut: desktopLayout,
       includeViewModeShortcut: true,
-      includeVoiceCallShortcut: !isWeb && !isIOS,
       excludedActions: Set.unmodifiable({
         if (!isDesktop) ...[
           kShortcutActionSwitchDisplayAll,
@@ -427,31 +422,6 @@ void registerSessionShortcutActions(
     });
     ffi.shortcutModel.register(kShortcutActionPinToolbar, () {
       toolbarState.switchPin();
-    });
-  }
-
-  // Toggle Chat overlay (open/close the chat panel for this session).
-  // _ChatMenu is a standalone toolbar icon — not part of any toolbar
-  // helper that returns a TToggleMenu list — so its handler is wired
-  // here rather than picked up by helper auto-register.
-  ffi.shortcutModel.register(kShortcutActionToggleChat, () {
-    ffi.chatModel.changeCurrentKey(MessageKey(ffi.id, ChatModel.clientModeID));
-    ffi.chatModel.toggleChatOverlay();
-  });
-
-  // Toggle Voice Call — start when idle, hang up when active. Mirrors the
-  // toolbar's `_VoiceCallMenu` state-driven button. Web bridge throws
-  // UnimplementedError on both sessionRequestVoiceCall and
-  // sessionCloseVoiceCall; iOS has no audio capture implementation.
-  if (!isWeb && !isIOS) {
-    ffi.shortcutModel.register(kShortcutActionToggleVoiceCall, () {
-      final status = ffi.chatModel.voiceCallStatus.value;
-      if (status == VoiceCallStatus.connected ||
-          status == VoiceCallStatus.waitingForResponse) {
-        bind.sessionCloseVoiceCall(sessionId: sessionId);
-      } else {
-        bind.sessionRequestVoiceCall(sessionId: sessionId);
-      }
     });
   }
 

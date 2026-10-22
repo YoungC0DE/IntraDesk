@@ -10,31 +10,16 @@ typedef AudioInputBuilder = Widget Function(
 
 class AudioInput extends StatelessWidget {
   final AudioInputBuilder builder;
-  final bool isCm;
-  final bool isVoiceCall;
 
-  const AudioInput(
-      {Key? key,
-      required this.builder,
-      required this.isCm,
-      required this.isVoiceCall})
-      : super(key: key);
+  const AudioInput({Key? key, required this.builder}) : super(key: key);
 
   static String getDefault() {
     if (bind.mainAudioSupportLoopback()) return translate(_kSystemSound);
     return '';
   }
 
-  static Future<String> getAudioInput(bool isCm, bool isVoiceCall) {
-    if (isVoiceCall) {
-      return bind.getVoiceCallInputDevice(isCm: isCm);
-    } else {
-      return bind.mainGetOption(key: 'audio-input');
-    }
-  }
-
-  static Future<String> getValue(bool isCm, bool isVoiceCall) async {
-    String device = await getAudioInput(isCm, isVoiceCall);
+  static Future<String> getValue() async {
+    String device = await bind.mainGetOption(key: 'audio-input');
     if (device.isNotEmpty) {
       return device;
     } else {
@@ -42,30 +27,24 @@ class AudioInput extends StatelessWidget {
     }
   }
 
-  static Future<void> setDevice(
-      String device, bool isCm, bool isVoiceCall) async {
+  static Future<void> setDevice(String device) async {
     if (device == getDefault()) device = '';
-    if (isVoiceCall) {
-      await bind.setVoiceCallInputDevice(isCm: isCm, device: device);
-    } else {
-      await bind.mainSetOption(key: 'audio-input', value: device);
-    }
+    await bind.mainSetOption(key: 'audio-input', value: device);
   }
 
-  static Future<Map<String, Object>> getDevicesInfo(
-      bool isCm, bool isVoiceCall) async {
+  static Future<Map<String, Object>> getDevicesInfo() async {
     List<String> devices = (await bind.mainGetSoundInputs()).toList();
     if (bind.mainAudioSupportLoopback()) {
       devices.insert(0, translate(_kSystemSound));
     }
-    String current = await getValue(isCm, isVoiceCall);
+    String current = await getValue();
     return {'devices': devices, 'current': current};
   }
 
   @override
   Widget build(BuildContext context) {
     return futureBuilder(
-      future: getDevicesInfo(isCm, isVoiceCall),
+      future: getDevicesInfo(),
       hasData: (data) {
         String currentDevice = data['current'];
         List<String> devices = data['devices'] as List<String>;
@@ -73,7 +52,7 @@ class AudioInput extends StatelessWidget {
           return const Offstage();
         }
         return builder(devices, currentDevice, (devices) {
-          setDevice(devices, isCm, isVoiceCall);
+          setDevice(devices);
         });
       },
     );

@@ -4843,8 +4843,6 @@ pub enum Data {
     ResumeJob((i32, bool)),
     ElevateDirect,
     ElevateWithLogon(String, String),
-    NewVoiceCall,
-    CloseVoiceCall,
     ContinueInsecureConnection,
     ResetDecoder(Option<usize>),
     RenameFile((i32, String, String, bool)),

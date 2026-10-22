@@ -118,7 +118,6 @@ class ShortcutPlatformCapabilities {
   final bool includeResetCanvasShortcut;
   final bool includePinToolbarShortcut;
   final bool includeViewModeShortcut;
-  final bool includeVoiceCallShortcut;
   final Set<String> excludedActions;
 
   const ShortcutPlatformCapabilities({
@@ -132,7 +131,6 @@ class ShortcutPlatformCapabilities {
     required this.includeResetCanvasShortcut,
     required this.includePinToolbarShortcut,
     required this.includeViewModeShortcut,
-    required this.includeVoiceCallShortcut,
     this.excludedActions = const {},
   });
 }
@@ -190,10 +188,6 @@ List<Map<String, dynamic>> filterDefaultBindingsForPlatform(
         (action == kShortcutActionViewModeOriginal ||
             action == kShortcutActionViewModeAdaptive ||
             action == kShortcutActionViewModeCustom)) {
-      continue;
-    }
-    if (!cap.includeVoiceCallShortcut &&
-        action == kShortcutActionToggleVoiceCall) {
       continue;
     }
     filtered.add(binding);

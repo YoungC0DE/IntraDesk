@@ -13,7 +13,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
-import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
 import 'package:flutter_hbb/models/file_model.dart';
 import 'package:flutter_hbb/models/group_model.dart';
@@ -359,12 +358,6 @@ class FfiModel with ChangeNotifier {
         Clipboard.setData(ClipboardData(text: evt['content']));
       } else if (name == 'permission') {
         updatePermission(evt, peerId);
-      } else if (name == 'chat_client_mode') {
-        parent.target?.chatModel
-            .receive(ChatModel.clientModeID, evt['text'] ?? '');
-      } else if (name == 'chat_server_mode') {
-        parent.target?.chatModel
-            .receive(int.parse(evt['id'] as String), evt['text'] ?? '');
       } else if (name == 'terminal_response') {
         parent.target?.routeTerminalResponse(evt);
       } else if (name == 'file_dir') {
@@ -413,21 +406,6 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'on_url_scheme_received') {
         // currently comes from "_url" ipc of mac and dbus of linux
         onUrlSchemeReceived(evt);
-      } else if (name == 'on_voice_call_waiting') {
-        // Waiting for the response from the peer.
-        parent.target?.chatModel.onVoiceCallWaiting();
-      } else if (name == 'on_voice_call_started') {
-        // Voice call is connected.
-        parent.target?.chatModel.onVoiceCallStarted();
-      } else if (name == 'on_voice_call_closed') {
-        // Voice call is closed with reason.
-        final reason = evt['reason'].toString();
-        parent.target?.chatModel.onVoiceCallClosed(reason);
-      } else if (name == 'on_voice_call_incoming') {
-        // Voice call is requested by the peer.
-        parent.target?.chatModel.onVoiceCallIncoming();
-      } else if (name == 'update_voice_call_state') {
-        parent.target?.serverModel.updateVoiceCallState(evt);
       } else if (name == 'fingerprint') {
         FingerprintState.find(peerId).value = evt['fingerprint'] ?? '';
       } else if (name == "sync_peer_hash_password_to_personal_ab") {
@@ -1333,8 +1311,6 @@ class FfiModel with ChangeNotifier {
 
   /// Handle the peer info event based on [evt].
   handlePeerInfo(Map<String, dynamic> evt, String peerId, bool isCache) async {
-    parent.target?.chatModel.voiceCallStatus.value = VoiceCallStatus.notStarted;
-
     _queryAuditGuid(peerId);
 
     // Map clone is required here, otherwise "evt" may be changed by other threads through the reference.
@@ -4011,7 +3987,6 @@ class FFI {
   late final CursorModel cursorModel; // session
   late final CanvasModel canvasModel; // session
   late final ServerModel serverModel; // global
-  late final ChatModel chatModel; // session
   late final FileModel fileModel; // session
   late final AbModel abModel; // global
   late final GroupModel groupModel; // global
@@ -4040,7 +4015,6 @@ class FFI {
     cursorModel = CursorModel(WeakReference(this));
     canvasModel = CanvasModel(WeakReference(this));
     serverModel = ServerModel(WeakReference(this));
-    chatModel = ChatModel(WeakReference(this));
     fileModel = FileModel(WeakReference(this));
     userModel = UserModel(WeakReference(this));
     peerTabModel = PeerTabModel(WeakReference(this));
@@ -4110,7 +4084,6 @@ class FFI {
     } else if (isTerminal) {
       connType = ConnType.terminal;
     } else {
-      chatModel.resetClientMode();
       connType = ConnType.defaultConn;
       canvasModel.id = id;
       imageModel.id = id;
@@ -4344,7 +4317,6 @@ class FFI {
     if (isWeb) {
       platformFFI.clearVideoFrameCallback();
     }
-    chatModel.close();
     // Close all terminal models
     for (final model in _terminalModels.values) {
       model.dispose();

@@ -7,167 +7,7 @@ import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
 import '../../consts.dart';
-import '../../desktop/widgets/tabbar_widget.dart';
-import '../../models/chat_model.dart';
 import '../../models/model.dart';
-import 'chat_page.dart';
-
-class DraggableChatWindow extends StatelessWidget {
-  const DraggableChatWindow(
-      {Key? key,
-      this.position = Offset.zero,
-      required this.width,
-      required this.height,
-      required this.chatModel})
-      : super(key: key);
-
-  final Offset position;
-  final double width;
-  final double height;
-  final ChatModel chatModel;
-
-  @override
-  Widget build(BuildContext context) {
-    if (draggablePositions.chatWindow.isInvalid()) {
-      draggablePositions.chatWindow.update(position);
-    }
-    return isIOS
-        ? IOSDraggable(
-            position: draggablePositions.chatWindow,
-            chatModel: chatModel,
-            width: width,
-            height: height,
-            builder: (context) {
-              return Column(
-                children: [
-                  _buildMobileAppBar(context),
-                  Expanded(
-                    child: ChatPage(chatModel: chatModel),
-                  ),
-                ],
-              );
-            },
-          )
-        : Draggable(
-            checkKeyboard: true,
-            checkScreenSize: true,
-            position: draggablePositions.chatWindow,
-            width: width,
-            height: height,
-            chatModel: chatModel,
-            builder: (context, onPanUpdate) {
-              final child = Scaffold(
-                resizeToAvoidBottomInset: false,
-                appBar: CustomAppBar(
-                  onPanUpdate: onPanUpdate,
-                  appBar: (isDesktop || isWebDesktop)
-                      ? _buildDesktopAppBar(context)
-                      : _buildMobileAppBar(context),
-                ),
-                body: ChatPage(chatModel: chatModel),
-              );
-              return Container(
-                  decoration:
-                      BoxDecoration(border: Border.all(color: MyTheme.border)),
-                  child: child);
-            });
-  }
-
-  Widget _buildMobileAppBar(BuildContext context) {
-    return Container(
-      color: Theme.of(context).colorScheme.primary,
-      height: 50,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              child: Text(
-                translate("Chat"),
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'WorkSans',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20),
-              )),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              IconButton(
-                  onPressed: () {
-                    chatModel.hideChatWindowOverlay();
-                  },
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white,
-                  )),
-              IconButton(
-                  onPressed: () {
-                    chatModel.hideChatWindowOverlay();
-                    chatModel.hideChatIconOverlay();
-                  },
-                  icon: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                  ))
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopAppBar(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-          border: Border(
-              bottom: BorderSide(
-                  color: Theme.of(context).hintColor.withOpacity(0.4)))),
-      height: 38,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-              child: Obx(() => Opacity(
-                  opacity: chatModel.isWindowFocus.value ? 1.0 : 0.4,
-                  child: Row(children: [
-                    Icon(Icons.chat_bubble_outline,
-                        size: 20, color: Theme.of(context).colorScheme.primary),
-                    SizedBox(width: 6),
-                    Text(translate("Chat"))
-                  ])))),
-          Padding(
-              padding: EdgeInsets.all(2),
-              child: ActionIcon(
-                message: 'Close',
-                icon: IconFont.close,
-                onTap: chatModel.hideChatWindowOverlay,
-                isClose: true,
-                boxSize: 32,
-              ))
-        ],
-      ),
-    );
-  }
-}
-
-class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final GestureDragUpdateCallback onPanUpdate;
-  final Widget appBar;
-
-  const CustomAppBar(
-      {Key? key, required this.onPanUpdate, required this.appBar})
-      : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(onPanUpdate: onPanUpdate, child: appBar);
-  }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
-}
 
 /// floating buttons of back/home/recent actions for android
 class DraggableMobileActions extends StatelessWidget {
@@ -315,17 +155,14 @@ class DraggableKeyPosition {
 }
 
 class DraggablePositions {
-  static const kChatWindow = 'draggablePositionChat';
   static const kMobileActions = 'draggablePositionMobile';
   static const kIOSDraggable = 'draggablePositionIOS';
 
   static const kInvalidDraggablePosition = Offset(-999999, -999999);
-  final chatWindow = DraggableKeyPosition(kChatWindow);
   final mobileActions = DraggableKeyPosition(kMobileActions);
   final iOSDraggable = DraggableKeyPosition(kIOSDraggable);
 
   load() {
-    chatWindow.load();
     mobileActions.load();
     iOSDraggable.load();
   }
@@ -341,7 +178,6 @@ class Draggable extends StatefulWidget {
       required this.position,
       required this.width,
       required this.height,
-      this.chatModel,
       required this.builder})
       : super(key: key);
 
@@ -350,22 +186,16 @@ class Draggable extends StatefulWidget {
   final DraggableKeyPosition position;
   final double width;
   final double height;
-  final ChatModel? chatModel;
   final Widget Function(BuildContext, GestureDragUpdateCallback) builder;
 
   @override
-  State<StatefulWidget> createState() => _DraggableState(chatModel);
+  State<StatefulWidget> createState() => _DraggableState();
 }
 
 class _DraggableState extends State<Draggable> {
-  late ChatModel? _chatModel;
   bool _keyboardVisible = false;
   double _saveHeight = 0;
   double _lastBottomHeight = 0;
-
-  _DraggableState(ChatModel? chatModel) {
-    _chatModel = chatModel;
-  }
 
   get position => widget.position.pos;
 
@@ -393,7 +223,6 @@ class _DraggableState extends State<Draggable> {
     setState(() {
       widget.position.update(Offset(x, y));
     });
-    _chatModel?.setChatWindowPosition(position);
   }
 
   checkScreenSize() {
@@ -449,112 +278,6 @@ class _DraggableState extends State<Draggable> {
           height: widget.height,
           child: widget.builder(context, onPanUpdate))
     ]);
-  }
-}
-
-class IOSDraggable extends StatefulWidget {
-  const IOSDraggable(
-      {Key? key,
-      this.chatModel,
-      required this.position,
-      required this.width,
-      required this.height,
-      required this.builder})
-      : super(key: key);
-
-  final DraggableKeyPosition position;
-  final ChatModel? chatModel;
-  final double width;
-  final double height;
-  final Widget Function(BuildContext) builder;
-
-  @override
-  IOSDraggableState createState() =>
-      IOSDraggableState(chatModel, width, height);
-}
-
-class IOSDraggableState extends State<IOSDraggable> {
-  late ChatModel? _chatModel;
-  late double _width;
-  late double _height;
-  bool _keyboardVisible = false;
-  double _saveHeight = 0;
-  double _lastBottomHeight = 0;
-
-  IOSDraggableState(ChatModel? chatModel, double w, double h) {
-    _chatModel = chatModel;
-    _width = w;
-    _height = h;
-  }
-
-  DraggableKeyPosition get position => widget.position;
-
-  checkKeyboard() {
-    final bottomHeight = MediaQuery.of(context).viewInsets.bottom;
-    final currentVisible = bottomHeight != 0;
-
-    // save
-    if (!_keyboardVisible && currentVisible) {
-      _saveHeight = position.pos.dy;
-    }
-
-    // reset
-    if (_lastBottomHeight > 0 && bottomHeight == 0) {
-      setState(() {
-        position.update(Offset(position.pos.dx, _saveHeight));
-      });
-    }
-
-    // onKeyboardVisible
-    if (_keyboardVisible && currentVisible) {
-      final sumHeight = bottomHeight + _height;
-      final contextHeight = MediaQuery.of(context).size.height;
-      if (sumHeight + position.pos.dy > contextHeight) {
-        final y = contextHeight - sumHeight;
-        setState(() {
-          position.update(Offset(position.pos.dx, y));
-        });
-      }
-    }
-
-    _keyboardVisible = currentVisible;
-    _lastBottomHeight = bottomHeight;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    position.tryAdjust(_width, _height, 1);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    checkKeyboard();
-    return Stack(
-      children: [
-        Positioned(
-          left: position.pos.dx,
-          top: position.pos.dy,
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                position.update(position.pos + details.delta);
-              });
-              _chatModel?.setChatWindowPosition(position.pos);
-            },
-            child: Material(
-              child: Container(
-                width: _width,
-                height: _height,
-                decoration:
-                    BoxDecoration(border: Border.all(color: MyTheme.border)),
-                child: widget.builder(context),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -634,7 +357,6 @@ class BlockableOverlayState extends OverlayKeyState {
 
   void applyFfi(FFI ffi) {
     ffi.dialogManager.setOverlayState(this);
-    ffi.chatModel.setOverlayState(this);
     // make remote page penetrable automatically, effective for chat over remote
     onMiddleBlockedClick = () {
       setMiddleBlocked(false);

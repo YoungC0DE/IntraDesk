@@ -704,7 +704,6 @@ closeConnection({String? id}) {
     () async {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
           overlays: SystemUiOverlay.values);
-      gFFI.chatModel.hideChatOverlay();
       Navigator.popUntil(globalKey.currentContext!, ModalRoute.withName("/"));
       stateGlobal.isInMainPage = true;
     }();
@@ -3223,18 +3222,6 @@ Widget unreadMessageCountBuilder(RxInt? count,
               style: TextStyle(color: Colors.white, fontSize: fontSize ?? 10)),
         ),
       )));
-}
-
-Widget unreadTopRightBuilder(RxInt? count, {Widget? icon}) {
-  return Stack(
-    children: [
-      icon ?? Icon(Icons.chat),
-      Positioned(
-          top: 0,
-          right: 0,
-          child: unreadMessageCountBuilder(count, size: 12, fontSize: 8))
-    ],
-  );
 }
 
 String toCapitalized(String s) {

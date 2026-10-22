@@ -16,12 +16,7 @@ use crate::keyboard::client::map_key_to_control_key;
 use crate::platform::WallPaperRemover;
 #[cfg(windows)]
 use crate::portable_service::client as portable_client;
-use crate::{
-    client::{
-        new_voice_call_request, new_voice_call_response, start_audio_thread, MediaData, MediaSender,
-    },
-    display_service, ipc, privacy_mode, video_service, VERSION,
-};
+use crate::{display_service, ipc, privacy_mode, video_service, VERSION};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::{common::DEVICE_NAME, flutter::connection_manager::start_channel};
 use cidr_utils::cidr::IpCidr;
@@ -58,7 +53,6 @@ use serde_json::{json, value::Value};
 use std::{
     collections::HashSet,
     net::{IpAddr, Ipv6Addr},
-    num::NonZeroI64,
     path::PathBuf,
     str::FromStr,
     sync::{
@@ -401,8 +395,6 @@ pub struct Connection {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     enable_file_transfer: bool,
     // by peer
-    audio_sender: Option<MediaSender>,
-    // audio by the remote peer/client
     tx_input: std_mpsc::Sender<MessageInput>,
     // handle input messages
     video_ack_required: bool,
@@ -415,13 +407,10 @@ pub struct Connection {
     login_scope: Option<[u8; 32]>,
     peer_argb: u32,
     session_last_recv_time: Option<Arc<Mutex<Instant>>>,
-    chat_unanswered: bool,
     file_transferred: bool,
     #[cfg(windows)]
     portable: PortableState,
     from_switch: bool,
-    voice_call_request_timestamp: Option<NonZeroI64>,
-    voice_calling: bool,
     options_in_login: Option<OptionMessage>,
     #[cfg(not(any(target_os = "ios")))]
     pressed_modifiers: HashSet<rdev::Key>,
@@ -619,14 +608,10 @@ impl Connection {
             login_scope: None,
             peer_argb: 0u32,
             session_last_recv_time: None,
-            chat_unanswered: false,
             file_transferred: false,
             #[cfg(windows)]
             portable: Default::default(),
             from_switch: false,
-            audio_sender: None,
-            voice_call_request_timestamp: None,
-            voice_calling: false,
             options_in_login: None,
             #[cfg(not(any(target_os = "ios")))]
             pressed_modifiers: Default::default(),
@@ -754,7 +739,6 @@ impl Connection {
                             }
                         }
                         ipc::Data::Close => {
-                            conn.chat_unanswered = false; // seen
                             conn.file_transferred = false; //seen
                             conn.send_close_reason_no_retry("").await;
                             conn.on_close("connection manager", true).await;
@@ -767,7 +751,6 @@ impl Connection {
                         // what puts the peer back on the login screen a moment later.
                         #[cfg(target_os = "linux")]
                         ipc::Data::CmWindowClosed => {
-                            conn.chat_unanswered = false; // seen
                             conn.file_transferred = false; //seen
                             conn.on_close("connection manager window closed", true).await;
                             break;
@@ -778,17 +761,6 @@ impl Connection {
                                 conn.on_close(&format!("connection manager error: {}", e), false).await;
                                 break;
                             }
-                        }
-                        ipc::Data::ChatMessage{text} => {
-                            let mut misc = Misc::new();
-                            misc.set_chat_message(ChatMessage {
-                                text,
-                                ..Default::default()
-                            });
-                            let mut msg_out = Message::new();
-                            msg_out.set_misc(misc);
-                            conn.send(msg_out).await;
-                            conn.chat_unanswered = false;
                         }
                         ipc::Data::SwitchPermission{name, enabled} => {
                             log::info!("Change permission {} -> {}", name, enabled);
@@ -823,7 +795,7 @@ impl Connection {
                                 if conn.authorized {
                                     if let Some(s) = conn.server.upgrade() {
                                         if conn.is_authed_view_camera_conn() {
-                                            if conn.voice_calling || !conn.audio_enabled() {
+                                            if !conn.audio_enabled() {
                                                 s.write().unwrap().subscribe(
                                                     super::audio_service::NAME,
                                                     conn.inner.clone(), conn.audio_enabled());
@@ -964,16 +936,6 @@ impl Connection {
                             misc.set_switch_back(SwitchBack::default());
                             let mut msg = Message::new();
                             msg.set_misc(misc);
-                            conn.send(msg).await;
-                        }
-                        ipc::Data::VoiceCallResponse(accepted) => {
-                            conn.handle_voice_call(accepted).await;
-                        }
-                        ipc::Data::CloseVoiceCall(_reason) => {
-                            log::debug!("Close the voice call from the ipc.");
-                            conn.close_voice_call().await;
-                            // Notify the peer that we closed the voice call.
-                            let msg = new_voice_call_request(false);
                             conn.send(msg).await;
                         }
                         ipc::Data::ReadJobInitResult { id, file_num, include_hidden, conn_id, result } => {
@@ -3893,11 +3855,6 @@ impl Connection {
                             self.toggle_privacy_mode(t).await;
                         }
                     }
-                    Some(misc::Union::ChatMessage(c)) => {
-                        self.send_to_cm(ipc::Data::ChatMessage { text: c.text });
-                        self.chat_unanswered = true;
-                        self.update_auto_disconnect_timer();
-                    }
                     Some(misc::Union::Option(o)) => {
                         if self.authed_conn_type() == Some(AuthConnType::Remote) {
                             self.update_options(&o).await;
@@ -3957,16 +3914,6 @@ impl Connection {
                         }
                         _ => {}
                     },
-                    Some(misc::Union::AudioFormat(format)) => {
-                        if !self.disable_audio {
-                            // Drop the audio sender previously.
-                            drop(std::mem::replace(&mut self.audio_sender, None));
-                            self.audio_sender = Some(start_audio_thread());
-                            self.audio_sender
-                                .as_ref()
-                                .map(|a| allow_err!(a.send(MediaData::AudioFormat(format))));
-                        }
-                    }
                     #[cfg(feature = "flutter")]
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     Some(misc::Union::SwitchSidesRequest(s)) => {
@@ -4054,32 +4001,6 @@ impl Connection {
                     }
                     _ => {}
                 },
-                Some(message::Union::AudioFrame(frame)) => {
-                    if !self.disable_audio {
-                        if let Some(sender) = &self.audio_sender {
-                            allow_err!(sender.send(MediaData::AudioFrame(Box::new(frame))));
-                        } else {
-                            log::warn!(
-                                "Processing audio frame without the voice call audio sender."
-                            );
-                        }
-                    }
-                }
-                Some(message::Union::VoiceCallRequest(request)) => {
-                    if request.is_connect {
-                        self.voice_call_request_timestamp = Some(
-                            NonZeroI64::new(request.req_timestamp)
-                                .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
-                        );
-                        // Notify the connection manager.
-                        self.send_to_cm(Data::VoiceCallIncoming);
-                    } else {
-                        self.close_voice_call().await;
-                    }
-                }
-                Some(message::Union::VoiceCallResponse(_response)) => {
-                    // TODO: Maybe we can do a voice call from cm directly.
-                }
                 Some(message::Union::ScreenshotRequest(request)) => {
                     if let Some(tx) = self.inner.tx.clone() {
                         crate::video_service::set_take_screenshot(
@@ -4851,48 +4772,6 @@ impl Connection {
         }
     }
 
-    pub async fn handle_voice_call(&mut self, accepted: bool) {
-        if let Some(ts) = self.voice_call_request_timestamp.take() {
-            let msg = new_voice_call_response(ts.get(), accepted);
-            if accepted {
-                crate::audio_service::set_voice_call_input_device(
-                    crate::get_default_sound_input(),
-                    false,
-                );
-                self.send_to_cm(Data::StartVoiceCall);
-            } else {
-                self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
-            }
-            self.send(msg).await;
-            self.voice_calling = accepted;
-            if self.is_authed_view_camera_conn() {
-                if let Some(s) = self.server.upgrade() {
-                    s.write().unwrap().subscribe(
-                        super::audio_service::NAME,
-                        self.inner.clone(),
-                        self.audio_enabled() && accepted,
-                    );
-                }
-            }
-        } else {
-            log::warn!("Possible a voice call attack.");
-        }
-    }
-
-    pub async fn close_voice_call(&mut self) {
-        crate::audio_service::set_voice_call_input_device(None, true);
-        // Notify the connection manager that the voice call has been closed.
-        self.send_to_cm(Data::CloseVoiceCall("".to_owned()));
-        self.voice_calling = false;
-        if self.is_authed_view_camera_conn() {
-            if let Some(s) = self.server.upgrade() {
-                s.write()
-                    .unwrap()
-                    .subscribe(super::audio_service::NAME, self.inner.clone(), false);
-            }
-        }
-    }
-
     async fn update_options(&mut self, o: &OptionMessage) {
         log::info!("Option update: {:?}", o);
         if let Ok(q) = o.image_quality.enum_value() {
@@ -4968,7 +4847,7 @@ impl Connection {
                 self.disable_audio = q == BoolOption::Yes;
                 if let Some(s) = self.server.upgrade() {
                     if self.is_authed_view_camera_conn() {
-                        if self.voice_calling || !self.audio_enabled() {
+                        if !self.audio_enabled() {
                             s.write().unwrap().subscribe(
                                 super::audio_service::NAME,
                                 self.inner.clone(),
@@ -5277,16 +5156,6 @@ impl Connection {
             return;
         }
         self.closed = true;
-        // If voice A,B -> C, and A,B has voice call
-        // B disconnects, C will reset the voice call input.
-        //
-        // It may be acceptable, because it's not a common case,
-        // and it's immediately known when the input device changes.
-        // C can change the input device manually in cm interface.
-        //
-        // We can add a (Vec<conn_id>, input device) to avoid this.
-        // But it's not necessary now and we have to consider two audio services(client, server).
-        crate::audio_service::set_voice_call_input_device(None, true);
         log::info!("#{} Connection closed: {}", self.inner.id(), reason);
         if lock
             && self.lock_after_session_end
@@ -5297,7 +5166,7 @@ impl Connection {
             lock_screen().await;
         }
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        let data = if self.chat_unanswered || self.file_transferred && cfg!(feature = "flutter") {
+        let data = if self.file_transferred && cfg!(feature = "flutter") {
             ipc::Data::Disconnected
         } else {
             ipc::Data::Close

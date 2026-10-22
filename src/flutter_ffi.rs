@@ -689,13 +689,6 @@ pub fn session_input_string(session_id: SessionID, value: String) {
     }
 }
 
-// chat_client_mode
-pub fn session_send_chat(session_id: SessionID, text: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.send_chat(text);
-    }
-}
-
 // Terminal functions
 pub fn session_open_terminal(session_id: SessionID, terminal_id: i32, rows: u32, cols: u32) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
@@ -1718,55 +1711,12 @@ pub fn session_new_rdp(session_id: SessionID) {
     }
 }
 
-pub fn session_request_voice_call(session_id: SessionID) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.request_voice_call();
-    }
-}
-
-pub fn session_close_voice_call(session_id: SessionID) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.close_voice_call();
-    }
-}
-
 pub fn session_get_conn_token(session_id: SessionID) -> SyncReturn<Option<String>> {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         SyncReturn(session.get_conn_token())
     } else {
         SyncReturn(None)
     }
-}
-
-pub fn cm_handle_incoming_voice_call(id: i32, accept: bool) {
-    crate::ui_cm_interface::handle_incoming_voice_call(id, accept);
-}
-
-pub fn cm_close_voice_call(id: i32) {
-    crate::ui_cm_interface::close_voice_call(id);
-}
-
-pub fn set_voice_call_input_device(_is_cm: bool, _device: String) {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if _is_cm {
-        let _ = crate::ipc::set_config("voice-call-input", _device);
-    } else {
-        crate::audio_service::set_voice_call_input_device(Some(_device), true);
-    }
-}
-
-pub fn get_voice_call_input_device(_is_cm: bool) -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if _is_cm {
-        match crate::ipc::get_config("voice-call-input") {
-            Ok(Some(device)) => device,
-            _ => "".to_owned(),
-        }
-    } else {
-        crate::audio_service::get_voice_call_input_device().unwrap_or_default()
-    }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    "".to_owned()
 }
 
 pub fn main_get_last_remote_id() -> String {
@@ -2206,11 +2156,6 @@ pub fn main_wol(id: String) {
 pub fn main_create_shortcut(_id: String) {
     #[cfg(windows)]
     create_shortcut(_id);
-}
-
-pub fn cm_send_chat(conn_id: i32, msg: String) {
-    #[cfg(not(any(target_os = "ios")))]
-    crate::ui_cm_interface::send_chat(conn_id, msg);
 }
 
 pub fn cm_login_res(conn_id: i32, res: bool) {

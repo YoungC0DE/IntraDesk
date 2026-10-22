@@ -1011,10 +1011,6 @@ impl InvokeUiSession for FlutterHandler {
         self.push_event("cancel_msgbox", &[("tag", tag)], &[]);
     }
 
-    fn new_message(&self, msg: String) {
-        self.push_event("chat_client_mode", &[("text", &msg)], &[]);
-    }
-
     fn switch_display(&self, display: &SwitchDisplay) {
         let resolutions = serialize_resolutions(&display.resolutions.resolutions);
         self.push_event(
@@ -1073,22 +1069,6 @@ impl InvokeUiSession for FlutterHandler {
             &[("running", running.to_string().as_str())],
             &[],
         );
-    }
-
-    fn on_voice_call_started(&self) {
-        self.push_event::<&str>("on_voice_call_started", &[], &[]);
-    }
-
-    fn on_voice_call_closed(&self, reason: &str) {
-        let _res = self.push_event("on_voice_call_closed", &[("reason", reason)], &[]);
-    }
-
-    fn on_voice_call_waiting(&self) {
-        self.push_event::<&str>("on_voice_call_waiting", &[], &[]);
-    }
-
-    fn on_voice_call_incoming(&self) {
-        self.push_event::<&str>("on_voice_call_incoming", &[], &[]);
     }
 
     #[inline]
@@ -1537,13 +1517,6 @@ pub mod connection_manager {
             );
         }
 
-        fn new_message(&self, id: i32, text: String) {
-            self.push_event(
-                "chat_server_mode",
-                &[("id", &id.to_string()), ("text", &text)],
-            );
-        }
-
         fn change_theme(&self, dark: String) {
             self.push_event("theme", &[("dark", &dark)]);
         }
@@ -1554,18 +1527,6 @@ pub mod connection_manager {
 
         fn show_elevation(&self, show: bool) {
             self.push_event("show_elevation", &[("show", &show.to_string())]);
-        }
-
-        fn update_voice_call_state(&self, client: &crate::ui_cm_interface::Client) {
-            let client_json = serde_json::to_string(&client).unwrap_or("".into());
-            // send to Android service, active notification no matter UI is shown or not.
-            #[cfg(target_os = "android")]
-            if let Err(e) =
-                call_main_service_set_by_name("update_voice_call_state", Some(&client_json), None)
-            {
-                log::debug!("call_main_service_set_by_name fail,{}", e);
-            }
-            self.push_event("update_voice_call_state", &[("client", &client_json)]);
         }
 
         fn file_transfer_log(&self, action: &str, log: &str) {

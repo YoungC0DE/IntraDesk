@@ -35,7 +35,6 @@ pub mod action_id {
     pub const PIN_TOOLBAR: &str          = "pin_toolbar";
     pub const VIEW_MODE_ORIGINAL: &str   = "view_mode_original";
     pub const VIEW_MODE_ADAPTIVE: &str   = "view_mode_adaptive";
-    pub const TOGGLE_CHAT: &str               = "toggle_chat";
     pub const TOGGLE_QUALITY_MONITOR: &str    = "toggle_quality_monitor";
     pub const TOGGLE_SHOW_REMOTE_CURSOR: &str = "toggle_show_remote_cursor";
     pub const TOGGLE_SHOW_MY_CURSOR: &str     = "toggle_show_my_cursor";
@@ -69,7 +68,6 @@ pub mod action_id {
     pub const SEND_CLIPBOARD_KEYSTROKES: &str = "send_clipboard_keystrokes";
     pub const SWITCH_TAB_NEXT: &str           = "switch_tab_next";
     pub const SWITCH_TAB_PREV: &str           = "switch_tab_prev";
-    pub const TOGGLE_VOICE_CALL: &str         = "toggle_voice_call";
     pub const TOGGLE_VIEW_ONLY: &str          = "toggle_view_only";
 }
 
@@ -116,7 +114,6 @@ pub fn default_bindings() -> Vec<Binding> {
         Binding { action: action_id::TOGGLE_SHOW_REMOTE_CURSOR.into(), mods: prefix(), key: "m".into() },
         Binding { action: action_id::TOGGLE_MUTE.into(),               mods: prefix(), key: "s".into() },
         Binding { action: action_id::TOGGLE_BLOCK_INPUT.into(),        mods: prefix(), key: "i".into() },
-        Binding { action: action_id::TOGGLE_CHAT.into(),               mods: prefix(), key: "c".into() },
     ]
 }
 
@@ -291,7 +288,6 @@ fn action_available_on_platform(action: &str, platform: &str, is_wayland: bool) 
         | action_id::KEYBOARD_MODE_TRANSLATE | action_id::KEYBOARD_MODE_LEGACY
         | action_id::TOGGLE_SHOW_MY_CURSOR | action_id::TOGGLE_ZOOM_CURSOR => !mobile,
         action_id::RESET_CANVAS => mobile,
-        action_id::TOGGLE_VOICE_CALL => platform != "ios",
         _ => true,
     }
 }
@@ -390,7 +386,6 @@ const RELEASE_ACTION_IDS: &[&str] = &[
     action_id::SWITCH_TAB_PREV,
     action_id::RESTART_REMOTE,
     action_id::SWITCH_SIDES,
-    action_id::TOGGLE_CHAT,
 ];
 
 pub fn runs_on_release(action_id: &str) -> bool {
@@ -971,7 +966,6 @@ mod tests {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let actions = [action_id::SWITCH_DISPLAY_ALL, action_id::KEYBOARD_MODE_MAP,
             action_id::TOGGLE_SHOW_MY_CURSOR, action_id::TOGGLE_ZOOM_CURSOR,
-            action_id::TOGGLE_VOICE_CALL,
             action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL];
         let saved = Bindings { enabled: true, pass_through: false,
             bindings: actions.iter().map(|action| Binding {
@@ -979,8 +973,7 @@ mod tests {
             }).collect() };
         let raw = serde_json::to_string(&saved).unwrap();
         for (platform, expected) in [
-            ("android", vec![action_id::TOGGLE_VOICE_CALL,
-                action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
+            ("android", vec![action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
             ("ios", vec![action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
             ("macos", actions.iter().copied().filter(|a| *a != action_id::RESET_CANVAS).collect()),
         ] {
@@ -1031,14 +1024,14 @@ mod tests {
                 assert_eq!(state.get(&k), Some(&true), "{k:?} must stay held locally");
             }
         }
-        assert!(dispatch(&make_press(Key::KeyC)), "second chord key fires");
+        assert!(dispatch(&make_press(Key::KeyM)), "second chord key fires");
         assert!(dispatch(&make_press(Key::KeyP)), "P repeat is consumed");
         assert!(dispatch(&make_release(Key::KeyP)), "P release is consumed");
-        assert!(dispatch(&make_release(Key::KeyC)), "C release is consumed");
+        assert!(dispatch(&make_release(Key::KeyM)), "M release is consumed");
         assert!(fired_keys().is_empty());
         assert_eq!(
             *fired.borrow(),
-            vec![action_id::SCREENSHOT.to_owned(), action_id::TOGGLE_CHAT.to_owned()]
+            vec![action_id::SCREENSHOT.to_owned(), action_id::TOGGLE_SHOW_REMOTE_CURSOR.to_owned()]
         );
 
         release_chord(chord);
@@ -1145,7 +1138,7 @@ mod tests {
         let remote_held = std::cell::RefCell::new(
             chord.into_iter().collect::<std::collections::HashSet<_>>()
         );
-        for key in [Key::KeyP, Key::KeyC] {
+        for key in [Key::KeyP, Key::KeyM] {
             assert!(try_dispatch(
                 Some(&SID_A),
                 &make_press(key),
@@ -1178,7 +1171,7 @@ mod tests {
         use rdev::Key;
 
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        for action in [action_id::TOGGLE_MUTE, action_id::TOGGLE_CHAT,
+        for action in [action_id::TOGGLE_MUTE,
             action_id::TOGGLE_VIEW_ONLY, action_id::TOGGLE_SHOW_MY_CURSOR,
             action_id::INSERT_LOCK, action_id::SEND_CTRL_ALT_DEL,
             action_id::KEYBOARD_MODE_MAP, action_id::KEYBOARD_MODE_TRANSLATE,
@@ -1427,12 +1420,12 @@ mod tests {
             Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(), |_| {}
         ));
         enter_view_only(&SID_A);
-        let action = match_event(&make_press(Key::KeyC));
+        let action = match_event(&make_press(Key::KeyM));
         let fired = fired_keys().contains(&Key::KeyP);
         super::super::IS_RDEV_ENABLED.store(previous, Ordering::SeqCst);
         release_chord(chord);
         clear_session_state(&SID_A);
-        assert_eq!(action.as_deref(), Some(action_id::TOGGLE_CHAT));
+        assert_eq!(action.as_deref(), Some(action_id::TOGGLE_SHOW_REMOTE_CURSOR));
         assert!(fired, "rdev still receives the held shortcut key's release");
     }
 
@@ -1449,7 +1442,7 @@ mod tests {
             Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(), |_| {}
         ));
         clear_session_state(&SID_B);
-        assert_eq!(match_event(&make_press(Key::KeyC)).as_deref(), Some(action_id::TOGGLE_CHAT));
+        assert_eq!(match_event(&make_press(Key::KeyM)).as_deref(), Some(action_id::TOGGLE_SHOW_REMOTE_CURSOR));
         enter_view_only(&SID_A);
         super::super::IS_RDEV_ENABLED.store(previous, Ordering::SeqCst);
         assert!(fired_keys().is_empty());

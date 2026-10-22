@@ -101,14 +101,6 @@ const CONFIG_SYNC_INITIAL_WAIT_SECS: u64 = 3;
 
 lazy_static::lazy_static! {
     pub static ref CHILD_PROCESS: Childs = Default::default();
-    // A client server used to provide local services(audio, video, clipboard, etc.)
-    // for all initiative connections.
-    //
-    // [Note]
-    // ugly
-    // Now we use this [`CLIENT_SERVER`] to do following operations:
-    // - record local audio, and send to remote
-    pub static ref CLIENT_SERVER: ServerPtr = new();
 }
 
 pub struct Server {

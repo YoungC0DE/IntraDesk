@@ -158,10 +158,6 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
     KeyboardShortcutActionEntry(
         kShortcutActionToggleSwapLeftRightMouse, 'swap-left-right-mouse'),
   ]),
-  KeyboardShortcutActionGroup('Chat', [
-    KeyboardShortcutActionEntry(kShortcutActionToggleChat, 'Text chat'),
-    KeyboardShortcutActionEntry(kShortcutActionToggleVoiceCall, 'Voice call'),
-  ]),
   // "Other" collects single-icon toolbar buttons that have no dropdown
   // (Pin, Close), plus actions with no toolbar entry at all (Fullscreen —
   // driven by callback, not menu; Toggle Toolbar / tab navigation — tab
@@ -250,9 +246,6 @@ List<KeyboardShortcutActionGroup> filterKeyboardShortcutActionGroupsForPlatform(
         (id == kShortcutActionViewModeOriginal ||
             id == kShortcutActionViewModeAdaptive ||
             id == kShortcutActionViewModeCustom)) {
-      return false;
-    }
-    if (!cap.includeVoiceCallShortcut && id == kShortcutActionToggleVoiceCall) {
       return false;
     }
     return true;

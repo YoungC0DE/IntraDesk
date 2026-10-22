@@ -812,10 +812,6 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
         return const Offstage();
       }
     }));
-    if (!isWebDesktop) {
-      toolbarItems.add(_MobileActionMenu(ffi: widget.ffi));
-    }
-
     toolbarItems.add(Obx(() {
       final privacyModeState = PrivacyModeState.find(widget.id);
       if ((privacyModeState.isEmpty ||
@@ -942,28 +938,6 @@ class _PinMenu extends StatelessWidget {
             : _ToolbarTheme.hoverInactiveColor,
       ),
     );
-  }
-}
-
-class _MobileActionMenu extends StatelessWidget {
-  final FFI ffi;
-  const _MobileActionMenu({Key? key, required this.ffi}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    if (!ffi.ffiModel.isPeerAndroid) return Offstage();
-    return Obx(() => _IconMenuButton(
-          assetName: 'assets/actions_mobile.svg',
-          tooltip: 'Mobile Actions',
-          onPressed: () => ffi.dialogManager.setMobileActionsOverlayVisible(
-              !ffi.dialogManager.mobileActionsOverlayVisible.value),
-          color: ffi.dialogManager.mobileActionsOverlayVisible.isTrue
-              ? _ToolbarTheme.blueColor
-              : _ToolbarTheme.inactiveColor,
-          hoverColor: ffi.dialogManager.mobileActionsOverlayVisible.isTrue
-              ? _ToolbarTheme.hoverBlueColor
-              : _ToolbarTheme.hoverInactiveColor,
-        ));
   }
 }
 
@@ -2583,7 +2557,6 @@ class _KeyboardMenu extends StatelessWidget {
               Divider(),
               ...toolbarToggles(),
               ...mouseSpeed(),
-              ...mobileActions(),
             ]);
   }
 
@@ -2775,38 +2748,6 @@ class _KeyboardMenu extends StatelessWidget {
         .paddingOnly(left: 26.0);
   }
 
-  mobileActions() {
-    if (pi.platform != kPeerPlatformAndroid) return [];
-    final enabled = versionCmp(pi.version, '1.2.7') >= 0;
-    if (!enabled) return [];
-    return [
-      Divider(),
-      MenuButton(
-          child: Text(translate('Back')),
-          onPressed: () => ffi.inputModel.onMobileBack(),
-          ffi: ffi),
-      MenuButton(
-          child: Text(translate('Home')),
-          onPressed: () => ffi.inputModel.onMobileHome(),
-          ffi: ffi),
-      MenuButton(
-          child: Text(translate('Apps')),
-          onPressed: () => ffi.inputModel.onMobileApps(),
-          ffi: ffi),
-      MenuButton(
-          child: Text(translate('Volume up')),
-          onPressed: () => ffi.inputModel.onMobileVolumeUp(),
-          ffi: ffi),
-      MenuButton(
-          child: Text(translate('Volume down')),
-          onPressed: () => ffi.inputModel.onMobileVolumeDown(),
-          ffi: ffi),
-      MenuButton(
-          child: Text(translate('Power')),
-          onPressed: () => ffi.inputModel.onMobilePower(),
-          ffi: ffi),
-    ];
-  }
 }
 
 class _CloseMenu extends StatelessWidget {

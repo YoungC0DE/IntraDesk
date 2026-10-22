@@ -86,11 +86,25 @@ try {
         Push-Location flutter
         try { Invoke-Native 'flutter' @('pub', 'get') } finally { Pop-Location }
         New-Item -ItemType Directory -Force -Path 'build\bridge' | Out-Null
-        Invoke-Native 'flutter_rust_bridge_codegen' @(
-            '--rust-input', '.\src\flutter_ffi.rs',
-            '--dart-output', ".\$dartBridge",
-            '--c-output', '.\build\bridge\bridge_generated.h',
-            '--llvm-path', (Split-Path $env:LIBCLANG_PATH))
+        $llvmRoot = Split-Path $env:LIBCLANG_PATH
+        # ffigen's libclang does not find clang's own headers on Windows; without stdbool.h it
+        # emits `typedef bool = ...`, which shadows Dart's bool and breaks the freezed code.
+        $clangInclude = Get-ChildItem (Join-Path $llvmRoot 'lib\clang') -Directory |
+            Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName 'include' }
+        $oldCpath = $env:CPATH
+        $env:CPATH = $clangInclude
+        try {
+            Invoke-Native 'flutter_rust_bridge_codegen' @(
+                '--rust-input', '.\src\flutter_ffi.rs',
+                '--dart-output', ".\$dartBridge",
+                '--c-output', '.\build\bridge\bridge_generated.h',
+                '--llvm-path', $llvmRoot)
+        } finally {
+            $env:CPATH = $oldCpath
+        }
+        if (Select-String -Path $dartBridge -Pattern '^typedef bool\b' -Quiet) {
+            throw "Bridge gerado com 'typedef bool' (ffigen não achou stdbool.h em $clangInclude)."
+        }
     } else {
         Write-Host '    Atualizado, pulando (use -ForceBridge para regenerar).'
     }

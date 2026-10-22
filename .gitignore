@@ -58,3 +58,6 @@ flutter/web/
 # Local git worktrees
 .worktrees/
 /dist
+/logs
+libs/portable/Runner.res
+libs/portable/app_metadata.toml

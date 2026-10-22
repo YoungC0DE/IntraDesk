@@ -123,27 +123,8 @@ pub fn has_no_active_conns() -> bool {
     conns.is_empty() && has_no_controlling_conns()
 }
 
-#[cfg(any(not(target_os = "windows"), feature = "flutter"))]
 fn has_no_controlling_conns() -> bool {
     CONTROLLING_SESSION_COUNT.load(Ordering::SeqCst) == 0
-}
-
-#[cfg(not(any(not(target_os = "windows"), feature = "flutter")))]
-fn has_no_controlling_conns() -> bool {
-    let app_exe = format!("{}.exe", crate::get_app_name().to_lowercase());
-    for arg in [
-        "--connect",
-        "--play",
-        "--file-transfer",
-        "--view-camera",
-        "--port-forward",
-        "--rdp",
-    ] {
-        if !crate::platform::get_pids_of_process_with_first_arg(&app_exe, arg).is_empty() {
-            return false;
-        }
-    }
-    true
 }
 
 fn start_auto_update_check() -> Sender<UpdateMsg> {

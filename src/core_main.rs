@@ -717,10 +717,7 @@ pub fn core_main() -> Option<CoreMainAction> {
         }
     }
     //_async_logger_holder.map(|x| x.flush());
-    #[cfg(feature = "flutter")]
     return Some(CoreMainAction::StartUi(flutter_args));
-    #[cfg(not(feature = "flutter"))]
-    return Some(CoreMainAction::StartUi(args));
 }
 
 fn import_config(path: &str) {

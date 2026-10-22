@@ -1108,53 +1108,6 @@ pub mod client {
                             }
                         }
                     }
-                    #[cfg(not(feature = "flutter"))]
-                    if let Some((dir, dst)) =
-                        crate::platform::windows::portable_service_logon_helper_paths()
-                    {
-                        let cleanup_helper_artifacts = || {
-                            if Path::new(&exe) != dst {
-                                std::fs::remove_file(&dst).ok();
-                            }
-                            std::fs::remove_dir(&dir).ok();
-                        };
-                        let mut use_logon_helper_exe = false;
-                        if let Err(err) = std::fs::create_dir_all(&dir) {
-                            log::warn!(
-                                "Failed to create portable service logon helper dir {:?}: {}",
-                                dir,
-                                err
-                            );
-                        } else if let Err(err) = std::fs::copy(&exe, &dst) {
-                            log::warn!(
-                                "Failed to copy portable service logon helper binary from '{}' to {:?}: {}",
-                                exe,
-                                dst,
-                                err
-                            );
-                            cleanup_helper_artifacts();
-                        } else if !dst.exists() {
-                            log::warn!(
-                                "Portable service logon helper binary missing after copy: {:?}",
-                                dst
-                            );
-                            cleanup_helper_artifacts();
-                        } else if let Err(err) =
-                            set_path_permission(&dir, FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0)
-                        {
-                            log::warn!(
-                                "Failed to set portable service logon helper path permission for {:?}: {}",
-                                dir,
-                                err
-                            );
-                            cleanup_helper_artifacts();
-                        } else {
-                            use_logon_helper_exe = true;
-                        }
-                        if use_logon_helper_exe {
-                            exe = dst.to_string_lossy().to_string();
-                        }
-                    }
                     if let Err(e) = crate::platform::windows::create_process_with_logon(
                         username.as_str(),
                         password.as_str(),

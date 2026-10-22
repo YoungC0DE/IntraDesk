@@ -2,8 +2,6 @@
 use crate::flutter;
 #[cfg(target_os = "windows")]
 use crate::platform::windows::{get_char_from_vk, get_unicode_from_vk};
-#[cfg(not(feature = "flutter"))]
-use crate::ui::CUR_SESSION;
 use crate::ui_session_interface::{InvokeUiSession, Session};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::{client::get_key_state, common::GrabState};
@@ -386,8 +384,6 @@ pub mod client {
         ) {
             return;
         }
-        #[cfg(not(feature = "flutter"))]
-        let _ = session_id;
 
         let keyboard_mode = get_keyboard_mode_enum(keyboard_mode);
         if is_long_press(&event) {
@@ -523,10 +519,6 @@ static mut IS_LEFT_OPTION_DOWN: bool = false;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn get_keyboard_mode() -> String {
-    #[cfg(not(feature = "flutter"))]
-    if let Some(session) = CUR_SESSION.lock().unwrap().as_ref() {
-        return session.get_keyboard_mode();
-    }
     #[cfg(feature = "flutter")]
     if let Some(session) = flutter::get_cur_session() {
         return session.get_keyboard_mode();
@@ -1049,11 +1041,6 @@ pub fn event_to_key_events(
 }
 
 pub fn send_key_event(key_event: &KeyEvent) {
-    #[cfg(not(feature = "flutter"))]
-    if let Some(session) = CUR_SESSION.lock().unwrap().as_ref() {
-        session.send_key_event(key_event);
-    }
-
     #[cfg(feature = "flutter")]
     if let Some(session) = flutter::get_cur_session() {
         session.send_key_event(key_event);
@@ -1061,10 +1048,6 @@ pub fn send_key_event(key_event: &KeyEvent) {
 }
 
 pub fn get_peer_platform() -> String {
-    #[cfg(not(feature = "flutter"))]
-    if let Some(session) = CUR_SESSION.lock().unwrap().as_ref() {
-        return session.peer_platform();
-    }
     #[cfg(feature = "flutter")]
     if let Some(session) = flutter::get_cur_session() {
         return session.peer_platform();

@@ -104,10 +104,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let (ipc_sender, ipc_receiver) = std::sync::mpsc::channel::<Data>();
 
     let open_func = move || {
-        if cfg!(not(feature = "flutter")) {
-            crate::run_me::<&str>(vec![]).ok();
-            return;
-        }
         #[cfg(target_os = "macos")]
         crate::platform::macos::handle_application_should_open_untitled_file();
         #[cfg(target_os = "windows")]

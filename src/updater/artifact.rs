@@ -34,31 +34,17 @@ pub(crate) fn current_update_platform() -> &'static str {
 }
 
 pub(crate) fn current_update_arch() -> &'static str {
-    #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-    {
-        "x86"
-    }
-    #[cfg(not(all(target_os = "windows", not(feature = "flutter"))))]
-    {
-        std::env::consts::ARCH
-    }
+    std::env::consts::ARCH
 }
 
 pub(crate) fn current_update_format(update_msi: bool) -> &'static str {
-    #[cfg(any(
-        not(target_os = "windows"),
-        all(target_os = "windows", not(feature = "flutter"))
-    ))]
+    #[cfg(not(target_os = "windows"))]
     let _ = update_msi;
     #[cfg(all(target_os = "windows", feature = "flutter"))]
     {
         if update_msi {
             return "msi";
         }
-        "exe"
-    }
-    #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-    {
         "exe"
     }
     #[cfg(target_os = "macos")]

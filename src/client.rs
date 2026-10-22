@@ -38,9 +38,6 @@ use crate::{
 #[cfg(feature = "unix-file-copy-paste")]
 use crate::{clipboard::check_clipboard_files, clipboard_file::unix_file_clip};
 pub use file_trait::FileManager;
-#[cfg(not(feature = "flutter"))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use hbb_common::tokio::sync::mpsc::UnboundedSender;
 use hbb_common::{
     allow_err,
     anyhow::{anyhow, Context},
@@ -87,9 +84,6 @@ use scrap::{
 use crate::clipboard::CLIPBOARD_INTERVAL;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{check_clipboard, ClipboardSide};
-#[cfg(not(feature = "flutter"))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use crate::ui_session_interface::SessionPermissionConfig;
 
 pub use super::lang::*;
 
@@ -136,15 +130,6 @@ pub const AUDIO_BUFFER_MS: usize = 3000;
 #[cfg(feature = "flutter")]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub(crate) struct ClientClipboardContext;
-
-#[cfg(not(feature = "flutter"))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub(crate) struct ClientClipboardContext {
-    pub cfg: SessionPermissionConfig,
-    pub tx: UnboundedSender<Data>,
-    #[cfg(feature = "unix-file-copy-paste")]
-    pub is_file_supported: bool,
-}
 
 /// Client of the remote desktop.
 pub struct Client;
@@ -1943,8 +1928,6 @@ impl Client {
         std::thread::spawn(move || {
             let mut handler = ClientClipboardHandler {
                 ctx: None,
-                #[cfg(not(feature = "flutter"))]
-                client_clip_ctx: _client_clip_ctx,
             };
 
             tx_started.send(()).ok();
@@ -2032,8 +2015,6 @@ impl ClipboardState {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 struct ClientClipboardHandler {
     ctx: Option<crate::clipboard::ClipboardContext>,
-    #[cfg(not(feature = "flutter"))]
-    client_clip_ctx: Option<ClientClipboardContext>,
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -2043,13 +2024,6 @@ impl ClientClipboardHandler {
         {
             CLIPBOARD_STATE.lock().unwrap().is_text_required
         }
-        #[cfg(not(feature = "flutter"))]
-        {
-            self.client_clip_ctx
-                .as_ref()
-                .map(|ctx| ctx.cfg.is_text_clipboard_required())
-                .unwrap_or(false)
-        }
     }
 
     #[cfg(feature = "unix-file-copy-paste")]
@@ -2057,13 +2031,6 @@ impl ClientClipboardHandler {
         #[cfg(feature = "flutter")]
         {
             CLIPBOARD_STATE.lock().unwrap().is_file_required
-        }
-        #[cfg(not(feature = "flutter"))]
-        {
-            self.client_clip_ctx
-                .as_ref()
-                .map(|ctx| ctx.cfg.is_file_clipboard_required())
-                .unwrap_or(false)
         }
     }
 
@@ -2105,34 +2072,6 @@ impl ClientClipboardHandler {
     #[cfg(feature = "flutter")]
     fn send_msg(&self, msg: Message, _is_file: bool) {
         crate::flutter::send_clipboard_msg(msg, _is_file);
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    fn send_msg(&self, msg: Message, _is_file: bool) {
-        if let Some(ctx) = &self.client_clip_ctx {
-            #[cfg(feature = "unix-file-copy-paste")]
-            if _is_file {
-                if ctx.is_file_supported {
-                    let _ = ctx.tx.send(Data::Message(msg));
-                }
-                return;
-            }
-
-            let pi = ctx.cfg.lc.read().unwrap().peer_info.clone();
-            if let Some(pi) = pi.as_ref() {
-                if let Some(message::Union::MultiClipboards(multi_clipboards)) = &msg.union {
-                    if let Some(msg_out) = crate::clipboard::get_msg_if_not_support_multi_clip(
-                        &pi.version,
-                        &pi.platform,
-                        multi_clipboards,
-                    ) {
-                        let _ = ctx.tx.send(Data::Message(msg_out));
-                        return;
-                    }
-                }
-            }
-            let _ = ctx.tx.send(Data::Message(msg));
-        }
     }
 }
 
@@ -2652,11 +2591,6 @@ impl VideoHandler {
     #[cfg(feature = "flutter")]
     pub fn get_adapter_luid() -> Option<i64> {
         crate::flutter::get_adapter_luid()
-    }
-
-    #[cfg(not(feature = "flutter"))]
-    pub fn get_adapter_luid() -> Option<i64> {
-        None
     }
 
     /// Create a new video handler.
@@ -4261,30 +4195,6 @@ pub async fn handle_test_delay(t: TestDelay, peer: &mut Stream) {
     }
 }
 
-/// Whether is track pad scrolling.
-#[inline]
-#[cfg(all(target_os = "macos", not(feature = "flutter")))]
-fn check_scroll_on_mac(mask: i32, x: i32, y: i32) -> bool {
-    // flutter version we set mask type bit to 4 when track pad scrolling.
-    if mask & 7 == crate::input::MOUSE_TYPE_TRACKPAD {
-        return true;
-    }
-    if mask & 3 != crate::input::MOUSE_TYPE_WHEEL {
-        return false;
-    }
-    let btn = mask >> 3;
-    if y == -1 {
-        btn != 0xff88 && btn != -0x780000
-    } else if y == 1 {
-        btn != 0x78 && btn != 0x780000
-    } else if x != 0 {
-        // No mouse support horizontal scrolling.
-        true
-    } else {
-        false
-    }
-}
-
 /// Send mouse data.
 ///
 /// # Arguments
@@ -4329,13 +4239,6 @@ pub fn send_mouse(
     }
     if command {
         mouse_event.modifiers.push(ControlKey::Meta.into());
-    }
-    #[cfg(all(target_os = "macos", not(feature = "flutter")))]
-    if check_scroll_on_mac(mask, x, y) {
-        let factor = 3;
-        mouse_event.mask = crate::input::MOUSE_TYPE_TRACKPAD;
-        mouse_event.x *= factor;
-        mouse_event.y *= factor;
     }
     interface.swap_modifier_mouse(&mut mouse_event);
     msg_out.set_mouse_event(mouse_event);
@@ -4992,8 +4895,6 @@ pub enum Data {
     CancelJob(i32),
     RemovePortForward(i32),
     AddPortForward((i32, String, i32)),
-    #[cfg(all(target_os = "windows", not(feature = "flutter")))]
-    ToggleClipboardFile,
     NewRDP,
     SetConfirmOverrideFile((i32, i32, bool, bool, bool)),
     AddJob((i32, JobType, String, String, i32, bool, bool)),

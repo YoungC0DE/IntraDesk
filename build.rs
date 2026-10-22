@@ -22,27 +22,6 @@ fn build_mac() {
     println!("cargo:rerun-if-changed={}", file);
 }
 
-#[cfg(all(windows, feature = "inline"))]
-fn build_manifest() {
-    use std::io::Write;
-    if std::env::var("PROFILE").unwrap() == "release" {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("res/icon.ico")
-            .set_language(winapi::um::winnt::MAKELANGID(
-                winapi::um::winnt::LANG_ENGLISH,
-                winapi::um::winnt::SUBLANG_ENGLISH_US,
-            ))
-            .set_manifest_file("res/manifest.xml");
-        match res.compile() {
-            Err(e) => {
-                write!(std::io::stderr(), "{}", e).unwrap();
-                std::process::exit(1);
-            }
-            Ok(_) => {}
-        }
-    }
-}
-
 // bionic only exports getifaddrs()/freeifaddrs() from API 24, while the jniLibs
 // are built against the API 21 sysroot (flutter/ndk_*.sh). webrtc-util calls
 // them, so without this the android link fails on undefined symbols.
@@ -88,8 +67,6 @@ fn install_android_deps() {
 fn main() {
     hbb_common::gen_version();
     install_android_deps();
-    #[cfg(all(windows, feature = "inline"))]
-    build_manifest();
     #[cfg(windows)]
     build_windows();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();

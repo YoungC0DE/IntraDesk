@@ -5,7 +5,6 @@
 .DS_Store
 .env
 libsciter-gtk.so
-src/ui/inline.rs
 extractor
 __pycache__
 src/version.rs
@@ -14,7 +13,6 @@ src/version.rs
 *tgz
 cert.pfx
 *.bak
-sciter.dll
 **pdb
 src/bridge_generated.rs
 src/bridge_generated.io.rs

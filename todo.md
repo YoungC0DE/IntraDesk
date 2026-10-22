@@ -49,7 +49,7 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   Área: `libs/hbb_common`, `.gitmodules` · @dono: claude
 - [x] **T0.2** Repositório = fork do RustDesk (https://github.com/YoungC0DE/IntraDesk), branch `master`, histórico do upstream preservado. `.gitignore` deixou de ignorar `*png`, `*svg`, `*jpg` (escondia os ícones do projeto).
   dep: T0.1 · Área: raiz · @dono: claude
-- [~] **T0.3** Ambiente de build. Criados `scripts/setup-dev.ps1` (instala Rust 1.75, Flutter 3.24.5 + engine RustDesk, LLVM 15.0.6, vcpkg, VS Build Tools, Python, ferramentas do bridge) e `scripts/build.ps1` (bridge + build + .exe portátil em `dist/`). Falta: rodar o setup nesta máquina, fazer o primeiro build local e registrar aqui o que precisou de ajuste. Conferir também se o primeiro run do CI (`build-windows.yml`) passou.
+- [x] **T0.3** Ambiente de build: `scripts/setup-dev.ps1` + `scripts/build.ps1`. Build local completo validado em 21/10/2026 (`dist\IntraDesk-dev.exe`, ~25 MB). Ajustes que foram necessários: fechar o Visual Studio aberto antes do Build Tools; `rustup --no-self-update`; recarregar o PATH; compilar dentro do ambiente do VS 2022 (o VS 2026 sem C++ confundia o bindgen) preservando `VCPKG_ROOT`; `CPATH` com os headers do clang na geração do bridge (senão o ffigen gera `typedef bool`). Pendente: conferir o primeiro run do CI após habilitar o Actions no fork.
   dep: T0.2 · Área: `scripts/`, `README.md` · @dono: claude
 - [ ] **T0.4** Rodar a suíte atual (`cargo test --lib`, `flutter test`) e anotar aqui as falhas que já existem, para não serem confundidas com regressões.
   dep: T0.3 · Área: este arquivo · @dono:

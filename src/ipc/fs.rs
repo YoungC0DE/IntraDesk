@@ -1,5 +1,3 @@
-#[cfg(target_os = "linux")]
-use super::ipc_auth::active_uid;
 use crate::ipc::{connect, Data};
 use hbb_common::{config, log, ResultType};
 use std::{
@@ -16,20 +14,6 @@ impl Drop for FdGuard {
             hbb_common::libc::close(self.0);
         }
     }
-}
-
-#[cfg(target_os = "linux")]
-#[inline]
-pub(crate) fn terminal_count_candidate_uids(effective_uid: u32) -> Vec<u32> {
-    if effective_uid != 0 {
-        return vec![effective_uid];
-    }
-    let mut candidates = Vec::with_capacity(2);
-    if let Some(uid) = active_uid().filter(|uid| *uid != 0) {
-        candidates.push(uid);
-    }
-    candidates.push(0);
-    candidates
 }
 
 #[inline]

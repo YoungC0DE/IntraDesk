@@ -516,11 +516,10 @@ mod tests {
     }
 
     #[test]
-    fn cameras_av1_and_missing_frames_are_not_refreshed() {
+    fn av1_and_missing_frames_are_not_refreshed() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let calls = Rc::new(Cell::new(0));
         for (source, codec_format, yuv) in [
-            (VideoSource::Camera, CodecFormat::VP9, &[1][..]),
             (VideoSource::Monitor, CodecFormat::AV1, &[1][..]),
             (VideoSource::Monitor, CodecFormat::VP9, &[][..]),
         ] {

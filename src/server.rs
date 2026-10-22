@@ -26,7 +26,6 @@ use hbb_common::{
     ResultType, Stream,
 };
 use base::message_proto::*;
-use scrap::camera;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use service::ServiceTmpl;
 use service::{EmptyExtraFieldService, GenericService, Service, Subscriber};
@@ -35,10 +34,6 @@ use video_service::VideoSource;
 use crate::ipc::Data;
 
 pub mod audio_service;
-#[cfg(target_os = "windows")]
-pub mod terminal_helper;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub mod terminal_service;
 cfg_if::cfg_if! {
 if #[cfg(not(target_os = "ios"))] {
 mod clipboard_service;
@@ -71,17 +66,12 @@ pub mod input_service {
 }
 
 mod connection;
-mod login_failure_check;
-pub(crate) mod port_forward_mux;
 pub mod display_service;
 #[cfg(windows)]
 pub mod portable_service;
 mod service;
 mod video_qos;
 pub mod video_service;
-
-#[cfg(all(target_os = "windows", feature = "flutter"))]
-pub mod printer_service;
 
 pub type Childs = Arc<Mutex<Vec<std::process::Child>>>;
 type ConnMap = HashMap<i32, ConnInner>;
@@ -153,21 +143,6 @@ pub fn new() -> ServerPtr {
             server.add_service(Box::new(input_service::new_window_focus()));
         }
     }
-    #[cfg(all(target_os = "windows", feature = "flutter"))]
-    {
-        match printer_service::init(&crate::get_app_name()) {
-            Ok(()) => {
-                log::info!("printer service initialized");
-                server.add_service(Box::new(printer_service::new(
-                    printer_service::NAME.to_owned(),
-                )));
-            }
-            Err(e) => {
-                log::error!("printer service init failed: {}", e);
-            }
-        }
-    }
-    // Terminal service is created per connection, not globally
     Arc::new(RwLock::new(server))
 }
 
@@ -419,21 +394,6 @@ async fn create_relay_connection_(
 impl Server {
     fn is_video_service_name(name: &str) -> bool {
         name.starts_with(VideoSource::Monitor.service_name_prefix())
-            || name.starts_with(VideoSource::Camera.service_name_prefix())
-    }
-
-    pub fn try_add_primary_camera_service(&mut self) {
-        if !camera::primary_camera_exists() {
-            return;
-        }
-        let primary_camera_name =
-            video_service::get_service_name(VideoSource::Camera, camera::PRIMARY_CAMERA_IDX);
-        if !self.contains(&primary_camera_name) {
-            self.add_service(Box::new(video_service::new(
-                VideoSource::Camera,
-                camera::PRIMARY_CAMERA_IDX,
-            )));
-        }
     }
 
     pub fn try_add_monitor_service(&mut self, display_idx: usize) {
@@ -445,17 +405,6 @@ impl Server {
                 display_idx,
             )));
         }
-    }
-
-    pub fn add_camera_connection(&mut self, conn: ConnInner) {
-        if camera::primary_camera_exists() {
-            let primary_camera_name =
-                video_service::get_service_name(VideoSource::Camera, camera::PRIMARY_CAMERA_IDX);
-            if let Some(s) = self.services.get(&primary_camera_name) {
-                s.on_subscribe(conn.clone());
-            }
-        }
-        self.connections.insert(conn.id(), conn);
     }
 
     pub fn add_monitor_connection(

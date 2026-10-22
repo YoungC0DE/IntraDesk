@@ -74,7 +74,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
   var _ignoreBatteryOpt = false;
   var _enableStartOnBoot = false;
   var _checkUpdateOnStartup = false;
-  var _showTerminalExtraKeys = false;
   var _floatingWindowDisabled = false;
   var _keepScreenOn = KeepScreenOn.duringControlled; // relay on floating window
   var _enableAbr = false;
@@ -144,8 +143,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         mainGetLocalBoolOptionSync(kOptionAllowAskForNoteAtEndOfConnection);
     _preventSleepWhileConnected =
         mainGetLocalBoolOptionSync(kOptionKeepAwakeDuringOutgoingSessions);
-    _showTerminalExtraKeys =
-        mainGetLocalBoolOptionSync(kOptionEnableShowTerminalExtraKeys);
   }
 
   @override
@@ -623,23 +620,6 @@ class _SettingsState extends State<SettingsPage> with WidgetsBindingObserver {
         ),
       );
     }
-
-    enhancementsTiles.add(
-      SettingsTile.switchTile(
-        initialValue: _showTerminalExtraKeys,
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(translate('Show terminal extra keys')),
-        ]),
-        onToggle: (bool v) async {
-          await mainSetLocalBoolOption(kOptionEnableShowTerminalExtraKeys, v);
-          final newValue =
-              mainGetLocalBoolOptionSync(kOptionEnableShowTerminalExtraKeys);
-          setState(() {
-            _showTerminalExtraKeys = newValue;
-          });
-        },
-      ),
-    );
 
     onFloatingWindowChanged(bool toValue) async {
       if (toValue) {

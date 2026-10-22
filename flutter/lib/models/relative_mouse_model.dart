@@ -19,7 +19,6 @@ class RelativeMouseModel {
   final RxBool enabled;
 
   final bool Function() keyboardPerm;
-  final bool Function() isViewCamera;
   final String Function() peerVersion;
   final String? Function() peerPlatform;
 
@@ -32,7 +31,6 @@ class RelativeMouseModel {
     required this.sessionId,
     required this.enabled,
     required this.keyboardPerm,
-    required this.isViewCamera,
     required this.peerVersion,
     required this.peerPlatform,
     required this.modify,
@@ -236,7 +234,7 @@ class RelativeMouseModel {
     required bool altPressed,
     required bool commandPressed,
   }) {
-    if (!isDesktop || !keyboardPerm() || isViewCamera()) return false;
+    if (!isDesktop || !keyboardPerm()) return false;
 
     // Only handle exit shortcuts when relative mouse mode is active
     if (!enabled.value) return false;
@@ -386,7 +384,7 @@ class RelativeMouseModel {
     }
 
     if (value) {
-      if (!keyboardPerm() || isViewCamera()) {
+      if (!keyboardPerm()) {
         return false;
       }
 
@@ -697,7 +695,6 @@ class RelativeMouseModel {
     bool bypassKeyboardPerm = false,
   }) async {
     if (!bypassKeyboardPerm && !keyboardPerm()) return false;
-    if (isViewCamera()) return false;
 
     try {
       await bind.sessionSendMouse(

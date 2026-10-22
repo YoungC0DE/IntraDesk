@@ -363,10 +363,7 @@ Widget buildConnectionCard(Client client) {
       key: ValueKey(client.id),
       children: [
         _CmHeader(client: client),
-        client.type_() == ClientType.file ||
-                client.type_() == ClientType.portForward ||
-                client.type_() == ClientType.terminal ||
-                client.disconnected
+        client.type_() == ClientType.file || client.disconnected
             ? Offstage()
             : _PrivilegeBoard(client: client),
         Expanded(
@@ -495,31 +492,10 @@ class _CmHeaderState extends State<_CmHeader>
                     style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
-                if (client.type_() == ClientType.terminal)
-                  FittedBox(
-                    child: Text(
-                      translate("Terminal"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
                 if (client.type_() == ClientType.file)
                   FittedBox(
                     child: Text(
                       translate("Transfer file"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
-                if (client.type_() == ClientType.camera)
-                  FittedBox(
-                    child: Text(
-                      translate("View camera"),
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ),
-                if (client.portForward.isNotEmpty)
-                  FittedBox(
-                    child: Text(
-                      "Port Forward: ${client.portForward}",
                       style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ),
@@ -681,134 +657,116 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
               padding: EdgeInsets.symmetric(horizontal: spacing),
               mainAxisSpacing: spacing,
               crossAxisSpacing: spacing,
-              children: client.type_() == ClientType.camera
-                  ? [
-                      buildPermissionIcon(
-                        client.audio,
-                        Icons.volume_up_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "audio",
-                              enabled: enabled);
-                          setState(() {
-                            client.audio = enabled;
-                          });
-                        },
-                        translate('Enable audio'),
-                        canModify: canModifyPermission,
-                      ),
-                    ]
-                  : [
-                      buildPermissionIcon(
-                        client.keyboard,
-                        Icons.keyboard,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "keyboard",
-                              enabled: enabled);
-                          setState(() {
-                            client.keyboard = enabled;
-                          });
-                        },
-                        translate('Enable keyboard/mouse'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.clipboard,
-                        Icons.assignment_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "clipboard",
-                              enabled: enabled);
-                          setState(() {
-                            client.clipboard = enabled;
-                          });
-                        },
-                        translate('Enable clipboard'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.audio,
-                        Icons.volume_up_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "audio",
-                              enabled: enabled);
-                          setState(() {
-                            client.audio = enabled;
-                          });
-                        },
-                        translate('Enable audio'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.file,
-                        Icons.upload_file_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "file",
-                              enabled: enabled);
-                          setState(() {
-                            client.file = enabled;
-                          });
-                        },
-                        translate('Enable file copy and paste'),
-                        canModify: canModifyPermission,
-                      ),
-                      buildPermissionIcon(
-                        client.restart,
-                        Icons.restart_alt_rounded,
-                        (enabled) {
-                          bind.cmSwitchPermission(
-                              connId: client.id,
-                              name: "restart",
-                              enabled: enabled);
-                          setState(() {
-                            client.restart = enabled;
-                          });
-                        },
-                        translate('Enable remote restart'),
-                        canModify: canModifyPermission,
-                      ),
-                      // only windows support block input
-                      if (isWindows)
-                        buildPermissionIcon(
-                          client.blockInput,
-                          Icons.block,
-                          (enabled) {
-                            bind.cmSwitchPermission(
-                                connId: client.id,
-                                name: "block_input",
-                                enabled: enabled);
-                            setState(() {
-                              client.blockInput = enabled;
-                            });
-                          },
-                          translate('Enable blocking user input'),
-                          canModify: canModifyPermission,
-                        ),
-                      if (bind.mainSupportedPrivacyModeImpls() != '[]')
-                        buildPermissionIcon(
-                          client.privacyMode,
-                          Icons.visibility_off,
-                          (enabled) {
-                            bind.cmSwitchPermission(
-                                connId: client.id,
-                                name: "privacy_mode",
-                                enabled: enabled);
-                            setState(() {
-                              client.privacyMode = enabled;
-                            });
-                          },
-                          translate('Enable privacy mode'),
-                          canModify: canModifyPermission,
-                        )
-                    ],
+              children: [
+                  buildPermissionIcon(
+                    client.keyboard,
+                    Icons.keyboard,
+                    (enabled) {
+                      bind.cmSwitchPermission(
+                          connId: client.id,
+                          name: "keyboard",
+                          enabled: enabled);
+                      setState(() {
+                        client.keyboard = enabled;
+                      });
+                    },
+                    translate('Enable keyboard/mouse'),
+                    canModify: canModifyPermission,
+                  ),
+                  buildPermissionIcon(
+                    client.clipboard,
+                    Icons.assignment_rounded,
+                    (enabled) {
+                      bind.cmSwitchPermission(
+                          connId: client.id,
+                          name: "clipboard",
+                          enabled: enabled);
+                      setState(() {
+                        client.clipboard = enabled;
+                      });
+                    },
+                    translate('Enable clipboard'),
+                    canModify: canModifyPermission,
+                  ),
+                  buildPermissionIcon(
+                    client.audio,
+                    Icons.volume_up_rounded,
+                    (enabled) {
+                      bind.cmSwitchPermission(
+                          connId: client.id,
+                          name: "audio",
+                          enabled: enabled);
+                      setState(() {
+                        client.audio = enabled;
+                      });
+                    },
+                    translate('Enable audio'),
+                    canModify: canModifyPermission,
+                  ),
+                  buildPermissionIcon(
+                    client.file,
+                    Icons.upload_file_rounded,
+                    (enabled) {
+                      bind.cmSwitchPermission(
+                          connId: client.id,
+                          name: "file",
+                          enabled: enabled);
+                      setState(() {
+                        client.file = enabled;
+                      });
+                    },
+                    translate('Enable file copy and paste'),
+                    canModify: canModifyPermission,
+                  ),
+                  buildPermissionIcon(
+                    client.restart,
+                    Icons.restart_alt_rounded,
+                    (enabled) {
+                      bind.cmSwitchPermission(
+                          connId: client.id,
+                          name: "restart",
+                          enabled: enabled);
+                      setState(() {
+                        client.restart = enabled;
+                      });
+                    },
+                    translate('Enable remote restart'),
+                    canModify: canModifyPermission,
+                  ),
+                  // only windows support block input
+                  if (isWindows)
+                    buildPermissionIcon(
+                      client.blockInput,
+                      Icons.block,
+                      (enabled) {
+                        bind.cmSwitchPermission(
+                            connId: client.id,
+                            name: "block_input",
+                            enabled: enabled);
+                        setState(() {
+                          client.blockInput = enabled;
+                        });
+                      },
+                      translate('Enable blocking user input'),
+                      canModify: canModifyPermission,
+                    ),
+                  if (bind.mainSupportedPrivacyModeImpls() != '[]')
+                    buildPermissionIcon(
+                      client.privacyMode,
+                      Icons.visibility_off,
+                      (enabled) {
+                        bind.cmSwitchPermission(
+                            connId: client.id,
+                            name: "privacy_mode",
+                            enabled: enabled);
+                        setState(() {
+                          client.privacyMode = enabled;
+                        });
+                      },
+                      translate('Enable privacy mode'),
+                      canModify: canModifyPermission,
+                    )
+                ],
             ),
           ),
         ],

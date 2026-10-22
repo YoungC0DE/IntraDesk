@@ -52,8 +52,6 @@ pub const STRIDE_ALIGN: usize = 64; // commonly used in libvpx vpx_img_alloc cal
 pub const HW_STRIDE_ALIGN: usize = 0; // recommended by av_frame_get_buffer
 
 pub mod aom;
-#[cfg(not(any(target_os = "ios")))]
-pub mod camera;
 mod vpx;
 
 #[repr(usize)]

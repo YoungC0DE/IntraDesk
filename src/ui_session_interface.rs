@@ -66,7 +66,6 @@ pub struct Session<T: InvokeUiSession> {
     pub server_clipboard_enabled: Arc<RwLock<bool>>,
     pub last_change_display: Arc<Mutex<ChangeDisplayRecord>>,
     pub connection_round_state: Arc<Mutex<ConnectionRoundState>>,
-    pub printer_names: Arc<RwLock<HashMap<i32, String>>>,
     // Indicate whether the session is reconnected.
     // Used to auto start file transfer after reconnection.
     pub reconnect_count: Arc<AtomicUsize>,
@@ -221,24 +220,6 @@ impl<T: InvokeUiSession> Session<T> {
             .unwrap()
             .conn_type
             .eq(&ConnType::DEFAULT_CONN)
-    }
-
-    pub fn is_view_camera(&self) -> bool {
-        self.lc.read().unwrap().conn_type.eq(&ConnType::VIEW_CAMERA)
-    }
-
-    pub fn is_terminal(&self) -> bool {
-        self.lc.read().unwrap().conn_type.eq(&ConnType::TERMINAL)
-    }
-
-    pub fn is_port_forward(&self) -> bool {
-        let conn_type = self.lc.read().unwrap().conn_type;
-        conn_type == ConnType::PORT_FORWARD || conn_type == ConnType::RDP
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    pub fn is_rdp(&self) -> bool {
-        self.lc.read().unwrap().conn_type.eq(&ConnType::RDP)
     }
 
     #[cfg(feature = "flutter")]
@@ -553,34 +534,6 @@ impl<T: InvokeUiSession> Session<T> {
         });
     }
 
-    pub fn remove_port_forward(&self, port: i32) {
-        let mut config = self.load_config();
-        config.port_forwards = config
-            .port_forwards
-            .drain(..)
-            .filter(|x| x.0 != port)
-            .collect();
-        self.save_config(config);
-        self.send(Data::RemovePortForward(port));
-    }
-
-    pub fn add_port_forward(&self, port: i32, remote_host: String, remote_port: i32) {
-        let mut config = self.load_config();
-        if config
-            .port_forwards
-            .iter()
-            .filter(|x| x.0 == port)
-            .next()
-            .is_some()
-        {
-            return;
-        }
-        let pf = (port, remote_host, remote_port);
-        config.port_forwards.push(pf.clone());
-        self.save_config(config);
-        self.send(Data::AddPortForward(pf));
-    }
-
     pub fn get_option(&self, k: String) -> String {
         if k.eq("remote_dir") {
             return self.lc.read().unwrap().get_remote_dir();
@@ -718,56 +671,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.swap_modifier_key(&mut msg);
         let mut msg_out = Message::new();
         msg_out.set_key_event(msg);
-        self.send(Data::Message(msg_out));
-    }
-
-    // Terminal methods
-    pub fn open_terminal(&self, terminal_id: i32, rows: u32, cols: u32) {
-        let mut action = TerminalAction::new();
-        action.set_open(OpenTerminal {
-            terminal_id,
-            rows,
-            cols,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_terminal_action(action);
-        self.send(Data::Message(msg_out));
-    }
-
-    pub fn send_terminal_input(&self, terminal_id: i32, data: String) {
-        let mut action = TerminalAction::new();
-        action.set_data(TerminalData {
-            terminal_id,
-            data: bytes::Bytes::from(data.into_bytes()),
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_terminal_action(action);
-        self.send(Data::Message(msg_out));
-    }
-
-    pub fn resize_terminal(&self, terminal_id: i32, rows: u32, cols: u32) {
-        let mut action = TerminalAction::new();
-        action.set_resize(ResizeTerminal {
-            terminal_id,
-            rows,
-            cols,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_terminal_action(action);
-        self.send(Data::Message(msg_out));
-    }
-
-    pub fn close_terminal(&self, terminal_id: i32) {
-        let mut action = TerminalAction::new();
-        action.set_close(CloseTerminal {
-            terminal_id,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_terminal_action(action);
         self.send(Data::Message(msg_out));
     }
 
@@ -1275,14 +1178,8 @@ impl<T: InvokeUiSession> Session<T> {
         }));
     }
 
-    pub fn login(
-        &self,
-        os_username: String,
-        os_password: String,
-        password: String,
-        remember: bool,
-    ) {
-        self.send(Data::Login((os_username, os_password, password, remember)));
+    pub fn login(&self, password: String, remember: bool) {
+        self.send(Data::Login((password, remember)));
     }
 
     pub fn send2fa(&self, code: String, trust_this_device: bool) {
@@ -1306,10 +1203,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn get_enable_trusted_devices(&self) -> bool {
         self.lc.read().unwrap().enable_trusted_devices
-    }
-
-    pub fn new_rdp(&self) {
-        self.send(Data::NewRDP);
     }
 
     pub fn close(&self) {
@@ -1518,7 +1411,7 @@ impl<T: InvokeUiSession> Session<T> {
                                 "No active console user logged on, please connect and logon first.",
                             );
                         }
-                    } else if !self.is_terminal() {
+                    } else {
                         self.msgbox(
                             "success",
                             "Successful",
@@ -1551,20 +1444,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn get_conn_token(&self) -> Option<String> {
         self.lc.read().unwrap().get_conn_token()
-    }
-
-    pub fn printer_response(&self, id: i32, path: String, printer_name: String) {
-        self.printer_names.write().unwrap().insert(id, printer_name);
-        let to = std::env::temp_dir().join(format!("rustdesk_printer_{id}"));
-        self.send(Data::SendFiles((
-            id,
-            base::fs::JobType::Printer,
-            path,
-            to.to_string_lossy().to_string(),
-            0,
-            false,
-            true,
-        )));
     }
 }
 
@@ -1625,9 +1504,7 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     #[cfg(feature = "flutter")]
     fn is_multi_ui_session(&self) -> bool;
     fn update_empty_dirs(&self, _res: ReadEmptyDirsResponse) {}
-    fn printer_request(&self, id: i32, path: String);
     fn handle_screenshot_resp(&self, sid: String, msg: String);
-    fn handle_terminal_response(&self, response: TerminalResponse);
 }
 
 impl<T: InvokeUiSession> Deref for Session<T> {
@@ -1688,24 +1565,17 @@ impl<T: InvokeUiSession> Interface for Session<T> {
                 self.on_error("No active console user logged on, please connect and logon first.");
                 return;
             }
-        } else if !self.is_port_forward() && !self.is_terminal() {
+        } else {
             if pi.displays.is_empty() {
                 self.lc.write().unwrap().handle_peer_info(&pi);
                 self.update_privacy_mode();
-                let msg = if self.is_view_camera() {
-                    "No cameras"
-                } else {
-                    "No displays"
-                };
-                self.msgbox("error", "Error", msg, "");
+                self.msgbox("error", "Error", "No displays", "");
                 return;
             }
-            if !self.is_view_camera() {
-                self.try_change_init_resolution(pi.current_display);
-                let p = self.lc.read().unwrap().should_auto_login();
-                if !p.is_empty() {
-                    crate::client::auto_login(p, &pi, self.clone());
-                }
+            self.try_change_init_resolution(pi.current_display);
+            let p = self.lc.read().unwrap().should_auto_login();
+            if !p.is_empty() {
+                crate::client::auto_login(p, &pi, self.clone());
             }
             let current = &pi.displays[pi.current_display as usize];
             self.set_display(
@@ -1726,7 +1596,7 @@ impl<T: InvokeUiSession> Interface for Session<T> {
         self.set_peer_info(&pi);
         if self.is_file_transfer() {
             self.close_success();
-        } else if !self.is_port_forward() && !self.is_terminal() {
+        } else {
             self.msgbox(
                 "success",
                 "Successful",
@@ -1764,23 +1634,8 @@ impl<T: InvokeUiSession> Interface for Session<T> {
         handle_hash(self.lc.clone(), pass, hash, self, peer).await
     }
 
-    async fn handle_login_from_ui(
-        &self,
-        os_username: String,
-        os_password: String,
-        password: String,
-        remember: bool,
-        peer: &mut Stream,
-    ) {
-        handle_login_from_ui(
-            self.lc.clone(),
-            os_username,
-            os_password,
-            password,
-            remember,
-            peer,
-        )
-        .await;
+    async fn handle_login_from_ui(&self, password: String, remember: bool, peer: &mut Stream) {
+        handle_login_from_ui(self.lc.clone(), password, remember, peer).await;
     }
 
     async fn handle_test_delay(&self, t: TestDelay, peer: &mut Stream) {
@@ -1829,132 +1684,13 @@ impl<T: InvokeUiSession> Session<T> {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn io_loop<T: InvokeUiSession>(handler: Session<T>, round: u32) {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
     let (sender, receiver) = mpsc::unbounded_channel::<Data>();
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let (sender, mut receiver) = mpsc::unbounded_channel::<Data>();
     *handler.sender.write().unwrap() = Some(sender.clone());
     let token = LocalConfig::get_option("access_token");
     let key = crate::get_key(false).await;
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if handler.is_port_forward() {
-        handler.lc.write().unwrap().port_forward_mux = crate::port_forward::mux_enabled();
-        if handler.is_rdp() {
-            let port = handler
-                .get_option("rdp_port".to_owned())
-                .parse::<i32>()
-                .unwrap_or(3389);
-            std::env::set_var(
-                "rdp_username",
-                handler.get_option("rdp_username".to_owned()),
-            );
-            std::env::set_var(
-                "rdp_password",
-                handler.get_option("rdp_password".to_owned()),
-            );
-            log::info!("Remote rdp port: {}", port);
-            start_one_port_forward(handler, 0, "".to_owned(), port, receiver, &key, &token).await;
-        } else if handler.args.len() == 0 {
-            let pfs = handler.lc.read().unwrap().port_forwards.clone();
-            let mut queues = HashMap::<i32, mpsc::UnboundedSender<Data>>::new();
-            for d in pfs {
-                sender.send(Data::AddPortForward(d)).ok();
-            }
-            loop {
-                match receiver.recv().await {
-                    Some(Data::AddPortForward((port, remote_host, remote_port))) => {
-                        if port <= 0 || remote_port <= 0 {
-                            continue;
-                        }
-                        let (sender, receiver) = mpsc::unbounded_channel::<Data>();
-                        queues.insert(port, sender);
-                        let handler = handler.clone();
-                        let key = key.clone();
-                        let token = token.clone();
-                        tokio::spawn(async move {
-                            start_one_port_forward(
-                                handler,
-                                port,
-                                remote_host,
-                                remote_port,
-                                receiver,
-                                &key,
-                                &token,
-                            )
-                            .await;
-                        });
-                    }
-                    Some(Data::RemovePortForward(port)) => {
-                        if let Some(s) = queues.remove(&port) {
-                            s.send(Data::Close).ok();
-                        }
-                    }
-                    Some(Data::Close) => {
-                        break;
-                    }
-                    Some(d) => {
-                        for (_, s) in queues.iter() {
-                            s.send(d.clone()).ok();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        } else {
-            let port = handler.args[0].parse::<i32>().unwrap_or(0);
-            if handler.args.len() != 3
-                || handler.args[2].parse::<i32>().unwrap_or(0) <= 0
-                || port <= 0
-            {
-                handler.on_error("Invalid arguments, usage:<br><br> rustdesk --port-forward remote-id listen-port remote-host remote-port");
-            }
-            let remote_host = handler.args[1].clone();
-            let remote_port = handler.args[2].parse::<i32>().unwrap_or(0);
-            start_one_port_forward(
-                handler,
-                port,
-                remote_host,
-                remote_port,
-                receiver,
-                &key,
-                &token,
-            )
-            .await;
-        }
-        return;
-    }
     let mut remote = Remote::new(handler, receiver, sender);
     remote.io_loop(&key, &token, round).await;
     let _ = remote.sync_jobs_status_to_local().await;
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-async fn start_one_port_forward<T: InvokeUiSession>(
-    handler: Session<T>,
-    port: i32,
-    remote_host: String,
-    remote_port: i32,
-    receiver: mpsc::UnboundedReceiver<Data>,
-    key: &str,
-    token: &str,
-) {
-    if let Err(err) = crate::port_forward::listen(
-        handler.get_id(),
-        handler.password.clone(),
-        port,
-        handler.clone(),
-        receiver,
-        key,
-        token,
-        handler.lc.clone(),
-        remote_host,
-        remote_port,
-    )
-    .await
-    {
-        handler.on_error(&format!("Failed to listen on {}: {}", port, err));
-    }
-    log::info!("port forward (:{}) exit", port);
 }
 
 #[tokio::main(flavor = "current_thread")]

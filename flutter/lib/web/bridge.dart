@@ -131,7 +131,6 @@ class RustdeskImpl {
       {required String id,
       required UuidValue sessionId,
       required Int32List displays,
-      required bool isViewCamera,
       dynamic hint}) {
     return '';
   }
@@ -140,10 +139,6 @@ class RustdeskImpl {
       {required UuidValue sessionId,
       required String id,
       required bool isFileTransfer,
-      required bool isViewCamera,
-      required bool isPortForward,
-      required bool isRdp,
-      required bool isTerminal,
       required String switchUuid,
       required bool forceRelay,
       required String password,
@@ -157,8 +152,6 @@ class RustdeskImpl {
         'password': password,
         'is_shared_password': isSharedPassword,
         'isFileTransfer': isFileTransfer,
-        'isViewCamera': isViewCamera,
-        'isTerminal': isTerminal
       })
     ]);
   }
@@ -205,16 +198,12 @@ class RustdeskImpl {
 
   Future<void> sessionLogin(
       {required UuidValue sessionId,
-      required String osUsername,
-      required String osPassword,
       required String password,
       required bool remember,
       dynamic hint}) {
     return Future(() => js.context.callMethod('setByName', [
           'login',
           jsonEncode({
-            'os_username': osUsername,
-            'os_password': osPassword,
             'password': password,
             'remember': remember
           })

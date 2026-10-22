@@ -14,7 +14,6 @@ import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'package:flutter_hbb/mobile/widgets/dialog.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
-import 'package:flutter_hbb/models/printer_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/shortcut_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -54,7 +53,6 @@ enum SettingsTabKey {
   network,
   display,
   account,
-  printer,
   about,
 }
 
@@ -73,10 +71,6 @@ class DesktopSettingPage extends StatefulWidget {
       SettingsTabKey.network,
     if (!bind.isIncomingOnly()) SettingsTabKey.display,
     if (!bind.isDisableAccount()) SettingsTabKey.account,
-    if (isWindows &&
-        !bind.isDisableSettings() &&
-        bind.mainGetBuildinOption(key: kOptionHideRemotePrinterSetting) != 'Y')
-      SettingsTabKey.printer,
     SettingsTabKey.about,
   ];
 
@@ -204,10 +198,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(
               _TabInfo(tab, 'Account', Icons.person_outline, Icons.person));
           break;
-        case SettingsTabKey.printer:
-          settingTabs
-              .add(_TabInfo(tab, 'Printer', Icons.print_outlined, Icons.print));
-          break;
         case SettingsTabKey.about:
           settingTabs
               .add(_TabInfo(tab, 'About', Icons.info_outline, Icons.info));
@@ -235,9 +225,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
         case SettingsTabKey.account:
           children.add(const _Account());
-          break;
-        case SettingsTabKey.printer:
-          children.add(const _Printer());
           break;
         case SettingsTabKey.about:
           children.add(const _About());
@@ -546,15 +533,6 @@ class _GeneralState extends State<_General> {
           'Open connection in new tab',
           kOptionOpenNewConnInTabs,
           isServer: false,
-        ),
-        Tooltip(
-          message: translate('port-forward-mux-tip'),
-          child: _OptionCheckBox(
-            context,
-            'Reuse one connection for port forwarding',
-            kOptionEnablePortForwardMux,
-            isServer: false,
-          ),
         ),
         // though this is related to GUI, but opengl problem affects all users, so put in config rather than local
         if (isLinux)
@@ -1129,23 +1107,12 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             _OptionCheckBox(
                 context, 'Enable keyboard/mouse', kOptionEnableKeyboard,
                 enabled: enabled, fakeValue: fakeValue),
-            if (isWindows)
-              _OptionCheckBox(
-                  context, 'Enable remote printer', kOptionEnableRemotePrinter,
-                  enabled: enabled, fakeValue: fakeValue),
             _OptionCheckBox(context, 'Enable clipboard', kOptionEnableClipboard,
                 enabled: enabled, fakeValue: fakeValue),
             _OptionCheckBox(
                 context, 'Enable file transfer', kOptionEnableFileTransfer,
                 enabled: enabled, fakeValue: fakeValue),
             _OptionCheckBox(context, 'Enable audio', kOptionEnableAudio,
-                enabled: enabled, fakeValue: fakeValue),
-            _OptionCheckBox(context, 'Enable camera', kOptionEnableCamera,
-                enabled: enabled, fakeValue: fakeValue),
-            _OptionCheckBox(context, 'Enable terminal', kOptionEnableTerminal,
-                enabled: enabled, fakeValue: fakeValue),
-            _OptionCheckBox(
-                context, 'Enable TCP tunneling', kOptionEnableTunnel,
                 enabled: enabled, fakeValue: fakeValue),
             _OptionCheckBox(
                 context, 'Enable remote restart', kOptionEnableRemoteRestart,
@@ -2287,153 +2254,6 @@ class _CheckboxState extends State<_Checkbox> {
       ).marginOnly(left: _kCheckBoxLeftMargin),
       onTap: () => onChanged(!value),
     );
-  }
-}
-
-class _Printer extends StatefulWidget {
-  const _Printer({super.key});
-
-  @override
-  State<_Printer> createState() => __PrinterState();
-}
-
-class __PrinterState extends State<_Printer> {
-  @override
-  Widget build(BuildContext context) {
-    final scrollController = ScrollController();
-    return ListView(controller: scrollController, children: [
-      outgoing(context),
-      incoming(context),
-    ]).marginOnly(bottom: _kListViewBottomMargin);
-  }
-
-  Widget outgoing(BuildContext context) {
-    final isSupportPrinterDriver =
-        bind.mainGetCommonSync(key: 'is-support-printer-driver') == 'true';
-
-    Widget tipOsNotSupported() {
-      return Align(
-        alignment: Alignment.topLeft,
-        child: Text(translate('printer-os-requirement-tip')),
-      ).marginOnly(left: _kCardLeftMargin);
-    }
-
-    Widget tipClientNotInstalled() {
-      return Align(
-        alignment: Alignment.topLeft,
-        child:
-            Text(translate('printer-requires-installed-{$appName}-client-tip')),
-      ).marginOnly(left: _kCardLeftMargin);
-    }
-
-    Widget tipPrinterNotInstalled() {
-      final failedMsg = ''.obs;
-      platformFFI.registerEventHandler(
-          'install-printer-res', 'install-printer-res', (evt) async {
-        if (evt['success'] as bool) {
-          setState(() {});
-        } else {
-          failedMsg.value = evt['msg'] as String;
-        }
-      }, replace: true);
-      return Column(children: [
-        Obx(
-          () => failedMsg.value.isNotEmpty
-              ? Offstage()
-              : Align(
-                  alignment: Alignment.topLeft,
-                  child: Text(translate('printer-{$appName}-not-installed-tip'))
-                      .marginOnly(bottom: 10.0),
-                ),
-        ),
-        Obx(
-          () => failedMsg.value.isEmpty
-              ? Offstage()
-              : Align(
-                  alignment: Alignment.topLeft,
-                  child: Text(failedMsg.value,
-                          style: DefaultTextStyle.of(context)
-                              .style
-                              .copyWith(color: Colors.red))
-                      .marginOnly(bottom: 10.0)),
-        ),
-        _Button('Install {$appName} Printer', () {
-          failedMsg.value = '';
-          bind.mainSetCommon(key: 'install-printer', value: '');
-        })
-      ]).marginOnly(left: _kCardLeftMargin, bottom: 2.0);
-    }
-
-    Widget tipReady() {
-      return Align(
-        alignment: Alignment.topLeft,
-        child: Text(translate('printer-{$appName}-ready-tip')),
-      ).marginOnly(left: _kCardLeftMargin);
-    }
-
-    final installed = bind.mainIsInstalled();
-    // `is-printer-installed` may fail, but it's rare case.
-    // Add additional error message here if it's really needed.
-    final isPrinterInstalled =
-        bind.mainGetCommonSync(key: 'is-printer-installed') == 'true';
-
-    final List<Widget> children = [];
-    if (!isSupportPrinterDriver) {
-      children.add(tipOsNotSupported());
-    } else {
-      children.addAll([
-        if (!installed) tipClientNotInstalled(),
-        if (installed && !isPrinterInstalled) tipPrinterNotInstalled(),
-        if (installed && isPrinterInstalled) tipReady()
-      ]);
-    }
-    return _Card(title: 'Outgoing Print Jobs', children: children);
-  }
-
-  Widget incoming(BuildContext context) {
-    onRadioChanged(String value) async {
-      await bind.mainSetLocalOption(
-          key: kKeyPrinterIncomingJobAction, value: value);
-      setState(() {});
-    }
-
-    PrinterOptions printerOptions = PrinterOptions.load();
-    return _Card(title: 'Incoming Print Jobs', children: [
-      _Radio(context,
-          value: kValuePrinterIncomingJobDismiss,
-          groupValue: printerOptions.action,
-          label: 'Dismiss',
-          onChanged: onRadioChanged),
-      _Radio(context,
-          value: kValuePrinterIncomingJobDefault,
-          groupValue: printerOptions.action,
-          label: 'use-the-default-printer-tip',
-          onChanged: onRadioChanged),
-      _Radio(context,
-          value: kValuePrinterIncomingJobSelected,
-          groupValue: printerOptions.action,
-          label: 'use-the-selected-printer-tip',
-          onChanged: onRadioChanged),
-      if (printerOptions.printerNames.isNotEmpty)
-        ComboBox(
-          initialKey: printerOptions.printerName,
-          keys: printerOptions.printerNames,
-          values: printerOptions.printerNames,
-          enabled: printerOptions.action == kValuePrinterIncomingJobSelected,
-          onChanged: (value) async {
-            await bind.mainSetLocalOption(
-                key: kKeyPrinterSelected, value: value);
-            setState(() {});
-          },
-        ).marginOnly(left: 10),
-      _OptionCheckBox(
-        context,
-        'auto-print-tip',
-        kKeyPrinterAllowAutoPrint,
-        isServer: false,
-        enabled: printerOptions.action != kValuePrinterIncomingJobDismiss,
-      )
-    ]);
   }
 }
 

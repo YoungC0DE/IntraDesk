@@ -1,6 +1,5 @@
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
@@ -542,11 +541,6 @@ abstract class BasePeerCard extends StatelessWidget {
     BuildContext context,
     String title, {
     bool isFileTransfer = false,
-    bool isViewCamera = false,
-    bool isTcpTunneling = false,
-    bool isRDP = false,
-    bool isTerminal = false,
-    bool isTerminalRunAsAdmin = false,
   }) {
     return MenuEntryButton<String>(
       childBuilder: (TextStyle? style) => Text(
@@ -554,18 +548,11 @@ abstract class BasePeerCard extends StatelessWidget {
         style: style,
       ),
       proc: () {
-        if (isTerminalRunAsAdmin) {
-          setEnvTerminalAdmin();
-        }
         connectInPeerTab(
           context,
           peer,
           tab,
           isFileTransfer: isFileTransfer,
-          isViewCamera: isViewCamera,
-          isTcpTunneling: isTcpTunneling,
-          isRDP: isRDP,
-          isTerminal: isTerminal || isTerminalRunAsAdmin,
         );
       },
       padding: menuPadding,
@@ -589,80 +576,6 @@ abstract class BasePeerCard extends StatelessWidget {
       context,
       translate('Transfer file'),
       isFileTransfer: true,
-    );
-  }
-
-  @protected
-  MenuEntryBase<String> _viewCameraAction(BuildContext context) {
-    return _connectCommonAction(
-      context,
-      translate('View camera'),
-      isViewCamera: true,
-    );
-  }
-
-  @protected
-  MenuEntryBase<String> _terminalAction(BuildContext context) {
-    return _connectCommonAction(
-      context,
-      '${translate('Terminal')} (beta)',
-      isTerminal: true,
-    );
-  }
-
-  @protected
-  MenuEntryBase<String> _terminalRunAsAdminAction(BuildContext context) {
-    return _connectCommonAction(
-      context,
-      '${translate('Terminal (Run as administrator)')} (beta)',
-      isTerminalRunAsAdmin: true,
-    );
-  }
-
-  @protected
-  MenuEntryBase<String> _tcpTunnelingAction(BuildContext context) {
-    return _connectCommonAction(
-      context,
-      translate('TCP tunneling'),
-      isTcpTunneling: true,
-    );
-  }
-
-  @protected
-  MenuEntryBase<String> _rdpAction(BuildContext context, String id) {
-    return MenuEntryButton<String>(
-      childBuilder: (TextStyle? style) => Container(
-          alignment: AlignmentDirectional.center,
-          height: CustomPopupMenuTheme.height,
-          child: Row(
-            children: [
-              Text(
-                translate('RDP'),
-                style: style,
-              ),
-              Expanded(
-                  child: Align(
-                alignment: Alignment.centerRight,
-                child: Transform.scale(
-                    scale: 0.8,
-                    child: IconButton(
-                      icon: const Icon(Icons.edit),
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        if (Navigator.canPop(context)) {
-                          Navigator.pop(context);
-                        }
-                        _rdpDialog(id);
-                      },
-                    )),
-              ))
-            ],
-          )),
-      proc: () {
-        connectInPeerTab(context, peer, tab, isRDP: true);
-      },
-      padding: menuPadding,
-      dismissOnClicked: true,
     );
   }
 
@@ -969,25 +882,13 @@ class RecentPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
     ];
-
-    if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
-    }
 
     final List favs = (await bind.mainGetFav()).toList();
 
-    if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
-    }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
       menuItems.add(_createShortCutAction(peer.id));
@@ -1034,23 +935,11 @@ class FavoritePeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
     ];
 
-    if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
-    }
-
-    if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
-    }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
       menuItems.add(_createShortCutAction(peer.id));
@@ -1094,25 +983,13 @@ class DiscoveredPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
     ];
-
-    if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
-    }
 
     final List favs = (await bind.mainGetFav()).toList();
 
-    if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
-    }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
     }
     menuItems.add(_wolAction(peer.id));
     if (isWindows) {
@@ -1153,23 +1030,11 @@ class AddressBookPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
     ];
 
-    if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
-    }
-
-    if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
-    }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
       menuItems.add(_createShortCutAction(peer.id));
@@ -1310,23 +1175,11 @@ class MyGroupPeerCard extends BasePeerCard {
     final List<MenuEntryBase<String>> menuItems = [
       _connectAction(context),
       _transferFileAction(context),
-      _viewCameraAction(context),
-      _terminalAction(context),
     ];
 
-    if (peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_terminalRunAsAdminAction(context));
-    }
-
-    if (isDesktop && peer.platform != kPeerPlatformAndroid) {
-      menuItems.add(_tcpTunnelingAction(context));
-    }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
     if (!isWeb) {
       menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows && peer.platform == kPeerPlatformWindows) {
-      menuItems.add(_rdpAction(context, peer.id));
     }
     if (isWindows) {
       menuItems.add(_createShortCutAction(peer.id));
@@ -1345,123 +1198,6 @@ class MyGroupPeerCard extends BasePeerCard {
   @protected
   @override
   void _update() => gFFI.groupModel.pull();
-}
-
-void _rdpDialog(String id) async {
-  final maxLength = bind.mainMaxEncryptLen();
-  final port = await bind.mainGetPeerOption(id: id, key: 'rdp_port');
-  final username = await bind.mainGetPeerOption(id: id, key: 'rdp_username');
-  final portController = TextEditingController(text: port);
-  final userController = TextEditingController(text: username);
-  final passwordController = TextEditingController(
-      text: await bind.mainGetPeerOption(id: id, key: 'rdp_password'));
-  RxBool secure = true.obs;
-
-  gFFI.dialogManager.show((setState, close, context) {
-    submit() async {
-      String port = portController.text.trim();
-      String username = userController.text;
-      String password = passwordController.text;
-      await bind.mainSetPeerOption(id: id, key: 'rdp_port', value: port);
-      await bind.mainSetPeerOption(
-          id: id, key: 'rdp_username', value: username);
-      await bind.mainSetPeerOption(
-          id: id, key: 'rdp_password', value: password);
-      showToast(translate('Successful'));
-      close();
-    }
-
-    return CustomAlertDialog(
-      title: Text(translate('RDP Settings')),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 500),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                isDesktop
-                    ? ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 140),
-                        child: Text(
-                          "${translate('Port')}:",
-                          textAlign: TextAlign.right,
-                        ).marginOnly(right: 10))
-                    : SizedBox.shrink(),
-                Expanded(
-                  child: TextField(
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(
-                          r'^([0-9]|[1-9]\d|[1-9]\d{2}|[1-9]\d{3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$'))
-                    ],
-                    decoration: InputDecoration(
-                        labelText: isDesktop ? null : translate('Port'),
-                        hintText: '3389'),
-                    controller: portController,
-                    autofocus: true,
-                  ).workaroundFreezeLinuxMint(),
-                ),
-              ],
-            ).marginOnly(bottom: isDesktop ? 8 : 0),
-            Obx(() => Row(
-                  children: [
-                    stateGlobal.isPortrait.isFalse
-                        ? ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 140),
-                            child: Text(
-                              "${translate('Username')}:",
-                              textAlign: TextAlign.right,
-                            ).marginOnly(right: 10))
-                        : SizedBox.shrink(),
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                            labelText:
-                                isDesktop ? null : translate('Username')),
-                        controller: userController,
-                      ).workaroundFreezeLinuxMint(),
-                    ),
-                  ],
-                ).marginOnly(bottom: stateGlobal.isPortrait.isFalse ? 8 : 0)),
-            Obx(() => Row(
-                  children: [
-                    stateGlobal.isPortrait.isFalse
-                        ? ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 140),
-                            child: Text(
-                              "${translate('Password')}:",
-                              textAlign: TextAlign.right,
-                            ).marginOnly(right: 10))
-                        : SizedBox.shrink(),
-                    Expanded(
-                      child: Obx(() => TextField(
-                            obscureText: secure.value,
-                            maxLength: maxLength,
-                            decoration: InputDecoration(
-                                labelText:
-                                    isDesktop ? null : translate('Password'),
-                                suffixIcon: IconButton(
-                                    onPressed: () =>
-                                        secure.value = !secure.value,
-                                    icon: Icon(secure.value
-                                        ? Icons.visibility_off
-                                        : Icons.visibility))),
-                            controller: passwordController,
-                          ).workaroundFreezeLinuxMint()),
-                    ),
-                  ],
-                ))
-          ],
-        ),
-      ),
-      actions: [
-        dialogButton("Cancel", onPressed: close, isOutline: true),
-        dialogButton("OK", onPressed: submit),
-      ],
-      onSubmit: submit,
-      onCancel: close,
-    );
-  });
 }
 
 Widget getOnline(double rightPadding, bool online) {
@@ -1539,11 +1275,7 @@ class TagPainter extends CustomPainter {
 }
 
 void connectInPeerTab(BuildContext context, Peer peer, PeerTabIndex tab,
-    {bool isFileTransfer = false,
-    bool isViewCamera = false,
-    bool isTcpTunneling = false,
-    bool isRDP = false,
-    bool isTerminal = false}) async {
+    {bool isFileTransfer = false}) async {
   var password = '';
   bool isSharedPassword = false;
   if (tab == PeerTabIndex.ab) {
@@ -1573,9 +1305,5 @@ void connectInPeerTab(BuildContext context, Peer peer, PeerTabIndex tab,
   connect(context, peer.id,
       password: password,
       isSharedPassword: isSharedPassword,
-      isFileTransfer: isFileTransfer,
-      isTerminal: isTerminal,
-      isViewCamera: isViewCamera,
-      isTcpTunneling: isTcpTunneling,
-      isRDP: isRDP);
+      isFileTransfer: isFileTransfer);
 }

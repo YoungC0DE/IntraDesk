@@ -70,10 +70,6 @@ pub fn core_main() -> Option<CoreMainAction> {
                 "--connect",
                 "--play",
                 "--file-transfer",
-                "--view-camera",
-                "--port-forward",
-                "--terminal",
-                "--rdp",
             ]
             .contains(&arg.as_str())
             {
@@ -126,7 +122,7 @@ pub fn core_main() -> Option<CoreMainAction> {
         }
     }
     #[cfg(windows)]
-    if args.contains(&"--connect".to_string()) || args.contains(&"--view-camera".to_string()) {
+    if args.contains(&"--connect".to_string()) {
         base::platform::windows::start_cpu_performance_monitor();
     }
     #[cfg(feature = "flutter")]
@@ -284,8 +280,8 @@ pub fn core_main() -> Option<CoreMainAction> {
                 if config::is_disable_installation() {
                     return None;
                 }
-                let (printer_override, debug) = parse_silent_install_args(&args);
-                let options = platform::get_silent_install_options(printer_override);
+                let debug = parse_silent_install_args(&args);
+                let options = platform::get_silent_install_options();
                 let res = platform::install_me(options, "".to_owned(), true, debug);
                 let text = match res {
                     Ok(_) => translate("Installation Successful!".to_string()),
@@ -326,28 +322,6 @@ pub fn core_main() -> Option<CoreMainAction> {
                 hbb_common::allow_err!(
                     crate::virtual_display_manager::amyuni_idd::uninstall_driver()
                 );
-                return None;
-            } else if args[0] == "--install-remote-printer" {
-                #[cfg(windows)]
-                if crate::platform::is_win_10_or_greater() {
-                    match remote_printer::install_update_printer(&crate::get_app_name()) {
-                        Ok(_) => {
-                            log::info!("Remote printer installed/updated successfully");
-                        }
-                        Err(e) => {
-                            log::error!("Failed to install/update the remote printer: {}", e);
-                        }
-                    }
-                } else {
-                    log::error!("Win10 or greater required!");
-                }
-                return None;
-            } else if args[0] == "--uninstall-remote-printer" {
-                #[cfg(windows)]
-                if crate::platform::is_win_10_or_greater() {
-                    remote_printer::uninstall_printer(&crate::get_app_name());
-                    log::info!("Remote printer uninstalled");
-                }
                 return None;
             }
         }
@@ -686,27 +660,10 @@ pub fn core_main() -> Option<CoreMainAction> {
             #[cfg(feature = "hwcodec")]
             crate::ipc::hwcodec_process();
             return None;
-        } else if args[0] == "--terminal-helper" {
-            // Terminal helper process - runs as user to create ConPTY
-            // This is needed because ConPTY has compatibility issues with CreateProcessAsUserW
-            #[cfg(target_os = "windows")]
-            {
-                let helper_args: Vec<String> = args[1..].to_vec();
-                if let Err(e) = crate::server::terminal_helper::run_terminal_helper(&helper_args) {
-                    log::error!("Terminal helper failed: {}", e);
-                }
-            }
-            return None;
         } else if args[0] == "--cm" {
             // call connection manager to establish connections
             // meanwhile, return true to call flutter window to show control panel
             crate::ui_interface::start_option_status_sync();
-        } else if args[0] == "--whiteboard" {
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            {
-                crate::whiteboard::run();
-            }
-            return None;
         } else if args[0] == "-gtk-sudo" {
             // rustdesk service kill `rustdesk --` processes
             #[cfg(target_os = "linux")]
@@ -759,8 +716,7 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
     let mut param_array = vec![];
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--connect" | "--play" | "--file-transfer" | "--view-camera" | "--port-forward"
-            | "--terminal" | "--rdp" => {
+            "--connect" | "--play" | "--file-transfer" => {
                 authority = Some((&arg.to_string()[2..]).to_owned());
                 id = args.next();
             }
@@ -881,20 +837,8 @@ fn is_cli_setting_change_disabled() -> bool {
 }
 
 #[cfg(windows)]
-fn parse_silent_install_args(args: &[String]) -> (Option<bool>, bool) {
-    let mut printer_override = None;
-    let mut debug = false;
-
-    for arg in args.iter().skip(1) {
-        match arg.as_str() {
-            "printer=1" => printer_override = Some(true),
-            "printer=0" => printer_override = Some(false),
-            "debug" => debug = true,
-            _ => {}
-        }
-    }
-
-    (printer_override, debug)
+fn parse_silent_install_args(args: &[String]) -> bool {
+    args.iter().skip(1).any(|arg| arg == "debug")
 }
 
 /// Check if the executable is a Quick Support version.

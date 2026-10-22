@@ -243,38 +243,20 @@ List<(String, String)> otherDefaultSettings() {
         'Use all my displays for the remote session',
         kKeyUseAllMyDisplaysForTheRemoteSession
       ),
-    ('Keep terminal sessions on disconnect', kOptionTerminalPersistent),
-    (
-      'Allow terminal apps to copy to clipboard',
-      kOptionAllowTerminalClipboardWrite
-    ),
   ];
 
   return v;
 }
 
 String getOtherDefaultSettingOption(String key) {
-  if (key == kOptionAllowTerminalClipboardWrite) {
-    return bind.mainGetLocalOption(key: key);
-  }
   return bind.mainGetUserDefaultOption(key: key);
 }
 
 Future<void> setOtherDefaultSettingOption(String key, String value) {
-  if (key == kOptionAllowTerminalClipboardWrite) {
-    return bind.mainSetLocalOption(
-      key: key,
-      value: value == kTerminalClipboardWriteAllowed
-          ? kTerminalClipboardWriteAllowed
-          : kTerminalClipboardWriteDenied,
-    );
-  }
   return bind.mainSetUserDefaultOption(key: key, value: value);
 }
 
-bool isOtherDefaultSettingReadOnly(String key) =>
-    isOptionFixed(key) ||
-    (key == kOptionAllowTerminalClipboardWrite && bind.isDisableSettings());
+bool isOtherDefaultSettingReadOnly(String key) => isOptionFixed(key);
 
 class TrackpadSpeedWidget extends StatefulWidget {
   final SimpleWrapper<int> value;

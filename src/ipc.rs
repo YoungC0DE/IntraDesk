@@ -66,8 +66,6 @@ pub(crate) use ipc_auth::{
     ensure_peer_executable_matches_current_by_fd, is_allowed_service_peer_uid,
     log_rejected_uinput_connection, peer_uid_from_fd,
 };
-#[cfg(target_os = "linux")]
-use ipc_fs::terminal_count_candidate_uids;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use ipc_fs::{
     check_pid, ensure_secure_ipc_parent_dir, scrub_secure_ipc_parent_dir,
@@ -326,13 +324,10 @@ pub enum Data {
     Login {
         id: i32,
         is_file_transfer: bool,
-        is_view_camera: bool,
-        is_terminal: bool,
         peer_id: String,
         name: String,
         avatar: String,
         authorized: bool,
-        port_forward: String,
         keyboard: bool,
         clipboard: bool,
         audio: bool,
@@ -476,23 +471,14 @@ pub enum Data {
     HwCodecConfig(Option<String>),
     RemoveTrustedDevices(Vec<Bytes>),
     ClearTrustedDevices,
-    #[cfg(all(target_os = "windows", feature = "flutter"))]
-    PrinterData(Vec<u8>),
-    InstallOption(Option<(String, String)>),
     #[cfg(all(
         feature = "flutter",
         not(any(target_os = "android", target_os = "ios"))
     ))]
     ControllingSessionCount(usize),
-    #[cfg(target_os = "linux")]
-    TerminalSessionCount(usize),
-    #[cfg(target_os = "windows")]
-    PortForwardSessionCount(Option<usize>),
     SocksWs(Option<Box<(Option<config::Socks5Server>, String)>>),
     #[cfg(target_os = "macos")]
     HasNoActiveConns(Option<bool>),
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    Whiteboard((String, crate::whiteboard::CustomEvent)),
     ControlPermissionsRemoteModify(Option<bool>),
     #[cfg(target_os = "windows")]
     FileTransferEnabledState(Option<bool>),
@@ -1123,11 +1109,6 @@ async fn handle(data: Data, stream: &mut Connection) {
         Data::ControllingSessionCount(count) => {
             crate::updater::update_controlling_session_count(count);
         }
-        #[cfg(target_os = "linux")]
-        Data::TerminalSessionCount(_) => {
-            let count = crate::terminal_service::get_terminal_session_count(true);
-            allow_err!(stream.send(&Data::TerminalSessionCount(count)).await);
-        }
         #[cfg(feature = "hwcodec")]
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         Data::CheckHwcodec => {
@@ -1200,42 +1181,6 @@ async fn handle(data: Data, stream: &mut Connection) {
         Data::ClearTrustedDevices => {
             Config::clear_trusted_devices();
         }
-        Data::InstallOption(opt) => match opt {
-            Some((_k, _v)) => {
-                #[cfg(target_os = "windows")]
-                if let Err(e) = crate::platform::windows::update_install_option(&_k, &_v) {
-                    log::error!(
-                        "Failed to update install option \"{}\" to \"{}\", error: {}",
-                        &_k,
-                        &_v,
-                        e
-                    );
-                }
-            }
-            None => {
-                // `None` is usually used to get values.
-                // This branch is left blank for unification and further use.
-            }
-        },
-        #[cfg(target_os = "windows")]
-        Data::PortForwardSessionCount(c) => match c {
-            None => {
-                let count = crate::server::AUTHED_CONNS
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .filter(|c| c.conn_type == crate::server::AuthConnType::PortForward)
-                    .count();
-                allow_err!(
-                    stream
-                        .send(&Data::PortForwardSessionCount(Some(count)))
-                        .await
-                );
-            }
-            _ => {
-                // Port forward session count is only a get value.
-            }
-        },
         Data::ControlPermissionsRemoteModify(_) => {
             use hbb_common::rendezvous_proto::control_permissions::Permission;
             let state =
@@ -2042,16 +1987,6 @@ pub async fn notify_server_to_check_hwcodec() -> ResultType<()> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-pub async fn get_port_forward_session_count(ms_timeout: u64) -> ResultType<usize> {
-    let mut c = connect(ms_timeout, "").await?;
-    c.send(&Data::PortForwardSessionCount(None)).await?;
-    if let Some(Data::PortForwardSessionCount(Some(count))) = c.next_timeout(ms_timeout).await? {
-        return Ok(count);
-    }
-    bail!("Failed to get port forward session count");
-}
-
 #[cfg(feature = "hwcodec")]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::main(flavor = "current_thread")]
@@ -2154,81 +2089,6 @@ pub async fn update_controlling_session_count(count: usize) -> ResultType<()> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-#[tokio::main(flavor = "current_thread")]
-pub async fn get_terminal_session_count() -> ResultType<usize> {
-    let timeout_ms = 1_000;
-    let effective_uid = unsafe { hbb_common::libc::geteuid() as u32 };
-    let candidate_uids = terminal_count_candidate_uids(effective_uid);
-    let mut last_err: Option<anyhow::Error> = None;
-    for candidate_uid in candidate_uids {
-        let socket_path = Config::ipc_path_for_uid(candidate_uid, "");
-        let connect_result = timeout(timeout_ms, Endpoint::connect(&socket_path))
-            .await
-            .map_err(|err| {
-                anyhow::anyhow!(
-                    "Timeout connecting to terminal ipc at {}: {}",
-                    socket_path,
-                    err
-                )
-            });
-        let connection = match connect_result {
-            Ok(Ok(connection)) => connection,
-            Ok(Err(err)) => {
-                last_err = Some(anyhow::anyhow!(
-                    "Failed to connect to terminal ipc at {}: {}",
-                    socket_path,
-                    err
-                ));
-                continue;
-            }
-            Err(err) => {
-                last_err = Some(err);
-                continue;
-            }
-        };
-        let mut ipc_conn = ConnectionTmpl::new(connection);
-        if let Err(err) = ipc_conn.send(&Data::TerminalSessionCount(0)).await {
-            last_err = Some(anyhow::anyhow!(
-                "Failed to request terminal session count via ipc at {}: {}",
-                socket_path,
-                err
-            ));
-            continue;
-        }
-        match ipc_conn.next_timeout(timeout_ms).await {
-            Ok(Some(Data::TerminalSessionCount(session_count))) => {
-                return Ok(session_count);
-            }
-            Ok(None) => {
-                last_err = Some(anyhow::anyhow!(
-                    "Invalid response when requesting terminal session count via ipc at {}",
-                    socket_path
-                ));
-            }
-            Ok(other) => {
-                last_err = Some(anyhow::anyhow!(
-                    "Unexpected response when requesting terminal session count via ipc at {}: {:?}",
-                    socket_path,
-                    other.map(|v| std::mem::discriminant(&v))
-                ));
-            }
-            Err(err) => {
-                last_err = Some(anyhow::anyhow!(
-                    "Failed to read terminal session count via ipc at {}: {}",
-                    socket_path,
-                    err
-                ));
-            }
-        }
-    }
-    if let Some(err) = last_err {
-        Err(err.into())
-    } else {
-        Ok(0)
-    }
-}
-
 async fn handle_wayland_screencast_restore_token(
     key: String,
     value: String,
@@ -2242,16 +2102,6 @@ async fn handle_wayland_screencast_restore_token(
         return Ok(Some(v));
     }
     return Ok(None);
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn set_install_option(k: String, v: String) -> ResultType<()> {
-    if let Ok(mut c) = connect(1000, "").await {
-        c.send(&&Data::InstallOption(Some((k, v)))).await?;
-        // do not put below before connect, because we need to check should_exit
-        c.next_timeout(1000).await.ok();
-    }
-    Ok(())
 }
 
 #[cfg(test)]

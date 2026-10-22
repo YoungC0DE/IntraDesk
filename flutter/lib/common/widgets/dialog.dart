@@ -936,51 +936,16 @@ void enterPasswordDialog(
   );
 }
 
-void enterUserLoginDialog(SessionID sessionId,
-    OverlayDialogManager dialogManager, String osAccountDescTip) async {
-  await _connectDialog(
-    sessionId,
-    dialogManager,
-    osUsernameController: TextEditingController(),
-    osPasswordController: TextEditingController(),
-    osAccountDescTip: osAccountDescTip,
-  );
-}
-
-void enterUserLoginAndPasswordDialog(SessionID sessionId,
-    OverlayDialogManager dialogManager, String osAccountDescTip) async {
-  await _connectDialog(
-    sessionId,
-    dialogManager,
-    osUsernameController: TextEditingController(),
-    osPasswordController: TextEditingController(),
-    passwordController: TextEditingController(),
-    osAccountDescTip: osAccountDescTip,
-  );
-}
-
 _connectDialog(
   SessionID sessionId,
   OverlayDialogManager dialogManager, {
-  TextEditingController? osUsernameController,
-  TextEditingController? osPasswordController,
   TextEditingController? passwordController,
-  String? osAccountDescTip,
 }) async {
-  final errUsername = ''.obs;
   var rememberPassword = false;
   if (passwordController != null) {
     rememberPassword =
         await bind.sessionGetRemember(sessionId: sessionId) ?? false;
   }
-  if (osUsernameController != null) {
-    osUsernameController.addListener(() {
-      if (errUsername.value.isNotEmpty) {
-        errUsername.value = '';
-      }
-    });
-  }
-
   dialogManager.dismissAll();
   dialogManager.show((setState, close, context) {
     cancel() {
@@ -989,20 +954,9 @@ _connectDialog(
     }
 
     submit() {
-      if (osUsernameController != null) {
-        if (osUsernameController.text.trim().isEmpty) {
-          errUsername.value = translate('Empty Username');
-          setState(() {});
-          return;
-        }
-      }
-      final osUsername = osUsernameController?.text.trim() ?? '';
-      final osPassword = osPasswordController?.text.trim() ?? '';
       final password = passwordController?.text.trim() ?? '';
       if (passwordController != null && password.isEmpty) return;
       gFFI.login(
-        osUsername,
-        osPassword,
         sessionId,
         password,
         rememberPassword,
@@ -1047,39 +1001,6 @@ _connectDialog(
       );
     }
 
-    osAccountWidget() {
-      if (osUsernameController == null || osPasswordController == null) {
-        return Offstage();
-      }
-      return Column(
-        children: [
-          if (osAccountDescTip != null) descWidget(translate(osAccountDescTip)),
-          DialogTextField(
-            title: translate(DialogTextField.kUsernameTitle),
-            controller: osUsernameController,
-            prefixIcon: DialogTextField.kUsernameIcon,
-            errorText: null,
-          ),
-          if (errUsername.value.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SelectableText(
-                errUsername.value,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.left,
-              ).paddingOnly(left: 12, bottom: 2),
-            ),
-          PasswordWidget(
-            controller: osPasswordController,
-            autoFocus: false,
-          ),
-        ],
-      );
-    }
-
     passwdWidget() {
       if (passwordController == null) {
         return Offstage();
@@ -1089,7 +1010,7 @@ _connectDialog(
           descWidget(translate('verify_rustdesk_password_tip')),
           PasswordWidget(
             controller: passwordController,
-            autoFocus: osUsernameController == null,
+            autoFocus: true,
           ),
           rememberWidget(
             translate('Remember password'),
@@ -1113,10 +1034,6 @@ _connectDialog(
         ],
       ),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        osAccountWidget(),
-        osUsernameController == null || passwordController == null
-            ? Offstage()
-            : Container(height: 12),
         passwdWidget(),
       ]),
       actions: [

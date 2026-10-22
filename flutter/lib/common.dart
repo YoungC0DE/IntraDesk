@@ -32,11 +32,8 @@ import '../consts.dart';
 import 'common/widgets/overlay.dart';
 import 'mobile/pages/file_manager_page.dart';
 import 'mobile/pages/remote_page.dart';
-import 'mobile/pages/view_camera_page.dart';
-import 'mobile/pages/terminal_page.dart';
 import 'desktop/pages/remote_page.dart' as desktop_remote;
 import 'desktop/pages/file_manager_page.dart' as desktop_file_manager;
-import 'desktop/pages/view_camera_page.dart' as desktop_view_camera;
 import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'models/model.dart';
 import 'models/platform_model.dart';
@@ -104,10 +101,7 @@ enum DesktopType {
   main,
   remote,
   fileTransfer,
-  viewCamera,
-  terminal,
   cm,
-  portForward,
 }
 
 bool isDoubleEqual(double a, double b) {
@@ -713,17 +707,6 @@ closeConnection({String? id}) {
       stateGlobal.isInMainPage = true;
     } else {
       final controller = Get.find<DesktopTabController>();
-      if (controller.tabType == DesktopTabType.terminal &&
-          controller.onCloseWindow != null) {
-        // Terminal windows are scoped to one peer. The optional id passed to
-        // closeConnection() is that peer id, not a terminal tab key
-        // (${peerId}_${terminalId}). Closing from terminal dialogs should close
-        // the peer's whole terminal window, including all terminal tabs.
-        unawaited(controller.onCloseWindow!().catchError((e, _) {
-          debugPrint('[closeConnection] Failed to close terminal window: $e');
-        }));
-        return;
-      }
       controller.closeBy(id);
     }
   }
@@ -1232,7 +1215,7 @@ void msgBox(SessionID sessionId, String type, String title, String text,
       onSubmit.call();
     } else {
       // https://github.com/rustdesk/rustdesk/blob/5e9a31340b899822090a3731769ae79c6bf5f3e5/src/ui/common.tis#L263
-      if (!type.contains("custom") && desktopType != DesktopType.portForward) {
+      if (!type.contains("custom")) {
         closeConnection();
       }
     }
@@ -1886,9 +1869,7 @@ Future<void> _saveWindowPositionActual(WindowKey key) async {
     await bind.setLocalFlutterOption(
         k: windowFramePrefix + key.type.name, v: pos.toString());
 
-    if ((key.type == WindowType.RemoteDesktop ||
-            key.type == WindowType.ViewCamera) &&
-        key.windowId != null) {
+    if (key.type == WindowType.RemoteDesktop && key.windowId != null) {
       await _saveSessionWindowPosition(key.type, key.windowId!,
           pos.isMaximized ?? false, pos.isFullscreen ?? false, pos);
     }
@@ -2039,9 +2020,7 @@ Future<bool> restoreWindowPosition(WindowType type,
   String? pos;
   // No need to check mainGetLocalBoolOptionSync(kOptionOpenNewConnInTabs)
   // Though "open in tabs" is true and the new window restore peer position, it's ok.
-  if ((type == WindowType.RemoteDesktop || type == WindowType.ViewCamera) &&
-      windowId != null &&
-      peerId != null) {
+  if (type == WindowType.RemoteDesktop && windowId != null && peerId != null) {
     final peerPos = bind.mainGetPeerFlutterOptionSync(
         id: peerId, k: windowFramePrefix + type.name);
     if (peerPos.isNotEmpty) {
@@ -2072,7 +2051,7 @@ Future<bool> restoreWindowPosition(WindowType type,
     }
     return true;
   }
-  if (type == WindowType.RemoteDesktop || type == WindowType.ViewCamera) {
+  if (type == WindowType.RemoteDesktop) {
     if (!isRemotePeerPos && windowId != null) {
       if (lpos.offsetWidth != null) {
         lpos.offsetWidth = lpos.offsetWidth! + windowId * kNewWindowOffset;
@@ -2241,14 +2220,6 @@ StreamSubscription? listenUniLinks({handleByFlutter = true}) {
 enum UriLinkType {
   remoteDesktop,
   fileTransfer,
-  viewCamera,
-  portForward,
-  rdp,
-  terminal,
-}
-
-setEnvTerminalAdmin() {
-  bind.mainSetEnv(key: 'IS_TERMINAL_ADMIN', value: 'Y');
 }
 
 // uri link handler
@@ -2298,32 +2269,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
         id = args[i + 1];
         i++;
         break;
-      case '--view-camera':
-        type = UriLinkType.viewCamera;
-        id = args[i + 1];
-        i++;
-        break;
-      case '--port-forward':
-        type = UriLinkType.portForward;
-        id = args[i + 1];
-        i++;
-        break;
-      case '--rdp':
-        type = UriLinkType.rdp;
-        id = args[i + 1];
-        i++;
-        break;
-      case '--terminal':
-        type = UriLinkType.terminal;
-        id = args[i + 1];
-        i++;
-        break;
-      case '--terminal-admin':
-        setEnvTerminalAdmin();
-        type = UriLinkType.terminal;
-        id = args[i + 1];
-        i++;
-        break;
       case '--password':
         password = args[i + 1];
         i++;
@@ -2355,30 +2300,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
               password: password, forceRelay: forceRelay);
         });
         break;
-      case UriLinkType.viewCamera:
-        Future.delayed(Duration.zero, () {
-          rustDeskWinManager.newViewCamera(id!,
-              password: password, forceRelay: forceRelay);
-        });
-        break;
-      case UriLinkType.portForward:
-        Future.delayed(Duration.zero, () {
-          rustDeskWinManager.newPortForward(id!, false,
-              password: password, forceRelay: forceRelay);
-        });
-        break;
-      case UriLinkType.rdp:
-        Future.delayed(Duration.zero, () {
-          rustDeskWinManager.newPortForward(id!, true,
-              password: password, forceRelay: forceRelay);
-        });
-        break;
-      case UriLinkType.terminal:
-        Future.delayed(Duration.zero, () {
-          rustDeskWinManager.newTerminal(id!,
-              password: password, forceRelay: forceRelay);
-        });
-        break;
     }
 
     return true;
@@ -2394,11 +2315,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     "connect",
     "play",
     "file-transfer",
-    "view-camera",
-    "port-forward",
-    "rdp",
-    "terminal",
-    "terminal-admin",
   ];
   if (uri.authority.isEmpty &&
       uri.path.split('').every((char) => char == '/')) {
@@ -2488,16 +2404,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     if (command == '--file-transfer') {
       connect(Get.context!, id,
           isFileTransfer: true, forceRelay: forceRelay, password: password);
-    } else if (command == '--view-camera') {
-      connect(Get.context!, id,
-          isViewCamera: true, forceRelay: forceRelay, password: password);
-    } else if (command == '--terminal') {
-      connect(Get.context!, id,
-          isTerminal: true, forceRelay: forceRelay, password: password);
-    } else if (command == 'terminal-admin') {
-      setEnvTerminalAdmin();
-      connect(Get.context!, id,
-          isTerminal: true, forceRelay: forceRelay, password: password);
     } else {
       // Default to remote desktop for '--connect', '--play', or direct connection
       connect(Get.context!, id, forceRelay: forceRelay, password: password);
@@ -2523,34 +2429,12 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
 
 connectMainDesktop(String id,
     {required bool isFileTransfer,
-    required bool isViewCamera,
-    required bool isTerminal,
-    required bool isTcpTunneling,
-    required bool isRDP,
     bool? forceRelay,
     String? password,
     String? connToken,
     bool? isSharedPassword}) async {
   if (isFileTransfer) {
     await rustDeskWinManager.newFileTransfer(id,
-        password: password,
-        isSharedPassword: isSharedPassword,
-        connToken: connToken,
-        forceRelay: forceRelay);
-  } else if (isViewCamera) {
-    await rustDeskWinManager.newViewCamera(id,
-        password: password,
-        isSharedPassword: isSharedPassword,
-        connToken: connToken,
-        forceRelay: forceRelay);
-  } else if (isTcpTunneling || isRDP) {
-    await rustDeskWinManager.newPortForward(id, isRDP,
-        password: password,
-        isSharedPassword: isSharedPassword,
-        connToken: connToken,
-        forceRelay: forceRelay);
-  } else if (isTerminal) {
-    await rustDeskWinManager.newTerminal(id,
         password: password,
         isSharedPassword: isSharedPassword,
         connToken: connToken,
@@ -2565,15 +2449,8 @@ connectMainDesktop(String id,
 
 /// Connect to a peer with [id].
 /// If [isFileTransfer], starts a session only for file transfer.
-/// If [isViewCamera], starts a session only for view camera.
-/// If [isTcpTunneling], starts a session only for tcp tunneling.
-/// If [isRDP], starts a session only for rdp.
 connect(BuildContext context, String id,
     {bool isFileTransfer = false,
-    bool isViewCamera = false,
-    bool isTerminal = false,
-    bool isTcpTunneling = false,
-    bool isRDP = false,
     bool forceRelay = false,
     String? password,
     String? connToken,
@@ -2595,18 +2472,12 @@ connect(BuildContext context, String id,
   final oldId = id;
   id = await bind.mainHandleRelayId(id: id);
   forceRelay = id != oldId || forceRelay;
-  assert(!(isFileTransfer && isTcpTunneling && isRDP),
-      "more than one connect type");
 
   if (isDesktop) {
     if (desktopType == DesktopType.main) {
       await connectMainDesktop(
         id,
         isFileTransfer: isFileTransfer,
-        isViewCamera: isViewCamera,
-        isTerminal: isTerminal,
-        isTcpTunneling: isTcpTunneling,
-        isRDP: isRDP,
         password: password,
         isSharedPassword: isSharedPassword,
         forceRelay: forceRelay,
@@ -2615,10 +2486,6 @@ connect(BuildContext context, String id,
       await rustDeskWinManager.call(WindowType.Main, kWindowConnect, {
         'id': id,
         'isFileTransfer': isFileTransfer,
-        'isViewCamera': isViewCamera,
-        'isTerminal': isTerminal,
-        'isTcpTunneling': isTcpTunneling,
-        'isRDP': isRDP,
         'password': password,
         'isSharedPassword': isSharedPassword,
         'forceRelay': forceRelay,
@@ -2650,45 +2517,6 @@ connect(BuildContext context, String id,
           ),
         );
       }
-    } else if (isViewCamera) {
-      if (isWeb) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) =>
-                desktop_view_camera.ViewCameraPage(
-              key: ValueKey(id),
-              id: id,
-              toolbarState: ToolbarState(),
-              password: password,
-              isSharedPassword: isSharedPassword,
-            ),
-          ),
-        );
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) => ViewCameraPage(
-                id: id,
-                password: password,
-                isSharedPassword: isSharedPassword,
-                forceRelay: forceRelay),
-          ),
-        );
-      }
-    } else if (isTerminal) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (BuildContext context) => TerminalPage(
-            id: id,
-            password: password,
-            isSharedPassword: isSharedPassword,
-            forceRelay: forceRelay,
-          ),
-        ),
-      );
     } else {
       if (isWeb) {
         Navigator.push(
@@ -3026,10 +2854,6 @@ String getWindowName({WindowType? overrideType}) {
       return name;
     case WindowType.FileTransfer:
       return "File Transfer - $name";
-    case WindowType.ViewCamera:
-      return "View Camera - $name";
-    case WindowType.PortForward:
-      return "Port Forward - $name";
     case WindowType.RemoteDesktop:
       return "Remote Desktop - $name";
     default:
@@ -4150,24 +3974,6 @@ void updateTextAndPreserveSelection(
   if (isSelected) {
     controller.selection = TextSelection(
         baseOffset: 0, extentOffset: controller.value.text.length);
-  }
-}
-
-List<String> getPrinterNames() {
-  final printerNamesJson = bind.mainGetPrinterNames();
-  if (printerNamesJson.isEmpty) {
-    return [];
-  }
-  try {
-    final List<dynamic> printerNamesList = jsonDecode(printerNamesJson);
-    final appPrinterName = '$appName Printer';
-    return printerNamesList
-        .map((e) => e.toString())
-        .where((name) => name != appPrinterName)
-        .toList();
-  } catch (e) {
-    debugPrint('failed to parse printer names, err: $e');
-    return [];
   }
 }
 

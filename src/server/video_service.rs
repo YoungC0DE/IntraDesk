@@ -250,23 +250,17 @@ impl VideoFrameController {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum VideoSource {
     Monitor,
-    Camera,
 }
 
 impl VideoSource {
     pub fn service_name_prefix(&self) -> &'static str {
         match self {
             VideoSource::Monitor => "monitor",
-            VideoSource::Camera => "camera",
         }
     }
 
     pub fn is_monitor(&self) -> bool {
         matches!(self, VideoSource::Monitor)
-    }
-
-    pub fn is_camera(&self) -> bool {
-        matches!(self, VideoSource::Camera)
     }
 }
 
@@ -541,46 +535,6 @@ fn get_capturer_monitor(
     })
 }
 
-fn get_capturer_camera(current: usize) -> ResultType<CapturerInfo> {
-    let cameras = camera::Cameras::get_sync_cameras();
-    let ncamera = cameras.len();
-    if ncamera <= current {
-        bail!("Failed to get camera {}, cameras len: {}", current, ncamera,);
-    }
-    let Some(camera) = cameras.get(current) else {
-        bail!(
-            "Camera of index {} doesn't exist or platform not supported",
-            current
-        );
-    };
-    let capturer = camera::Cameras::get_capturer(current)?;
-    let (width, height) = (camera.width as usize, camera.height as usize);
-    let origin = (camera.x as i32, camera.y as i32);
-    let name = &camera.name;
-    let privacy_mode_id = get_privacy_mode_conn_id().unwrap_or(INVALID_PRIVACY_MODE_CONN_ID);
-    let _capturer_privacy_mode_id = privacy_mode_id;
-    log::debug!(
-        "#cameras={}, current={}, origin: {:?}, width={}, height={}, cpus={}/{}, name:{}",
-        ncamera,
-        current,
-        &origin,
-        width,
-        height,
-        num_cpus::get_physical(),
-        num_cpus::get(),
-        name,
-    );
-    return Ok(CapturerInfo {
-        origin,
-        width,
-        height,
-        ndisplay: ncamera,
-        current,
-        privacy_mode_id,
-        _capturer_privacy_mode_id: privacy_mode_id,
-        capturer,
-    });
-}
 fn get_capturer(
     source: VideoSource,
     current: usize,
@@ -588,7 +542,6 @@ fn get_capturer(
 ) -> ResultType<CapturerInfo> {
     match source {
         VideoSource::Monitor => get_capturer_monitor(current, portable_service_running),
-        VideoSource::Camera => get_capturer_camera(current),
     }
 }
 
@@ -1068,7 +1021,7 @@ fn get_encoder_config(
     _source: VideoSource,
 ) -> EncoderCfg {
     #[cfg(all(windows, feature = "vram"))]
-    if _portable_service || c.is_gdi() || _source == VideoSource::Camera {
+    if _portable_service || c.is_gdi() {
         log::info!("gdi:{}, portable:{}", c.is_gdi(), _portable_service);
         VRamEncoder::set_not_use(_name, true);
     }
@@ -1339,9 +1292,6 @@ pub fn make_display_changed_msg(
         Some(d) => d,
         None => match source {
             VideoSource::Monitor => display_service::get_display_info(display_idx)?,
-            VideoSource::Camera => camera::Cameras::get_sync_cameras()
-                .get(display_idx)?
-                .clone(),
         },
     };
     let mut misc = Misc::new();
@@ -1353,7 +1303,6 @@ pub fn make_display_changed_msg(
         height: display.height,
         cursor_embedded: match source {
             VideoSource::Monitor => display_service::capture_cursor_embedded(),
-            VideoSource::Camera => false,
         },
         #[cfg(not(target_os = "android"))]
         resolutions: Some(SupportedResolutions {
@@ -1365,10 +1314,6 @@ pub fn make_display_changed_msg(
                         crate::platform::resolutions(&display.name)
                     }
                 }
-                VideoSource::Camera => camera::Cameras::get_camera_resolution(display_idx)
-                    .ok()
-                    .into_iter()
-                    .collect(),
             },
             ..SupportedResolutions::default()
         })

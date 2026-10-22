@@ -18,13 +18,11 @@ import 'package:flutter_hbb/models/file_model.dart';
 import 'package:flutter_hbb/models/group_model.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
-import 'package:flutter_hbb/models/printer_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/shortcut_model.dart';
 import 'package:flutter_hbb/models/user_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/models/desktop_render_texture.dart';
-import 'package:flutter_hbb/models/terminal_model.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
@@ -358,8 +356,6 @@ class FfiModel with ChangeNotifier {
         Clipboard.setData(ClipboardData(text: evt['content']));
       } else if (name == 'permission') {
         updatePermission(evt, peerId);
-      } else if (name == 'terminal_response') {
-        parent.target?.routeTerminalResponse(evt);
       } else if (name == 'file_dir') {
         parent.target?.fileModel.receiveFileDir(evt);
       } else if (name == 'empty_dirs') {
@@ -435,8 +431,6 @@ class FfiModel with ChangeNotifier {
         if (isWeb) {
           parent.target?.fileModel.sendEmptyDirs(evt);
         }
-      } else if (name == "printer_request") {
-        _handlePrinterRequest(evt, sessionId, peerId);
       } else if (name == 'screenshot') {
         _handleScreenshot(evt, sessionId, peerId);
       } else if (name == 'exit_relative_mouse_mode') {
@@ -519,178 +513,6 @@ class FfiModel with ChangeNotifier {
         tag: '$msgBoxType-$msgBoxTitle-$msgBoxTitle',
       );
     }
-  }
-
-  _handlePrinterRequest(
-      Map<String, dynamic> evt, SessionID sessionId, String peerId) {
-    final id = evt['id'];
-    final path = evt['path'];
-    final dialogManager = parent.target!.dialogManager;
-    dialogManager.show((setState, close, context) {
-      PrinterOptions printerOptions = PrinterOptions.load();
-      final saveSettings = mainGetLocalBoolOptionSync(kKeyPrinterSave).obs;
-      final dontShowAgain = false.obs;
-      final Rx<String> selectedPrinterName = printerOptions.printerName.obs;
-      final printerNames = printerOptions.printerNames;
-      final defaultOrSelectedGroupValue =
-          (printerOptions.action == kValuePrinterIncomingJobDismiss
-                  ? kValuePrinterIncomingJobDefault
-                  : printerOptions.action)
-              .obs;
-
-      onRatioChanged(String? value) {
-        defaultOrSelectedGroupValue.value =
-            value ?? kValuePrinterIncomingJobDefault;
-      }
-
-      onSubmit() {
-        final printerName = defaultOrSelectedGroupValue.isEmpty
-            ? ''
-            : selectedPrinterName.value;
-        bind.sessionPrinterResponse(
-            sessionId: sessionId, id: id, path: path, printerName: printerName);
-        if (saveSettings.value || dontShowAgain.value) {
-          bind.mainSetLocalOption(key: kKeyPrinterSelected, value: printerName);
-          bind.mainSetLocalOption(
-              key: kKeyPrinterIncomingJobAction,
-              value: defaultOrSelectedGroupValue.value);
-        }
-        if (dontShowAgain.value) {
-          mainSetLocalBoolOption(kKeyPrinterAllowAutoPrint, true);
-        }
-        close();
-      }
-
-      onCancel() {
-        if (dontShowAgain.value) {
-          bind.mainSetLocalOption(
-              key: kKeyPrinterIncomingJobAction,
-              value: kValuePrinterIncomingJobDismiss);
-        }
-        close();
-      }
-
-      final printerItemHeight = 30.0;
-      final selectionAreaHeight =
-          printerItemHeight * min(8.0, max(printerNames.length, 3.0));
-      final content = Column(
-        children: [
-          Text(translate('print-incoming-job-confirm-tip')),
-          Row(
-            children: [
-              Obx(() => Radio<String>(
-                  value: kValuePrinterIncomingJobDefault,
-                  groupValue: defaultOrSelectedGroupValue.value,
-                  onChanged: onRatioChanged)),
-              GestureDetector(
-                  child: Text(translate('use-the-default-printer-tip')),
-                  onTap: () => onRatioChanged(kValuePrinterIncomingJobDefault)),
-            ],
-          ),
-          Column(
-            children: [
-              Row(children: [
-                Obx(() => Radio<String>(
-                    value: kValuePrinterIncomingJobSelected,
-                    groupValue: defaultOrSelectedGroupValue.value,
-                    onChanged: onRatioChanged)),
-                GestureDetector(
-                    child: Text(translate('use-the-selected-printer-tip')),
-                    onTap: () =>
-                        onRatioChanged(kValuePrinterIncomingJobSelected)),
-              ]),
-              SizedBox(
-                height: selectionAreaHeight,
-                width: 500,
-                child: ListView.builder(
-                    itemBuilder: (context, index) {
-                      return Obx(() => GestureDetector(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: selectedPrinterName.value ==
-                                        printerNames[index]
-                                    ? (defaultOrSelectedGroupValue.value ==
-                                            kValuePrinterIncomingJobSelected
-                                        ? MyTheme.button
-                                        : MyTheme.button.withOpacity(0.5))
-                                    : Theme.of(context).cardColor,
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(5.0),
-                                ),
-                              ),
-                              key: ValueKey(printerNames[index]),
-                              height: printerItemHeight,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 10.0),
-                                  child: Text(
-                                    printerNames[index],
-                                    style: TextStyle(fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            onTap: defaultOrSelectedGroupValue.value ==
-                                    kValuePrinterIncomingJobSelected
-                                ? () {
-                                    selectedPrinterName.value =
-                                        printerNames[index];
-                                  }
-                                : null,
-                          ));
-                    },
-                    itemCount: printerNames.length),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Obx(() => Checkbox(
-                  value: saveSettings.value,
-                  onChanged: (value) {
-                    if (value != null) {
-                      saveSettings.value = value;
-                      mainSetLocalBoolOption(kKeyPrinterSave, value);
-                    }
-                  })),
-              GestureDetector(
-                  child: Text(translate('save-settings-tip')),
-                  onTap: () {
-                    saveSettings.value = !saveSettings.value;
-                    mainSetLocalBoolOption(kKeyPrinterSave, saveSettings.value);
-                  }),
-            ],
-          ),
-          Row(
-            children: [
-              Obx(() => Checkbox(
-                  value: dontShowAgain.value,
-                  onChanged: (value) {
-                    if (value != null) {
-                      dontShowAgain.value = value;
-                    }
-                  })),
-              GestureDetector(
-                  child: Text(translate('dont-show-again-tip')),
-                  onTap: () {
-                    dontShowAgain.value = !dontShowAgain.value;
-                  }),
-            ],
-          ),
-        ],
-      );
-      return CustomAlertDialog(
-        title: Text(translate('Incoming Print Job')),
-        content: content,
-        actions: [
-          dialogButton('OK', onPressed: onSubmit),
-          dialogButton('Cancel', onPressed: onCancel),
-        ],
-        onSubmit: onSubmit,
-        onCancel: onCancel,
-      );
-    });
   }
 
   _handleUseTextureRender(
@@ -892,12 +714,6 @@ class FfiModel with ChangeNotifier {
       enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
       enterPasswordDialog(sessionId, dialogManager);
-    } else if (type == 'terminal-admin-login') {
-      enterUserLoginDialog(
-          sessionId, dialogManager, 'terminal-admin-login-tip');
-    } else if (type == 'terminal-admin-login-password') {
-      enterUserLoginAndPasswordDialog(
-          sessionId, dialogManager, 'terminal-admin-login-tip');
     } else if (type == 'restarting') {
       // Treat restart messages as reconnect control events. Rust still sends
       // title/text for legacy UI and translation reuse; Flutter keeps the last
@@ -1382,14 +1198,7 @@ class FfiModel with ChangeNotifier {
     }
     if (connType == ConnType.fileTransfer) {
       parent.target?.fileModel.onReady();
-    } else if (connType == ConnType.terminal) {
-      // Call onReady on all registered terminal models
-      final models = parent.target?._terminalModels.values ?? [];
-      for (final model in models) {
-        model.onReady();
-      }
-    } else if (connType == ConnType.defaultConn ||
-        connType == ConnType.viewCamera) {
+    } else if (connType == ConnType.defaultConn) {
       List<Display> newDisplays = [];
       List<dynamic> displays = json.decode(evt['displays']);
       for (int i = 0; i < displays.length; ++i) {
@@ -1442,7 +1251,7 @@ class FfiModel with ChangeNotifier {
       setShowMyCursor(bind.sessionGetToggleOptionSync(
           sessionId: sessionId, arg: kOptionToggleShowMyCursor));
     }
-    if (connType == ConnType.defaultConn || connType == ConnType.viewCamera) {
+    if (connType == ConnType.defaultConn) {
       final platformAdditions = evt['platform_additions'];
       if (platformAdditions != null && platformAdditions != '') {
         try {
@@ -4002,12 +3811,6 @@ class FFI {
   late final Peers favoritePeersModel; // global
   late final Peers lanPeersModel; // global
 
-  // Terminal model registry for multiple terminals
-  final Map<int, TerminalModel> _terminalModels = {};
-
-  // Getter for terminal models
-  Map<int, TerminalModel> get terminalModels => _terminalModels;
-
   FFI(SessionID? sId) {
     sessionId = sId ?? (isDesktop ? Uuid().v4obj() : _constSessionId);
     imageModel = ImageModel(WeakReference(this));
@@ -4048,14 +3851,10 @@ class FFI {
     ffiModel.waitForImageTimer = null;
   }
 
-  /// Start with the given [id]. Only transfer file if [isFileTransfer], only view camera if [isViewCamera], only port forward if [isPortForward].
+  /// Start with the given [id]. Only transfer file if [isFileTransfer].
   void start(
     String id, {
     bool isFileTransfer = false,
-    bool isViewCamera = false,
-    bool isPortForward = false,
-    bool isRdp = false,
-    bool isTerminal = false,
     String? switchUuid,
     String? password,
     bool? isSharedPassword,
@@ -4067,22 +3866,8 @@ class FFI {
   }) {
     closed = false;
     if (isMobile) mobileReset();
-    assert(
-        (!(isPortForward && isViewCamera)) &&
-            (!(isViewCamera && isPortForward)) &&
-            (!(isPortForward && isFileTransfer)) &&
-            (!(isTerminal && isFileTransfer)) &&
-            (!(isTerminal && isViewCamera)) &&
-            (!(isTerminal && isPortForward)),
-        'more than one connect type');
     if (isFileTransfer) {
       connType = ConnType.fileTransfer;
-    } else if (isViewCamera) {
-      connType = ConnType.viewCamera;
-    } else if (isPortForward) {
-      connType = ConnType.portForward;
-    } else if (isTerminal) {
-      connType = ConnType.terminal;
     } else {
       connType = ConnType.defaultConn;
       canvasModel.id = id;
@@ -4099,10 +3884,6 @@ class FFI {
         sessionId: sessionId,
         id: id,
         isFileTransfer: isFileTransfer,
-        isViewCamera: isViewCamera,
-        isPortForward: isPortForward,
-        isRdp: isRdp,
-        isTerminal: isTerminal,
         switchUuid: switchUuid ?? '',
         forceRelay: forceRelay ?? false,
         password: password ?? '',
@@ -4118,8 +3899,7 @@ class FFI {
       final addRes = bind.sessionAddExistedSync(
           id: id,
           sessionId: sessionId,
-          displays: Int32List.fromList(displays),
-          isViewCamera: isViewCamera);
+          displays: Int32List.fromList(displays));
       if (addRes != '') {
         debugPrint(
             'Unreachable, failed to add existed session to $id, $addRes');
@@ -4128,11 +3908,6 @@ class FFI {
       ffiModel.pi.currentDisplay = display;
     }
     if (isDesktop && connType == ConnType.defaultConn) {
-      textureModel.updateCurrentDisplay(display ?? 0);
-    }
-    // FIXME: separate cameras displays or shift all indices.
-    if (isDesktop && connType == ConnType.viewCamera) {
-      // FIXME: currently the default 0 is not used.
       textureModel.updateCurrentDisplay(display ?? 0);
     }
 
@@ -4296,14 +4071,9 @@ class FFI {
   }
 
   /// Login with [password], choose if the client should [remember] it.
-  void login(String osUsername, String osPassword, SessionID sessionId,
-      String password, bool remember) {
+  void login(SessionID sessionId, String password, bool remember) {
     bind.sessionLogin(
-        sessionId: sessionId,
-        osUsername: osUsername,
-        osPassword: osPassword,
-        password: password,
-        remember: remember);
+        sessionId: sessionId, password: password, remember: remember);
   }
 
   void send2FA(SessionID sessionId, String code, bool trustThisDevice) {
@@ -4317,11 +4087,6 @@ class FFI {
     if (isWeb) {
       platformFFI.clearVideoFrameCallback();
     }
-    // Close all terminal models
-    for (final model in _terminalModels.values) {
-      model.dispose();
-    }
-    _terminalModels.clear();
     if (imageModel.image != null && !isWebDesktop) {
       await setCanvasConfig(
           sessionId,
@@ -4360,27 +4125,6 @@ class FFI {
   Future<T?> invokeMethodWithResult<T>(String method,
       [dynamic arguments]) async {
     return await platformFFI.invokeMethodWithResult<T>(method, arguments);
-  }
-
-  // Terminal model management
-  void registerTerminalModel(int terminalId, TerminalModel model) {
-    debugPrint('[FFI] Registering terminal model for terminal $terminalId');
-    _terminalModels[terminalId] = model;
-  }
-
-  void unregisterTerminalModel(int terminalId) {
-    debugPrint('[FFI] Unregistering terminal model for terminal $terminalId');
-    _terminalModels.remove(terminalId);
-  }
-
-  void routeTerminalResponse(Map<String, dynamic> evt) {
-    final int terminalId = TerminalModel.getTerminalIdFromEvt(evt);
-
-    // Route to specific terminal model if it exists
-    final model = _terminalModels[terminalId];
-    if (model != null) {
-      model.handleTerminalResponse(evt);
-    }
   }
 }
 

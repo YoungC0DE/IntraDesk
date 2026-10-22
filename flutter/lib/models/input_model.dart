@@ -365,8 +365,7 @@ class InputModel {
           final model = _activeSideButtonModel;
           if (model != null &&
               !(model.isViewOnly && !model.showMyCursor) &&
-              model.keyboardPerm &&
-              !model.isViewCamera) {
+              model.keyboardPerm) {
             _sideButtonDownModels[mb] = model;
             // Fire-and-forget to avoid blocking the platform channel handler.
             unawaited(model._sendMouseUnchecked(type, mb).catchError((Object e) {
@@ -497,7 +496,6 @@ class InputModel {
   bool get isViewOnly => parent.target!.ffiModel.viewOnly;
   bool get showMyCursor => parent.target!.ffiModel.showMyCursor;
   double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
-  bool get isViewCamera => parent.target!.connType == ConnType.viewCamera;
   int get trackpadSpeed => _trackpadSpeed;
   bool get useEdgeScroll =>
       parent.target!.canvasModel.scrollStyle == ScrollStyle.scrolledge;
@@ -512,7 +510,6 @@ class InputModel {
       sessionId: sessionId,
       enabled: relativeMouseMode,
       keyboardPerm: () => keyboardPerm,
-      isViewCamera: () => isViewCamera,
       peerVersion: () => peerVersion,
       peerPlatform: () => peerPlatform,
       modify: (msg) => modify(msg),
@@ -754,7 +751,6 @@ class InputModel {
       _tryDispatchRawFlutterShortcut(e, releaseModifiers: false);
       return KeyEventResult.handled;
     }
-    if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
       if (isDesktop) {
         return KeyEventResult.handled;
@@ -850,7 +846,6 @@ class InputModel {
       _tryDispatchFlutterShortcut(e, releaseModifiers: false);
       return KeyEventResult.handled;
     }
-    if (isViewCamera) return KeyEventResult.handled;
     if (!isInputSourceFlutter) {
       if (isDesktop) {
         return KeyEventResult.handled;
@@ -1208,7 +1203,6 @@ class InputModel {
       required bool altPressed,
       required bool shiftPressed,
       required bool commandPressed}) {
-    if (isViewCamera) return null;
     final keyName = physicalKeyName(key);
     if (keyName == null) return null;
     final config = ShortcutModel.config(active: true);
@@ -1341,7 +1335,6 @@ class InputModel {
   /// [press] indicates a click event(down and up).
   void inputKey(String name, {bool? down, bool? press}) {
     if (!keyboardPerm) return;
-    if (isViewCamera) return;
     bind.sessionInputKey(
         sessionId: sessionId,
         name: name,
@@ -1415,7 +1408,6 @@ class InputModel {
 
   /// Send scroll event with scroll distance [y].
   Future<void> scroll(int y) async {
-    if (isViewCamera) return;
     await bind.sessionSendMouse(
         sessionId: sessionId,
         msg: json
@@ -1449,7 +1441,6 @@ class InputModel {
   /// Send mouse press event.
   Future<void> sendMouse(String type, MouseButtons button) async {
     if (!keyboardPerm) return;
-    if (isViewCamera) return;
     await _sendMouseUnchecked(type, button);
   }
 
@@ -1484,7 +1475,6 @@ class InputModel {
   /// Send mouse movement event with distance in [x] and [y].
   Future<void> moveMouse(double x, double y) async {
     if (!keyboardPerm) return;
-    if (isViewCamera) return;
     var x2 = x.toInt();
     var y2 = y.toInt();
     await bind.sessionSendMouse(
@@ -1500,7 +1490,6 @@ class InputModel {
   /// Only sends events when relative mouse mode is enabled and supported.
   Future<void> sendMobileRelativeMouseMove(double dx, double dy) async {
     if (!keyboardPerm) return;
-    if (isViewCamera) return;
     // Only send relative mouse events when relative mode is enabled and supported.
     if (!isRelativeMouseModeSupported || !relativeMouseMode.value) return;
     _mobileDeltaRemainderX += dx;
@@ -1636,7 +1625,6 @@ class InputModel {
     _lastScale = 1.0;
     _stopFling = true;
     if (isViewOnly) return;
-    if (isViewCamera) return;
     if (peerPlatform == kPeerPlatformAndroid) {
       handlePointerEvent('touch', kMouseEventTypePanStart, e.position);
     }
@@ -1645,7 +1633,6 @@ class InputModel {
   // https://docs.flutter.dev/release/breaking-changes/trackpad-gestures
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent e) {
     if (isViewOnly) return;
-    if (isViewCamera) return;
     if (peerPlatform != kPeerPlatformAndroid) {
       final scale = ((e.scale - _lastScale) * 1000).toInt();
       _lastScale = e.scale;
@@ -1689,7 +1676,6 @@ class InputModel {
         handlePointerEvent('touch', kMouseEventTypePanUpdate,
             Offset(x.toDouble(), y.toDouble()));
       } else {
-        if (isViewCamera) return;
         bind.sessionSendMouse(
             sessionId: sessionId,
             msg: '{"type": "trackpad", "x": "$x", "y": "$y"}');
@@ -1716,7 +1702,6 @@ class InputModel {
   }
 
   void _scheduleFling(double x, double y, int delay) {
-    if (isViewCamera) return;
     if ((x == 0 && y == 0) || _stopFling) {
       _fling = false;
       return;
@@ -1768,7 +1753,6 @@ class InputModel {
   }
 
   void onPointerPanZoomEnd(PointerPanZoomEndEvent e) {
-    if (isViewCamera) return;
     if (peerPlatform == kPeerPlatformAndroid) {
       handlePointerEvent('touch', kMouseEventTypePanEnd, e.position);
       return;
@@ -1835,7 +1819,6 @@ class InputModel {
     _remoteWindowCoords = [];
     _windowRect = null;
     if (isViewOnly && !showMyCursor) return;
-    if (isViewCamera) return;
 
     // Track mouse down events for duplicate detection on iOS.
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -1876,7 +1859,6 @@ class InputModel {
   void onPointUpImage(PointerUpEvent e) {
     if (isDesktop) _queryOtherWindowCoords = false;
     if (isViewOnly && !showMyCursor) return;
-    if (isViewCamera) return;
 
     if (_relativeMouse.enabled.value) {
       _relativeMouse.updatePointerRegionTopLeftGlobal(e);
@@ -1898,7 +1880,6 @@ class InputModel {
 
   void onPointMoveImage(PointerMoveEvent e) {
     if (isViewOnly && !showMyCursor) return;
-    if (isViewCamera) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     if (_relativeMouse.enabled.value) {
@@ -1974,7 +1955,6 @@ class InputModel {
   /// handle scroll events the same way regardless of mouse mode.
   void onPointerSignalImage(PointerSignalEvent e) {
     if (isViewOnly) return;
-    if (isViewCamera) return;
     if (e is PointerScrollEvent) {
       final rawDx = e.scrollDelta.dx;
       final rawDy = e.scrollDelta.dy;
@@ -2099,7 +2079,6 @@ class InputModel {
     }
 
     final evt = PointerEventToRust(kind, type, evtValue).toJson();
-    if (isViewCamera) return;
     bind.sessionSendPointer(
         sessionId: sessionId, msg: json.encode(modify(evt)));
   }
@@ -2138,7 +2117,6 @@ class InputModel {
     bool moveCanvas = true,
     bool edgeScroll = false,
   }) {
-    if (isViewCamera) return null;
     final buttons = evt['buttons'];
     final isMatchingMouseUp = (isDesktop || isWebDesktop) &&
         evt['type'] == _kMouseEventUp &&

@@ -2,8 +2,6 @@
 use super::rdp_input::client::{RdpInputKeyboard, RdpInputMouse};
 use super::*;
 use crate::input::*;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-use crate::whiteboard;
 use base::message_proto::{
     pointer_device_event::Union::TouchEvent, touch_event::Union::ScaleUpdate,
 };
@@ -105,8 +103,6 @@ impl StateWindowFocus {
 struct Input {
     conn: i32,
     time: i64,
-    x: i32,
-    y: i32,
 }
 
 const KEY_CHAR_START: u64 = 9999;
@@ -503,9 +499,6 @@ lazy_static::lazy_static! {
     static ref KEYS_DOWN: Arc<Mutex<HashMap<KeysDown, Instant>>> = Default::default();
     static ref LATEST_PEER_INPUT_CURSOR: Arc<Mutex<Input>> = Default::default();
     static ref LATEST_SYS_CURSOR_POS: Arc<Mutex<(Option<Instant>, (i32, i32))>> = Arc::new(Mutex::new((None, (INVALID_CURSOR_POS, INVALID_CURSOR_POS))));
-    // Track connections that are currently using relative mouse movement.
-    // Used to disable whiteboard/cursor display for all events while in relative mode.
-    static ref RELATIVE_MOUSE_CONNS: Arc<Mutex<std::collections::HashSet<i32>>> = Default::default();
 }
 
 lazy_static::lazy_static! {
@@ -601,31 +594,6 @@ pub fn cursor_data_message(id: u64) -> Option<Arc<Message>> {
 lazy_static::lazy_static! {
     static ref WAYLAND_CLIPBOARD_INPUT_RECORDS: Arc<Mutex<Vec<(Instant, String)>>> =
         Default::default();
-}
-
-#[inline]
-fn set_relative_mouse_active(conn: i32, active: bool) {
-    let mut lock = RELATIVE_MOUSE_CONNS.lock().unwrap();
-    if active {
-        lock.insert(conn);
-    } else {
-        lock.remove(&conn);
-    }
-}
-
-#[inline]
-fn is_relative_mouse_active(conn: i32) -> bool {
-    RELATIVE_MOUSE_CONNS.lock().unwrap().contains(&conn)
-}
-
-/// Clears the relative mouse mode state for a connection.
-///
-/// This must be called when an authenticated connection is dropped (during connection teardown)
-/// to avoid leaking the connection id in `RELATIVE_MOUSE_CONNS` (a `Mutex<HashSet<i32>>`).
-/// Callers are responsible for invoking this on disconnect.
-#[inline]
-pub(crate) fn clear_relative_mouse_active(conn: i32) {
-    set_relative_mouse_active(conn, false);
 }
 
 static EXITING: AtomicBool = AtomicBool::new(false);
@@ -1159,12 +1127,6 @@ pub fn update_latest_input_cursor_time(conn: i32) {
     lock.time = get_time();
 }
 
-#[inline]
-fn get_last_input_cursor_pos() -> (i32, i32) {
-    let lock = LATEST_PEER_INPUT_CURSOR.lock().unwrap();
-    (lock.x, lock.y)
-}
-
 // check if mouse is moved by the controlled side user to make controlled side has higher mouse priority than remote.
 fn active_mouse_(_conn: i32) -> bool {
     true
@@ -1262,18 +1224,6 @@ pub fn handle_mouse_(
     if simulate {
         handle_mouse_simulation_(evt, conn);
     }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        let evt_type = evt.mask & MOUSE_TYPE_MASK;
-        // Relative (delta) mouse events do not include absolute coordinates, so
-        // whiteboard/cursor rendering must be disabled during relative mode to prevent
-        // incorrect cursor/whiteboard updates. We check both is_relative_mouse_active(conn)
-        // (connection already in relative mode from prior events) and evt_type (current
-        // event is relative) to guard against the first relative event before the flag is set.
-        if _show_cursor && !is_relative_mouse_active(conn) && evt_type != MOUSE_TYPE_MOVE_RELATIVE {
-            handle_mouse_show_cursor_(evt, conn, _username, _argb);
-        }
-    }
 }
 
 pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
@@ -1316,8 +1266,6 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
     }
     match evt_type {
         MOUSE_TYPE_MOVE => {
-            // Switching back to absolute movement implicitly disables relative mouse mode.
-            set_relative_mouse_active(conn, false);
             // On Wayland with uinput, the client sends coordinates in the layout it was
             // told at session init. If the compositor has since moved a monitor, correct
             // them onto the current layout. https://github.com/rustdesk/rustdesk/issues/15601
@@ -1340,8 +1288,6 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
             *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
                 conn,
                 time: get_time(),
-                x: mx,
-                y: my,
             };
         }
         // MOUSE_TYPE_MOVE_RELATIVE: Relative mouse movement for gaming/3D applications.
@@ -1349,7 +1295,6 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
         // Multiple clients can mix absolute and relative movements without conflict,
         // as the server simply applies the delta to the current cursor position.
         MOUSE_TYPE_MOVE_RELATIVE => {
-            set_relative_mouse_active(conn, true);
             // Clamp delta to prevent extreme/malicious values from reaching OS APIs.
             // This matches the Flutter client's kMaxRelativeMouseDelta constant.
             const MAX_RELATIVE_MOUSE_DELTA: i32 = 10000;
@@ -1364,15 +1309,10 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
             #[cfg(all(target_os = "linux", feature = "drm"))]
             note_pointer_moved_without_absolute_sample();
             en.mouse_move_relative(dx, dy);
-            // Get actual cursor position after relative movement for tracking
-            if let Some((x, y)) = crate::get_cursor_pos() {
-                *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
-                    conn,
-                    time: get_time(),
-                    x,
-                    y,
-                };
-            }
+            *LATEST_PEER_INPUT_CURSOR.lock().unwrap() = Input {
+                conn,
+                time: get_time(),
+            };
         }
         MOUSE_TYPE_DOWN => match buttons {
             MOUSE_BUTTON_LEFT => {
@@ -1466,52 +1406,6 @@ pub fn handle_mouse_simulation_(evt: &MouseEvent, conn: i32) {
     #[cfg(not(target_os = "macos"))]
     for key in to_release {
         en.key_up(key.clone());
-    }
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub fn handle_mouse_show_cursor_(evt: &MouseEvent, conn: i32, username: String, argb: u32) {
-    let buttons = evt.mask >> 3;
-    let evt_type = evt.mask & MOUSE_TYPE_MASK;
-    match evt_type {
-        MOUSE_TYPE_MOVE => {
-            whiteboard::update_whiteboard(
-                whiteboard::get_key_cursor(conn),
-                whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
-                    x: evt.x as _,
-                    y: evt.y as _,
-                    argb,
-                    btns: 0,
-                    text: username,
-                }),
-            );
-        }
-        MOUSE_TYPE_UP => {
-            if buttons == MOUSE_BUTTON_LEFT {
-                // Some clients intentionally send button events without coordinates.
-                // Fall back to the last known cursor position to avoid jumping to (0, 0).
-                // TODO(protocol): (0, 0) is a valid screen coordinate. Consider using a dedicated
-                // sentinel value (e.g. INVALID_CURSOR_POS) or a protocol-level flag to distinguish
-                // "coordinates not provided" from "coordinates are (0, 0)". Impact is minor since
-                // this only affects whiteboard rendering and clicking exactly at (0, 0) is rare.
-                let (x, y) = if evt.x == 0 && evt.y == 0 {
-                    get_last_input_cursor_pos()
-                } else {
-                    (evt.x, evt.y)
-                };
-                whiteboard::update_whiteboard(
-                    whiteboard::get_key_cursor(conn),
-                    whiteboard::CustomEvent::Cursor(whiteboard::Cursor {
-                        x: x as _,
-                        y: y as _,
-                        argb,
-                        btns: buttons,
-                        text: username,
-                    }),
-                );
-            }
-        }
-        _ => {}
     }
 }
 

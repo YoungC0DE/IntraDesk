@@ -797,10 +797,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         await connectMainDesktop(
           call.arguments['id'],
           isFileTransfer: call.arguments['isFileTransfer'],
-          isViewCamera: call.arguments['isViewCamera'],
-          isTerminal: call.arguments['isTerminal'],
-          isTcpTunneling: call.arguments['isTcpTunneling'],
-          isRDP: call.arguments['isRDP'],
           password: call.arguments['password'],
           forceRelay: call.arguments['forceRelay'],
           connToken: call.arguments['connToken'],

@@ -43,15 +43,9 @@ mod clipboard;
 pub mod core_main;
 mod custom_server;
 mod lang;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-mod port_forward;
-mod port_forward_mux;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod tray;
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-mod whiteboard;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod updater;

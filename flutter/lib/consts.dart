@@ -50,9 +50,6 @@ const String kAppTypeConnectionManager = "cm";
 
 const String kAppTypeDesktopRemote = "remote";
 const String kAppTypeDesktopFileTransfer = "file transfer";
-const String kAppTypeDesktopViewCamera = "view camera";
-const String kAppTypeDesktopPortForward = "port forward";
-const String kAppTypeDesktopTerminal = "terminal";
 
 const String kWindowMainWindowOnTop = "main_window_on_top";
 const String kWindowRefreshCurrentUser = "refresh_current_user";
@@ -67,10 +64,6 @@ const String kWindowBumpMouse = "bump_mouse";
 
 const String kWindowEventNewRemoteDesktop = "new_remote_desktop";
 const String kWindowEventNewFileTransfer = "new_file_transfer";
-const String kWindowEventNewViewCamera = "new_view_camera";
-const String kWindowEventNewPortForward = "new_port_forward";
-const String kWindowEventNewTerminal = "new_terminal";
-const String kWindowEventRestoreTerminalSessions = "restore_terminal_sessions";
 const String kWindowEventActiveSession = "active_session";
 const String kWindowEventActiveDisplaySession = "active_display_session";
 const String kWindowEventGetRemoteList = "get_remote_list";
@@ -105,19 +98,9 @@ const String kOptionEnableHwcodec = "enable-hwcodec";
 const String kOptionAccessMode = "access-mode";
 const String kOptionEnableKeyboard = "enable-keyboard";
 // "Settings -> Security -> Permissions"
-const String kOptionEnableRemotePrinter = "enable-remote-printer";
 const String kOptionEnableClipboard = "enable-clipboard";
 const String kOptionEnableFileTransfer = "enable-file-transfer";
 const String kOptionEnableAudio = "enable-audio";
-const String kOptionEnableCamera = "enable-camera";
-const String kOptionEnableTerminal = "enable-terminal";
-const String kOptionTerminalPersistent = "terminal-persistent";
-const String kOptionAllowTerminalClipboardWrite =
-    "allow-terminal-clipboard-write";
-const String kTerminalClipboardWriteUnconfigured = "";
-const String kTerminalClipboardWriteAllowed = "Y";
-const String kTerminalClipboardWriteDenied = "N";
-const String kOptionEnableTunnel = "enable-tunnel";
 const String kOptionEnableRemoteRestart = "enable-remote-restart";
 const String kOptionEnableBlockInput = "enable-block-input";
 const String kOptionEnablePrivacyMode = "enable-privacy-mode";
@@ -163,7 +146,6 @@ const String kOptionPeerTabVisible = "peer-tab-visible";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
 const String kOptionCurrentAbName = "current-ab-name";
 const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
-const String kOptionEnablePortForwardMux = "enable-port-forward-mux";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
 const String kOptionEnableCheckUpdate = "enable-check-update";
 const String kOptionAllowAutoUpdate = "allow-auto-update";
@@ -185,8 +167,6 @@ const String kOptionShowVirtualJoystick = "show-virtual-joystick";
 const String kOptionAllowAskForNoteAtEndOfConnection = "allow-ask-for-note";
 const String kOptionAllowMonitorSwitchMainToolbar = "allow-monitor-switch-main-toolbar";
 const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-toolbar";
-const String kOptionEnableShowTerminalExtraKeys = "enable-show-terminal-extra-keys";
-const String kOptionShowTerminalCtrlKeys = "show-terminal-extra-ctrl-keys";
 
 // network options
 const String kOptionAllowWebSocket = "allow-websocket";
@@ -199,7 +179,6 @@ const String kOptionHideServerSetting = "hide-server-settings";
 const String kOptionHideProxySetting = "hide-proxy-settings";
 const String kOptionHideWebSocketSetting = "hide-websocket-settings";
 const String kOptionHideStopService = "hide-stop-service";
-const String kOptionHideRemotePrinterSetting = "hide-remote-printer-settings";
 const String kOptionHideGeneralSetting = "hide-general-settings";
 const String kOptionHideSecuritySetting = "hide-security-settings";
 const String kOptionHideNetworkSetting = "hide-network-settings";
@@ -317,13 +296,6 @@ const int kMaxRelativeMouseDelta = 10000;
 const int kRelativeMouseModeToggleDebounceMs = 150;
 
 // incomming (should be incoming) is kept, because change it will break the previous setting.
-const String kKeyPrinterIncomingJobAction = 'printer-incomming-job-action';
-const String kValuePrinterIncomingJobDismiss = 'dismiss';
-const String kValuePrinterIncomingJobDefault = '';
-const String kValuePrinterIncomingJobSelected = 'selected';
-const String kKeyPrinterSelected = 'printer-selected-name';
-const String kKeyPrinterSave = 'allow-printer-dialog-save';
-const String kKeyPrinterAllowAutoPrint = 'allow-printer-auto-print';
 
 double kNewWindowOffset = isWindows
     ? 56.0

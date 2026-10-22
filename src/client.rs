@@ -2726,24 +2726,10 @@ struct ConnToken {
 pub struct LoginConfigHandler {
     id: String,
     pub conn_type: ConnType,
-    pub is_terminal_admin: bool,
     hash: Hash,
     password: Vec<u8>, // remember password for reconnect
     pub remember: bool,
     config: PeerConfig,
-    pub port_forward: (String, i32),
-    /// This login's `multiplex`, filled with `port_forward` under the turn
-    /// lock. `port_forward_mux` says whether a mapping probes for the tunnel;
-    /// one the probe latched to the raw pipe logs in without asking, so an
-    /// upgraded peer keeps giving it the raw pipe.
-    pub(crate) port_forward_multiplex: bool,
-    /// Set once per window, before its mappings start: every accept's claim
-    /// reads it.
-    pub(crate) port_forward_mux: bool,
-    /// Held by a port-forward mapping from filling `port_forward` and `hash`
-    /// until its login is built from them; a window's mappings log in
-    /// concurrently.
-    pub(crate) port_forward_login_turn: Arc<hbb_common::tokio::sync::Mutex<()>>,
     pub version: i64,
     features: Option<Features>,
     pub session_id: u64, // used for local <-> server communication
@@ -2787,10 +2773,6 @@ impl Deref for LoginConfigHandler {
 }
 
 impl LoginConfigHandler {
-    pub(crate) fn set_hash(&mut self, hash: Hash) {
-        self.hash = hash;
-    }
-
     /// Initialize the login config handler.
     ///
     /// # Arguments
@@ -2895,11 +2877,6 @@ impl LoginConfigHandler {
         self.adapter_luid = adapter_luid;
         self.selected_windows_session_id = None;
         self.shared_password = shared_password;
-
-        // `std::env::remove_var("IS_TERMINAL_ADMIN");` is called in `session_add_sync()` - `flutter_ffi.rs`.
-        let is_terminal_admin = conn_type == ConnType::TERMINAL
-            && std::env::var("IS_TERMINAL_ADMIN").map_or(false, |v| v == "Y");
-        self.is_terminal_admin = is_terminal_admin;
     }
 
     #[cfg(feature = "flutter")]
@@ -3138,14 +3115,6 @@ impl LoginConfigHandler {
                 BoolOption::No
             })
             .into();
-        } else if name == keys::OPTION_TERMINAL_PERSISTENT {
-            config.terminal_persistent.v = !config.terminal_persistent.v;
-            option.terminal_persistent = (if config.terminal_persistent.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            })
-            .into();
         } else if name == "privacy-mode" {
             // try toggle privacy mode
             option.privacy_mode = (if config.privacy_mode.v {
@@ -3248,21 +3217,10 @@ impl LoginConfigHandler {
     ///
     /// * `ignore_default` - If `true`, ignore the default value of the option.
     fn get_option_message(&self, ignore_default: bool) -> Option<OptionMessage> {
-        if self.conn_type.eq(&ConnType::PORT_FORWARD)
-            || self.conn_type.eq(&ConnType::RDP)
-            || self.conn_type.eq(&ConnType::FILE_TRANSFER)
-        {
+        if self.conn_type.eq(&ConnType::FILE_TRANSFER) {
             return None;
         }
         let mut msg = OptionMessage::new();
-        if self.conn_type.eq(&ConnType::TERMINAL) {
-            if self.get_toggle_option(keys::OPTION_TERMINAL_PERSISTENT) {
-                msg.terminal_persistent = BoolOption::Yes.into();
-                return Some(msg);
-            } else {
-                return None;
-            }
-        }
         let q = self.image_quality.clone();
         if let Some(q) = self.get_image_quality_enum(&q, ignore_default) {
             msg.image_quality = q.into();
@@ -3367,8 +3325,6 @@ impl LoginConfigHandler {
             self.config.show_remote_cursor.v
         } else if name == "lock-after-session-end" {
             self.config.lock_after_session_end.v
-        } else if name == keys::OPTION_TERMINAL_PERSISTENT {
-            self.config.terminal_persistent.v
         } else if name == "privacy-mode" {
             self.config.privacy_mode.v
         } else if name == keys::OPTION_ENABLE_FILE_COPY_PASTE {
@@ -3659,12 +3615,7 @@ impl LoginConfigHandler {
     }
 
     /// Create a [`Message`] for login.
-    fn create_login_msg(
-        &self,
-        os_username: String,
-        os_password: String,
-        password: Vec<u8>,
-    ) -> Message {
+    fn create_login_msg(&self, password: Vec<u8>) -> Message {
         let my_id = Config::get_id();
         let (my_id, pure_id) = if let Some((id, _, _)) = self.other_server.as_ref() {
             let server = Config::get_rendezvous_server();
@@ -3729,16 +3680,6 @@ impl LoginConfigHandler {
         } else {
             Bytes::new()
         };
-        let os_login: MessageField<OSLogin> = if self.conn_type == ConnType::TERMINAL {
-            Some(OSLogin {
-                username: os_username,
-                password: os_password,
-                ..Default::default()
-            })
-            .into()
-        } else {
-            Default::default()
-        };
         let mut lr = LoginRequest {
             username: pure_id,
             password: password.into(),
@@ -3748,7 +3689,6 @@ impl LoginConfigHandler {
             option: self.get_option_message(true).into(),
             session_id: self.session_id,
             version: crate::VERSION.to_string(),
-            os_login,
             hwid,
             avatar,
             ..Default::default()
@@ -3759,18 +3699,6 @@ impl LoginConfigHandler {
                 show_hidden: !self.get_option("remote_show_hidden").is_empty(),
                 ..Default::default()
             }),
-            ConnType::VIEW_CAMERA => lr.set_view_camera(Default::default()),
-            ConnType::PORT_FORWARD | ConnType::RDP => lr.set_port_forward(PortForward {
-                host: self.port_forward.0.clone(),
-                port: self.port_forward.1,
-                multiplex: self.port_forward_multiplex,
-                ..Default::default()
-            }),
-            ConnType::TERMINAL => {
-                let mut terminal = Terminal::new();
-                terminal.service_id = self.get_option(self.get_key_terminal_service_id());
-                lr.set_terminal(terminal);
-            }
             _ => {}
         }
 
@@ -3842,14 +3770,6 @@ impl LoginConfigHandler {
 
     pub fn get_id(&self) -> &str {
         &self.id
-    }
-
-    pub fn get_key_terminal_service_id(&self) -> &'static str {
-        if self.is_terminal_admin {
-            "terminal-admin-service-id"
-        } else {
-            "terminal-service-id"
-        }
     }
 }
 
@@ -4578,18 +4498,6 @@ pub async fn handle_hash(
 
     lc.write().unwrap().password = password.clone();
 
-    let is_terminal_admin = lc.read().unwrap().is_terminal_admin;
-    let is_terminal = lc.read().unwrap().conn_type.eq(&ConnType::TERMINAL);
-    if is_terminal && is_terminal_admin {
-        if password.is_empty() {
-            interface.msgbox("terminal-admin-login-password", "", "", "");
-        } else {
-            interface.msgbox("terminal-admin-login", "", "", "");
-        }
-        lc.write().unwrap().hash = hash;
-        return true;
-    }
-
     let password = if password.is_empty() {
         // login without password, the remote side can click accept
         interface.msgbox("input-password", "Password Required", "", "");
@@ -4601,7 +4509,7 @@ pub async fn handle_hash(
         hasher.finalize()[..].into()
     };
 
-    send_login(lc.clone(), String::new(), String::new(), password, peer).await;
+    send_login(lc.clone(), password, peer).await;
     lc.write().unwrap().hash = hash;
     true
 }
@@ -4636,21 +4544,10 @@ fn try_get_password_from_personal_ab(lc: Arc<RwLock<LoginConfigHandler>>, passwo
 /// # Arguments
 ///
 /// * `lc` - Login config.
-/// * `os_username` - OS username.
-/// * `os_password` - OS password.
 /// * `password` - Password.
 /// * `peer` - [`Stream`] for communicating with peer.
-async fn send_login(
-    lc: Arc<RwLock<LoginConfigHandler>>,
-    os_username: String,
-    os_password: String,
-    password: Vec<u8>,
-    peer: &mut Stream,
-) {
-    let msg_out = lc
-        .read()
-        .unwrap()
-        .create_login_msg(os_username, os_password, password);
+async fn send_login(lc: Arc<RwLock<LoginConfigHandler>>, password: Vec<u8>, peer: &mut Stream) {
+    let msg_out = lc.read().unwrap().create_login_msg(password);
     allow_err!(peer.send(&msg_out).await);
 }
 
@@ -4659,15 +4556,11 @@ async fn send_login(
 /// # Arguments
 ///
 /// * `lc` - Login config.
-/// * `os_username` - OS username.
-/// * `os_password` - OS password.
 /// * `password` - Password.
 /// * `remember` - Whether to remember password.
 /// * `peer` - [`Stream`] for communicating with peer.
 pub async fn handle_login_from_ui(
     lc: Arc<RwLock<LoginConfigHandler>>,
-    os_username: String,
-    os_password: String,
     password: String,
     remember: bool,
     peer: &mut Stream,
@@ -4696,7 +4589,7 @@ pub async fn handle_login_from_ui(
     hasher2.update(&lc.read().unwrap().hash.challenge);
     hash_password = hasher2.finalize()[..].to_vec();
 
-    send_login(lc.clone(), os_username, os_password, hash_password, peer).await;
+    send_login(lc.clone(), hash_password, peer).await;
 }
 
 async fn send_switch_login_request(
@@ -4710,7 +4603,7 @@ async fn send_switch_login_request(
         lr: hbb_common::protobuf::MessageField::some(
             lc.read()
                 .unwrap()
-                .create_login_msg("".to_owned(), "".to_owned(), vec![])
+                .create_login_msg(vec![])
                 .login_request()
                 .to_owned(),
         ),
@@ -4734,8 +4627,6 @@ pub trait Interface: Send + Clone + 'static + Sized {
     async fn handle_hash(&self, pass: &str, hash: Hash, peer: &mut Stream) -> bool;
     async fn handle_login_from_ui(
         &self,
-        os_username: String,
-        os_password: String,
         password: String,
         remember: bool,
         peer: &mut Stream,
@@ -4823,7 +4714,7 @@ pub trait Interface: Send + Clone + 'static + Sized {
 pub enum Data {
     Close,
     RejectInsecureConnection,
-    Login((String, String, String, bool)),
+    Login((String, bool)),
     Message(Message),
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     InitialClipboard(usize, Option<Message>),
@@ -4835,9 +4726,6 @@ pub enum Data {
     RemoveFile((i32, String, i32, bool)),
     CreateDir((i32, String, bool)),
     CancelJob(i32),
-    RemovePortForward(i32),
-    AddPortForward((i32, String, i32)),
-    NewRDP,
     SetConfirmOverrideFile((i32, i32, bool, bool, bool)),
     AddJob((i32, JobType, String, String, i32, bool, bool)),
     ResumeJob((i32, bool)),

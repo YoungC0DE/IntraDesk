@@ -1088,81 +1088,12 @@ impl InvokeUiSession for FlutterHandler {
         }
     }
 
-    fn printer_request(&self, id: i32, path: String) {
-        self.push_event(
-            "printer_request",
-            &[("id", json!(id)), ("path", json!(path))],
-            &[],
-        );
-    }
-
     fn handle_screenshot_resp(&self, sid: String, msg: String) {
         match SessionID::from_str(&sid) {
             Ok(sid) => self.push_event_to("screenshot", &[("msg", json!(msg))], &[&sid]),
             Err(e) => {
                 // Unreachable!
                 log::error!("Failed to parse sid \"{}\", {}", sid, e);
-            }
-        }
-    }
-
-    fn handle_terminal_response(&self, response: TerminalResponse) {
-        use base::message_proto::terminal_response::Union;
-
-        match response.union {
-            Some(Union::Opened(opened)) => {
-                let mut event_data: Vec<(&str, serde_json::Value)> = vec![
-                    ("type", json!("opened")),
-                    ("terminal_id", json!(opened.terminal_id)),
-                    ("success", json!(opened.success)),
-                    ("message", json!(&opened.message)),
-                    ("pid", json!(opened.pid)),
-                    ("service_id", json!(&opened.service_id)),
-                    (
-                        "replay_terminal_output",
-                        json!(opened.replay_terminal_output),
-                    ),
-                ];
-                if !opened.persistent_sessions.is_empty() {
-                    event_data.push(("persistent_sessions", json!(opened.persistent_sessions)));
-                }
-                self.push_event_("terminal_response", &event_data, &[], &[]);
-            }
-            Some(Union::Data(data)) => {
-                // Decompress data if needed
-                let output_data = if data.compressed {
-                    hbb_common::compress::decompress(&data.data)
-                } else {
-                    data.data.to_vec()
-                };
-
-                let encoded = crate::encode64(&output_data);
-                let event_data: Vec<(&str, serde_json::Value)> = vec![
-                    ("type", json!("data")),
-                    ("terminal_id", json!(data.terminal_id)),
-                    ("data", json!(&encoded)),
-                ];
-                self.push_event_("terminal_response", &event_data, &[], &[]);
-            }
-            Some(Union::Closed(closed)) => {
-                let event_data: Vec<(&str, serde_json::Value)> = vec![
-                    ("type", json!("closed")),
-                    ("terminal_id", json!(closed.terminal_id)),
-                    ("exit_code", json!(closed.exit_code)),
-                ];
-                self.push_event_("terminal_response", &event_data, &[], &[]);
-            }
-            Some(Union::Error(error)) => {
-                let event_data: Vec<(&str, serde_json::Value)> = vec![
-                    ("type", json!("error")),
-                    ("terminal_id", json!(error.terminal_id)),
-                    ("message", json!(&error.message)),
-                ];
-                self.push_event_("terminal_response", &event_data, &[], &[]);
-            }
-            None => {}
-            Some(_) => {
-                log::warn!("Unhandled terminal response type");
             }
         }
     }
@@ -1247,14 +1178,8 @@ pub fn session_add_existed(
     peer_id: String,
     session_id: SessionID,
     displays: Vec<i32>,
-    is_view_camera: bool,
 ) -> ResultType<()> {
-    let conn_type = if is_view_camera {
-        ConnType::VIEW_CAMERA
-    } else {
-        ConnType::DEFAULT_CONN
-    };
-    sessions::insert_peer_session_id(peer_id, conn_type, session_id, displays);
+    sessions::insert_peer_session_id(peer_id, ConnType::DEFAULT_CONN, session_id, displays);
     Ok(())
 }
 
@@ -1264,16 +1189,10 @@ pub fn session_add_existed(
 ///
 /// * `id` - The identifier of the remote session with prefix. Regex: [\w]*[\_]*[\d]+
 /// * `is_file_transfer` - If the session is used for file transfer.
-/// * `is_view_camera` - If the session is used for view camera.
-/// * `is_port_forward` - If the session is used for port forward.
 pub fn session_add(
     session_id: &SessionID,
     id: &str,
     is_file_transfer: bool,
-    is_view_camera: bool,
-    is_port_forward: bool,
-    is_rdp: bool,
-    is_terminal: bool,
     switch_uuid: &str,
     force_relay: bool,
     password: String,
@@ -1282,16 +1201,6 @@ pub fn session_add(
 ) -> ResultType<FlutterSession> {
     let conn_type = if is_file_transfer {
         ConnType::FILE_TRANSFER
-    } else if is_view_camera {
-        ConnType::VIEW_CAMERA
-    } else if is_terminal {
-        ConnType::TERMINAL
-    } else if is_port_forward {
-        if is_rdp {
-            ConnType::RDP
-        } else {
-            ConnType::PORT_FORWARD
-        }
     } else {
         ConnType::DEFAULT_CONN
     };
@@ -1496,7 +1405,6 @@ pub mod connection_manager {
     struct FlutterHandler {}
 
     impl InvokeUiCM for FlutterHandler {
-        //TODO port_forward
         fn add_connection(&self, client: &crate::ui_cm_interface::Client) {
             let client_json = serde_json::to_string(&client).unwrap_or("".into());
             // send to Android service, active notification no matter UI is shown or not.

@@ -26,7 +26,6 @@ const KCP_PEER_SILENCE_LIMIT: Duration = Duration::from_secs(8);
 #[cfg(feature = "unix-file-copy-paste")]
 use crate::{clipboard::try_empty_clipboard_files, clipboard_file::unix_file_clip};
 use base::{
-    config::keys,
     fs::{
         self, can_enable_overwrite_detection, get_job, get_string, new_send_confirm,
         DigestCheckResult, RemoveJobMeta,
@@ -41,7 +40,7 @@ use clipboard::ContextSend;
 use crossbeam_queue::ArrayQueue;
 use hbb_common::{
     allow_err,
-    config::{self, LocalConfig, PeerConfig, TransferSerde},
+    config::{self, PeerConfig, TransferSerde},
     log,
     protobuf::Message as _,
     rendezvous_proto::ConnType,
@@ -100,8 +99,6 @@ struct ParsedPeerInfo {
     platform: String,
     is_installed: bool,
     idd_impl: String,
-    support_view_camera: bool,
-    support_terminal: bool,
 }
 
 impl ParsedPeerInfo {
@@ -148,7 +145,6 @@ impl<T: InvokeUiSession> Remote<T> {
     pub async fn io_loop(&mut self, key: &str, token: &str, round: u32) {
         #[cfg(target_os = "windows")]
         let _file_clip_context_holder = {
-            // `is_port_forward()` will not reach here, but we still check it for clarity.
             if self.handler.is_default() {
                 // It is ok to call this function multiple times.
                 ContextSend::enable(true);
@@ -171,10 +167,6 @@ impl<T: InvokeUiSession> Remote<T> {
         let mut received = false;
         let conn_type = if self.handler.is_file_transfer() {
             ConnType::FILE_TRANSFER
-        } else if self.handler.is_view_camera() {
-            ConnType::VIEW_CAMERA
-        } else if self.handler.is_terminal() {
-            ConnType::TERMINAL
         } else {
             ConnType::default()
         };
@@ -217,7 +209,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     return;
                 }
                 self.handler.update_direct(Some(direct));
-                if conn_type == ConnType::DEFAULT_CONN || conn_type == ConnType::VIEW_CAMERA {
+                if conn_type == ConnType::DEFAULT_CONN {
                     self.handler
                         .set_fingerprint(crate::common::pk_to_fingerprint(pk.unwrap_or_default()));
                 }
@@ -616,9 +608,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 self.send_close_reason(peer, "").await;
                 return false;
             }
-            Data::Login((os_username, os_password, password, remember)) => {
+            Data::Login((password, remember)) => {
                 self.handler
-                    .handle_login_from_ui(os_username, os_password, password, remember, peer)
+                    .handle_login_from_ui(password, remember, peer)
                     .await;
             }
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -1187,9 +1179,6 @@ impl<T: InvokeUiSession> Remote<T> {
     }
 
     async fn send_toggle_virtual_display_msg(&self, peer: &mut Stream) {
-        if self.handler.is_view_camera() {
-            return;
-        }
         if !self.peer_info.is_support_virtual_display() {
             return;
         }
@@ -1211,9 +1200,6 @@ impl<T: InvokeUiSession> Remote<T> {
     }
 
     async fn send_toggle_privacy_mode_msg(&self, peer: &mut Stream) {
-        if self.handler.is_view_camera() {
-            return;
-        }
         let lc = self.handler.lc.read().unwrap();
         if lc.version >= hbb_common::get_version_number("1.2.4")
             && lc.get_toggle_option("privacy-mode")
@@ -1360,43 +1346,6 @@ impl<T: InvokeUiSession> Remote<T> {
         }
     }
 
-    fn check_view_camera_support(&self, peer_version: &str, peer_platform: &str) -> bool {
-        if self.peer_info.support_view_camera {
-            return true;
-        }
-        if hbb_common::get_version_number(&peer_version) < hbb_common::get_version_number("1.3.9")
-            && (peer_platform == "Windows" || peer_platform == "Linux")
-        {
-            self.handler.msgbox(
-                "error",
-                "Download new version",
-                "upgrade_remote_rustdesk_client_to_{1.3.9}_tip",
-                "",
-            );
-        } else {
-            self.handler.on_error("view_camera_unsupported_tip");
-        }
-        return false;
-    }
-
-    fn check_terminal_support(&self, peer_version: &str) -> bool {
-        if self.peer_info.support_terminal {
-            return true;
-        }
-        if hbb_common::get_version_number(&peer_version) < hbb_common::get_version_number("1.4.1") {
-            self.handler.msgbox(
-                "error",
-                "Remote terminal not supported",
-                "Remote terminal is not supported by the remote side. Please upgrade to version 1.4.1 or higher.",
-                "",
-            );
-        } else {
-            self.handler
-                .on_error("Remote terminal is not supported by the remote side");
-        }
-        return false;
-    }
-
     async fn handle_msg_from_peer(&mut self, data: &[u8], peer: &mut Stream) -> bool {
         if let Ok(msg_in) = Message::parse_from_bytes(&data) {
             match msg_in.union {
@@ -1452,21 +1401,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     Some(login_response::Union::PeerInfo(pi)) => {
-                        let peer_version = pi.version.clone();
-                        let peer_platform = pi.platform.clone();
                         self.set_peer_info(&pi);
-                        if self.handler.is_view_camera() {
-                            if !self.check_view_camera_support(&peer_version, &peer_platform) {
-                                self.handler.lc.write().unwrap().handle_peer_info(&pi);
-                                return false;
-                            }
-                        }
-                        if self.handler.is_terminal() {
-                            if !self.check_terminal_support(&peer_version) {
-                                self.handler.lc.write().unwrap().handle_peer_info(&pi);
-                                return false;
-                            }
-                        }
                         self.handler.handle_peer_info(pi);
                         if self.handler.is_default() {
                             // Startup notifications must see the current sessions' clipboard requirements.
@@ -1840,7 +1775,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         Some(file_response::Union::Done(d)) => {
                             let mut err: Option<String> = None;
                             let mut job_type = fs::JobType::Generic;
-                            let mut printer_data = None;
                             if let Some(job) = fs::remove_job(d.id, &mut self.write_jobs) {
                                 err = job
                                     .finish_download()
@@ -1848,49 +1782,9 @@ impl<T: InvokeUiSession> Remote<T> {
                                     .map(|err| err.to_string())
                                     .or_else(|| job.job_error());
                                 job_type = job.r#type;
-                                printer_data = match job.get_buf_data().await {
-                                    Ok(d) => d,
-                                    Err(e) => {
-                                        log::error!("Failed to get the printer data: {}", e);
-                                        None
-                                    }
-                                };
                             }
-                            match job_type {
-                                fs::JobType::Generic => {
-                                    self.handle_job_status(d.id, d.file_num, err);
-                                }
-                                fs::JobType::Printer => {
-                                    if let Some(err) = err {
-                                        log::error!("Receive print job failed, error {err}");
-                                    } else {
-                                        log::info!(
-                                            "Receive print job done, data len: {:?}",
-                                            printer_data.as_ref().map(|d| d.len()).unwrap_or(0)
-                                        );
-                                        #[cfg(target_os = "windows")]
-                                        if let Some(data) = printer_data {
-                                            let printer_name = self
-                                                .handler
-                                                .printer_names
-                                                .write()
-                                                .unwrap()
-                                                .remove(&d.id);
-                                            // Spawn a new thread to handle the print job.
-                                            // Or print job will block the ui thread.
-                                            std::thread::spawn(move || {
-                                                if let Err(e) =
-                                                    crate::platform::send_raw_data_to_printer(
-                                                        printer_name,
-                                                        data,
-                                                    )
-                                                {
-                                                    log::error!("Print job error: {}", e);
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
+                            if job_type == fs::JobType::Generic {
+                                self.handle_job_status(d.id, d.file_num, err);
                             }
                         }
                         Some(file_response::Union::Error(e)) => {
@@ -1898,13 +1792,8 @@ impl<T: InvokeUiSession> Remote<T> {
                                 .or_else(|| fs::remove_job(e.id, &mut self.read_jobs))
                                 .map(|j| j.r#type)
                                 .unwrap_or(fs::JobType::Generic);
-                            match job_type {
-                                fs::JobType::Generic => {
-                                    self.handle_job_status(e.id, e.file_num, Some(e.error));
-                                }
-                                fs::JobType::Printer => {
-                                    log::error!("Printer job error: {}", e.error);
-                                }
+                            if job_type == fs::JobType::Generic {
+                                self.handle_job_status(e.id, e.file_num, Some(e.error));
                             }
                         }
                         _ => {}
@@ -2094,34 +1983,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 Some(message::Union::FileAction(action)) => match action.union {
-                    Some(file_action::Union::Send(_s)) => match _s.file_type.enum_value() {
-                        #[cfg(target_os = "windows")]
-                        Ok(file_transfer_send_request::FileType::Printer) => {
-                            #[cfg(feature = "flutter")]
-                            let action =
-                                LocalConfig::get_option(keys::OPTION_PRINTER_INCOMING_JOB_ACTION);
-                            if action == "dismiss" {
-                                // Just ignore the incoming print job.
-                            } else {
-                                let id = fs::get_next_job_id();
-                                #[cfg(feature = "flutter")]
-                                let allow_auto_print = LocalConfig::get_bool_option(
-                                    keys::OPTION_PRINTER_ALLOW_AUTO_PRINT,
-                                );
-                                if allow_auto_print {
-                                    let printer_name = if action == "" {
-                                        "".to_string()
-                                    } else {
-                                        LocalConfig::get_option(keys::OPTION_PRINTER_SELECTED_NAME)
-                                    };
-                                    self.handler.printer_response(id, _s.path, printer_name);
-                                } else {
-                                    self.handler.printer_request(id, _s.path);
-                                }
-                            }
-                        }
-                        _ => {}
-                    },
                     Some(file_action::Union::SendConfirm(c)) => {
                         if let Some(job) = fs::get_job(c.id, &mut self.read_jobs) {
                             job.confirm(&c).await;
@@ -2149,17 +2010,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handler
                         .handle_screenshot_resp(response.sid, response.msg);
                 }
-                Some(message::Union::TerminalResponse(response)) => {
-                    use base::message_proto::terminal_response::Union;
-                    if let Some(Union::Opened(opened)) = &response.union {
-                        if opened.success && !opened.service_id.is_empty() {
-                            let mut lc = self.handler.lc.write().unwrap();
-                            let key = lc.get_key_terminal_service_id().to_owned();
-                            lc.set_option(key, opened.service_id.clone());
-                        }
-                    }
-                    self.handler.handle_terminal_response(response);
-                }
                 _ => {}
             }
         }
@@ -2168,11 +2018,6 @@ impl<T: InvokeUiSession> Remote<T> {
 
     fn set_peer_info(&mut self, pi: &PeerInfo) {
         self.peer_info.platform = pi.platform.clone();
-
-        // Check features field for terminal support
-        if let Some(features) = pi.features.as_ref() {
-            self.peer_info.support_terminal = features.terminal;
-        }
 
         if let Ok(platform_additions) =
             serde_json::from_str::<HashMap<String, serde_json::Value>>(&pi.platform_additions)
@@ -2188,11 +2033,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 .flatten()
                 .unwrap_or_default()
                 .to_string();
-            self.peer_info.support_view_camera = platform_additions
-                .get("support_view_camera")
-                .map(|v| v.as_bool())
-                .flatten()
-                .unwrap_or(false);
         }
     }
 

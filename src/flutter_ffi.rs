@@ -115,16 +115,8 @@ pub fn host_stop_system_key_propagate(_stopped: bool) {
 
 // This function is only used to count the number of control sessions.
 pub fn peer_get_sessions_count(id: String, conn_type: i32) -> SyncReturn<usize> {
-    let conn_type = if conn_type == ConnType::VIEW_CAMERA as i32 {
-        ConnType::VIEW_CAMERA
-    } else if conn_type == ConnType::FILE_TRANSFER as i32 {
+    let conn_type = if conn_type == ConnType::FILE_TRANSFER as i32 {
         ConnType::FILE_TRANSFER
-    } else if conn_type == ConnType::PORT_FORWARD as i32 {
-        ConnType::PORT_FORWARD
-    } else if conn_type == ConnType::RDP as i32 {
-        ConnType::RDP
-    } else if conn_type == ConnType::TERMINAL as i32 {
-        ConnType::TERMINAL
     } else {
         ConnType::DEFAULT_CONN
     };
@@ -135,9 +127,8 @@ pub fn session_add_existed_sync(
     id: String,
     session_id: SessionID,
     displays: Vec<i32>,
-    is_view_camera: bool,
 ) -> SyncReturn<String> {
-    if let Err(e) = session_add_existed(id.clone(), session_id, displays, is_view_camera) {
+    if let Err(e) = session_add_existed(id.clone(), session_id, displays) {
         SyncReturn(format!("Failed to add session with id {}, {}", &id, e))
     } else {
         SyncReturn("".to_owned())
@@ -148,10 +139,6 @@ pub fn session_add_sync(
     session_id: SessionID,
     id: String,
     is_file_transfer: bool,
-    is_view_camera: bool,
-    is_port_forward: bool,
-    is_rdp: bool,
-    is_terminal: bool,
     switch_uuid: String,
     force_relay: bool,
     password: String,
@@ -162,22 +149,12 @@ pub fn session_add_sync(
         &session_id,
         &id,
         is_file_transfer,
-        is_view_camera,
-        is_port_forward,
-        is_rdp,
-        is_terminal,
         &switch_uuid,
         force_relay,
         password,
         is_shared_password,
         conn_token,
     );
-    // We can't put the remove call together with `std::env::var("IS_TERMINAL_ADMIN")`.
-    // Because there are some `bail!` in `session_add()`, we must make sure `IS_TERMINAL_ADMIN` is removed at last.
-    if is_terminal {
-        std::env::remove_var("IS_TERMINAL_ADMIN");
-    }
-
     if let Err(e) = add_res {
         SyncReturn(format!("Failed to add session with id {}, {}", &id, e))
     } else {
@@ -267,15 +244,9 @@ pub fn session_get_option(session_id: SessionID, arg: String) -> Option<String> 
     }
 }
 
-pub fn session_login(
-    session_id: SessionID,
-    os_username: String,
-    os_password: String,
-    password: String,
-    remember: bool,
-) {
+pub fn session_login(session_id: SessionID, password: String, remember: bool) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.login(os_username, os_password, password, remember);
+        session.login(password, remember);
     }
 }
 
@@ -686,36 +657,6 @@ pub fn session_input_string(session_id: SessionID, value: String) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         // #[cfg(any(target_os = "android", target_os = "ios"))]
         session.input_string(&value);
-    }
-}
-
-// Terminal functions
-pub fn session_open_terminal(session_id: SessionID, terminal_id: i32, rows: u32, cols: u32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.open_terminal(terminal_id, rows, cols);
-    } else {
-        log::error!(
-            "[flutter_ffi] Session not found for session_id: {}",
-            session_id
-        );
-    }
-}
-
-pub fn session_send_terminal_input(session_id: SessionID, terminal_id: i32, data: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.send_terminal_input(terminal_id, data);
-    }
-}
-
-pub fn session_resize_terminal(session_id: SessionID, terminal_id: i32, rows: u32, cols: u32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.resize_terminal(terminal_id, rows, cols);
-    }
-}
-
-pub fn session_close_terminal(session_id: SessionID, terminal_id: i32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.close_terminal(terminal_id);
     }
 }
 
@@ -1239,8 +1180,7 @@ pub fn main_set_local_option(key: String, value: String) {
     let is_texture_render_key = key.eq(keys::OPTION_TEXTURE_RENDER);
     let is_d3d_render_key = key.eq(keys::OPTION_ALLOW_D3D_RENDER);
     set_local_option(key, value.clone());
-    let is_render_target =
-        |session: &crate::flutter::FlutterSession| session.is_default() || session.is_view_camera();
+    let is_render_target = |session: &crate::flutter::FlutterSession| session.is_default();
     if is_texture_render_key {
         let session_event = [("v", &value)];
         for session in sessions::get_sessions() {
@@ -1688,29 +1628,6 @@ pub fn main_get_displays() -> SyncReturn<String> {
     SyncReturn(display_info)
 }
 
-pub fn session_add_port_forward(
-    session_id: SessionID,
-    local_port: i32,
-    remote_host: String,
-    remote_port: i32,
-) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.add_port_forward(local_port, remote_host, remote_port);
-    }
-}
-
-pub fn session_remove_port_forward(session_id: SessionID, local_port: i32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.remove_port_forward(local_port);
-    }
-}
-
-pub fn session_new_rdp(session_id: SessionID) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.new_rdp();
-    }
-}
-
 pub fn session_get_conn_token(session_id: SessionID) -> SyncReturn<Option<String>> {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         SyncReturn(session.get_conn_token())
@@ -2066,17 +1983,6 @@ pub fn session_toggle_virtual_display(session_id: SessionID, index: i32, on: boo
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.toggle_virtual_display(index, on);
         flutter::session_update_virtual_display(&session, index, on);
-    }
-}
-
-pub fn session_printer_response(
-    session_id: SessionID,
-    id: i32,
-    path: String,
-    printer_name: String,
-) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.printer_response(id, path, printer_name);
     }
 }
 
@@ -2610,33 +2516,8 @@ pub fn main_audio_support_loopback() -> SyncReturn<bool> {
     SyncReturn(is_surpport)
 }
 
-pub fn main_get_printer_names() -> SyncReturn<String> {
-    #[cfg(target_os = "windows")]
-    return SyncReturn(
-        serde_json::to_string(&crate::platform::windows::get_printer_names().unwrap_or_default())
-            .unwrap_or_default(),
-    );
-    #[cfg(not(target_os = "windows"))]
-    return SyncReturn("".to_owned());
-}
-
 pub fn main_get_common(key: String) -> String {
-    if key == "is-printer-installed" {
-        #[cfg(target_os = "windows")]
-        {
-            return match remote_printer::is_rd_printer_installed(&get_app_name()) {
-                Ok(r) => r.to_string(),
-                Err(e) => e.to_string(),
-            };
-        }
-        #[cfg(not(target_os = "windows"))]
-        return false.to_string();
-    } else if key == "is-support-printer-driver" {
-        #[cfg(target_os = "windows")]
-        return crate::platform::is_win_10_or_greater().to_string();
-        #[cfg(not(target_os = "windows"))]
-        return false.to_string();
-    } else if key == "transfer-job-id" {
+    if key == "transfer-job-id" {
         return base::fs::get_next_job_id().to_string();
     } else if key == "is-remote-modify-enabled-by-control-permissions" {
         return match is_remote_modify_enabled_by_control_permissions() {
@@ -2730,38 +2611,6 @@ fn verified_update_artifact_for_release_page_url(
 }
 
 pub fn main_set_common(_key: String, _value: String) {
-    #[cfg(target_os = "windows")]
-    if _key == "install-printer" && crate::platform::is_win_10_or_greater() {
-        std::thread::spawn(move || {
-            let (success, msg) = match remote_printer::install_update_printer(&get_app_name()) {
-                Ok(_) => (true, "".to_owned()),
-                Err(e) => {
-                    let err = e.to_string();
-                    log::error!("Failed to install/update rd printer: {}", &err);
-                    (false, err)
-                }
-            };
-            if success {
-                // Use `ipc` to notify the server process to update the install option in the registry.
-                // Because `install_update_printer()` may prompt for permissions, there is no need to prompt again here.
-                if let Err(e) = crate::ipc::set_install_option(
-                    crate::platform::REG_NAME_INSTALL_PRINTER.to_string(),
-                    "1".to_string(),
-                ) {
-                    log::error!("Failed to set install printer option: {}", e);
-                }
-            }
-            let data = HashMap::from([
-                ("name", serde_json::json!("install-printer-res")),
-                ("success", serde_json::json!(success)),
-                ("msg", serde_json::json!(msg)),
-            ]);
-            let _res = flutter::push_global_event(
-                flutter::APP_TYPE_MAIN,
-                serde_json::ser::to_string(&data).unwrap_or("".to_owned()),
-            );
-        });
-    }
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     {
         use crate::updater::get_update_download_file_from_url;

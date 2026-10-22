@@ -566,18 +566,9 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
 
   // https://github.com/rustdesk/rustdesk/pull/9731
   // Does not work for connection established by "accept".
-  connectWithToken(
-      {bool isFileTransfer = false,
-      bool isViewCamera = false,
-      bool isTcpTunneling = false,
-      bool isTerminal = false}) {
+  connectWithToken({bool isFileTransfer = false}) {
     final connToken = bind.sessionGetConnToken(sessionId: ffi.sessionId);
-    connect(context, id,
-        isFileTransfer: isFileTransfer,
-        isViewCamera: isViewCamera,
-        isTerminal: isTerminal,
-        isTcpTunneling: isTcpTunneling,
-        connToken: connToken);
+    connect(context, id, isFileTransfer: isFileTransfer, connToken: connToken);
   }
 
   if (isDefaultConn && isDesktop) {
@@ -585,21 +576,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
       TTextMenu(
           child: Text(translate('Transfer file')),
           onPressed: () => connectWithToken(isFileTransfer: true)),
-    );
-    v.add(
-      TTextMenu(
-          child: Text(translate('View camera')),
-          onPressed: () => connectWithToken(isViewCamera: true)),
-    );
-    v.add(
-      TTextMenu(
-          child: Text('${translate('Terminal')} (beta)'),
-          onPressed: () => connectWithToken(isTerminal: true)),
-    );
-    v.add(
-      TTextMenu(
-          child: Text(translate('TCP tunneling')),
-          onPressed: () => connectWithToken(isTcpTunneling: true)),
     );
   }
   // note
@@ -706,7 +682,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
   // to-do:
   // 1. Web desktop
   // 2. Mobile, copy the image to the clipboard
-  if ((isDefaultConn || ffi.connType == ConnType.viewCamera) && isDesktop) {
+  if (isDefaultConn && isDesktop) {
     final isScreenshotSupported = bind.sessionGetCommonSync(
         sessionId: sessionId, key: 'is_screenshot_supported', param: '');
     if ('true' == isScreenshotSupported) {

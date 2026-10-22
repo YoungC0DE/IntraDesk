@@ -103,7 +103,6 @@ ctrlc = "3.2"
 # arboard = { version = "3.4", features = ["wayland-data-control"] }
 arboard = { git = "https://github.com/rustdesk-org/arboard", features = ["wayland-data-control"] }
 clipboard-master = { git = "https://github.com/rustdesk-org/clipboard-master" }
-portable-pty = { git = "https://github.com/rustdesk-org/wezterm", branch = "rustdesk/pty_based_0.8.1", package = "portable-pty" }
 
 system_shutdown = "4.0"
 qrcode-generator = "4.1"
@@ -122,7 +121,6 @@ winapi = { version = "0.3", features = [
     "cguid",
     "cfgmgr32",
     "ioapiset",
-    "winspool",
 ] }
 windows = { version = "0.61", features = [
     "Win32",
@@ -147,7 +145,6 @@ windows = { version = "0.61", features = [
 winreg = "0.11"
 windows-service = "0.6"
 virtual_display = { path = "libs/virtual_display" }
-remote_printer = { path = "libs/remote_printer" }
 impersonate_system = { git = "https://github.com/rustdesk-org/impersonate-system" }
 shared_memory = "0.12"
 tauri-winrt-notification = "0.1"
@@ -176,11 +173,6 @@ keepawake = { git = "https://github.com/rustdesk-org/keepawake-rs" }
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
 wallpaper = { git = "https://github.com/rustdesk-org/wallpaper.rs" }
-tiny-skia = "0.11"
-softbuffer = "0.4"
-fontdb = "0.23"
-bytemuck = "1.23"
-ttf-parser = "0.25"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libxdo-sys = "0.11"
@@ -199,7 +191,6 @@ nix = { version = "0.29", features = ["term", "process"]}
 gtk = "0.18"
 termios = "0.3"
 terminfo = "0.8"
-winit = "0.30"
 wayland-client = "0.31"
 xkbcommon-dl = { version = "0.4", features = ["x11"] }
 
@@ -212,7 +203,7 @@ jni = "0.21"
 android-wakelock = { git = "https://github.com/rustdesk-org/android-wakelock" }
 
 [workspace]
-members = ["libs/scrap", "libs/hbb_common", "libs/base", "libs/enigo", "libs/clipboard", "libs/virtual_display", "libs/virtual_display/dylib", "libs/portable", "libs/remote_printer"]
+members = ["libs/scrap", "libs/hbb_common", "libs/base", "libs/enigo", "libs/clipboard", "libs/virtual_display", "libs/virtual_display/dylib", "libs/portable"]
 exclude = ["vdi/host"]
 
 # Patch libxdo-sys to use a stub implementation that doesn't require libxdo

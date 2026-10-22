@@ -194,10 +194,6 @@ class ShortcutModel {
   ///     toolbars don't surface either action.
   ///   * Tab navigation / Close Tab: only native desktop ships
   ///     `DesktopTabController`; Web's `RemotePage` is invoked without one.
-  ///   * Recording: native desktop has the `_RecordMenu` widget +
-  ///     `registerSessionShortcutActions` registration; native Android has
-  ///     the `toolbarControls` entry; iOS short-circuits inside
-  ///     `recordingModel.toggle()`; Web has no implementation.
   ///   * Reset Canvas: only the mobile toolbar builds the menu entry
   ///     (`isDefaultConn && isMobile` in `toolbarControls`).
   ///   * Voice Call: iOS has no audio capture implementation; Web bridge throws
@@ -214,7 +210,6 @@ class ShortcutModel {
       includeToolbarShortcut: desktopLayout,
       includeCloseTabShortcut: isDesktop,
       includeSwitchSidesShortcut: isDesktop,
-      includeRecordingShortcut: !isWeb && !isIOS,
       includeResetCanvasShortcut: isMobile,
       includePinToolbarShortcut: desktopLayout,
       includeViewModeShortcut: true,
@@ -319,19 +314,6 @@ void registerSessionShortcutActions(
   if (isDesktop || isWeb) {
     ffi.shortcutModel.register(kShortcutActionToggleFullscreen, () {
       stateGlobal.setFullscreen(!stateGlobal.fullscreen.value);
-    });
-  }
-
-  // Toggle Recording — desktop only here. Mobile already wires this through
-  // `toolbarControls` (which adds a recording entry on `!(isDesktop||isWeb)`),
-  // but the desktop toolbar uses a separate `_RecordMenu` widget that has no
-  // `actionId`. Without this explicit registration a desktop user could bind
-  // Toggle Recording in settings and the press would have no handler.
-  // `recordingModel.toggle()` itself short-circuits on iOS and on sessions
-  // without recording permission.
-  if (isDesktop) {
-    ffi.shortcutModel.register(kShortcutActionToggleRecording, () {
-      ffi.recordingModel.toggle();
     });
   }
 

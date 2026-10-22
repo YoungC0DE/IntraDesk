@@ -811,7 +811,6 @@ class Client {
   bool audio = false;
   bool file = false;
   bool restart = false;
-  bool recording = false;
   bool blockInput = false;
   bool privacyMode = false;
   bool disconnected = false;
@@ -840,7 +839,6 @@ class Client {
     audio = json['audio'];
     file = json['file'];
     restart = json['restart'];
-    recording = json['recording'];
     blockInput = json['block_input'];
     privacyMode = json['privacy_mode'] ?? privacyMode;
     disconnected = json['disconnected'];
@@ -865,7 +863,6 @@ class Client {
     data['audio'] = audio;
     data['file'] = file;
     data['restart'] = restart;
-    data['recording'] = recording;
     data['block_input'] = blockInput;
     data['privacy_mode'] = privacyMode;
     data['disconnected'] = disconnected;

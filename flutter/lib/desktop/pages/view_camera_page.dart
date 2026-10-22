@@ -105,8 +105,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
     _ffi.imageModel.addCallbackOnFirstImage((String peerId) {
       showKBLayoutTypeChooserIfNeeded(
           _ffi.ffiModel.pi.platform, _ffi.dialogManager);
-      _ffi.recordingModel
-          .updateStatus(bind.sessionGetIsRecording(sessionId: _ffi.sessionId));
     });
     _ffi.start(
       widget.id,
@@ -357,7 +355,6 @@ class _ViewCameraPageState extends State<ViewCameraPage>
           ChangeNotifierProvider.value(value: _ffi.imageModel),
           ChangeNotifierProvider.value(value: _ffi.cursorModel),
           ChangeNotifierProvider.value(value: _ffi.canvasModel),
-          ChangeNotifierProvider.value(value: _ffi.recordingModel),
         ], child: buildBody(context)));
   }
 

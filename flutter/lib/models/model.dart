@@ -457,12 +457,6 @@ class FfiModel with ChangeNotifier {
         if (isWeb) {
           parent.target?.fileModel.sendEmptyDirs(evt);
         }
-      } else if (name == "record_status") {
-        if (desktopType == DesktopType.remote ||
-            desktopType == DesktopType.viewCamera ||
-            isMobile) {
-          parent.target?.recordingModel.updateStatus(evt['start'] == 'true');
-        }
       } else if (name == "printer_request") {
         _handlePrinterRequest(evt, sessionId, peerId);
       } else if (name == 'screenshot') {
@@ -3977,31 +3971,6 @@ class QualityMonitorModel with ChangeNotifier {
   }
 }
 
-class RecordingModel with ChangeNotifier {
-  WeakReference<FFI> parent;
-  RecordingModel(this.parent);
-  bool _start = false;
-  bool get start => _start;
-
-  toggle() async {
-    if (isIOS) return;
-    final sessionId = parent.target?.sessionId;
-    if (sessionId == null) return;
-    final pi = parent.target?.ffiModel.pi;
-    if (pi == null) return;
-    bool value = !_start;
-    if (value) {
-      await sessionRefreshVideo(sessionId, pi);
-    }
-    await bind.sessionRecordScreen(sessionId: sessionId, start: value);
-  }
-
-  updateStatus(bool status) {
-    _start = status;
-    notifyListeners();
-  }
-}
-
 class ElevationModel with ChangeNotifier {
   WeakReference<FFI> parent;
   ElevationModel(this.parent);
@@ -4049,7 +4018,6 @@ class FFI {
   late final UserModel userModel; // global
   late final PeerTabModel peerTabModel; // global
   late final QualityMonitorModel qualityMonitorModel; // session
-  late final RecordingModel recordingModel; // session
   late final InputModel inputModel; // session
   late final ElevationModel elevationModel; // session
   late final CmFileModel cmFileModel; // cm
@@ -4079,7 +4047,6 @@ class FFI {
     abModel = AbModel(WeakReference(this));
     groupModel = GroupModel(WeakReference(this));
     qualityMonitorModel = QualityMonitorModel(WeakReference(this));
-    recordingModel = RecordingModel(WeakReference(this));
     inputModel = InputModel(WeakReference(this));
     elevationModel = ElevationModel(WeakReference(this));
     cmFileModel = CmFileModel(WeakReference(this));

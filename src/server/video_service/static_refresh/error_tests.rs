@@ -109,12 +109,10 @@ fn failures_pause_refresh_until_a_real_frame_succeeds() {
     let sp = GenericService::new("repeat-errors-test".to_owned(), false);
     let (tx, rx) = mpsc::unbounded_channel();
     sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
-    let recorder = Arc::new(Mutex::new(None));
     let mut refresh = new_refresh(
         VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
-        &recorder,
         0,
         1,
         1,
@@ -171,12 +169,10 @@ fn failures_pause_refresh_until_a_real_frame_succeeds() {
 #[test]
 fn empty_outputs_exhaust_the_no_output_budget_without_disabling_the_encoder() {
     let sp = GenericService::new("repeat-empty-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     let mut refresh = new_refresh(
         VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
-        &recorder,
         0,
         1,
         1,
@@ -194,9 +190,8 @@ fn empty_outputs_exhaust_the_no_output_budget_without_disabling_the_encoder() {
 #[test]
 fn vpx_drops_exhaust_the_no_output_budget_without_disabling_the_encoder() {
     let sp = GenericService::new("repeat-vpx-drops-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let limit = MAX_REPEAT_NO_OUTPUTS;
         let (mut encoder, state) = encoder(&vec![Outcome::Dropped; limit]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
@@ -214,11 +209,10 @@ fn vpx_dropped_capture_repeats_the_latest_frame() {
     use super::super::handle_one_frame;
     use Outcome::*;
     let sp = GenericService::new("repeat-dropped-capture-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
         let (tx, mut rx) = mpsc::unbounded_channel();
         sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let (mut encoder, state) = encoder(&[Frame, Dropped, Dropped, Frame]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
         refresh.on_encoded(true);
@@ -236,12 +230,9 @@ fn vpx_dropped_capture_repeats_the_latest_frame() {
             EncodeInput::YUV(&latest_yuv),
             100,
             &mut encoder,
-            recorder.clone(),
             &mut normal_failures,
             &mut first_frame,
             &mut encoder_warmed_up,
-            1,
-            1,
         )
         .unwrap();
         assert!(result.send_conn_ids.is_empty());
@@ -276,14 +267,13 @@ fn vpx_dropped_capture_repeats_the_latest_frame() {
 fn captured_frame_errors_do_not_enable_repeat() {
     use super::super::handle_one_frame;
     let sp = GenericService::new("repeat-capture-error-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for (codec, outcome, vpx_no_output) in [
         (CodecFormat::VP8, Outcome::Error, false),
         (CodecFormat::VP9, Outcome::Error, false),
         (CodecFormat::H264, Outcome::Dropped, true),
         (CodecFormat::H265, Outcome::Dropped, true),
     ] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let (mut encoder, state) = encoder(&[outcome, Outcome::Frame]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
         let mut normal_failures = 0;
@@ -295,12 +285,9 @@ fn captured_frame_errors_do_not_enable_repeat() {
             EncodeInput::YUV(&[1]),
             0,
             &mut encoder,
-            recorder.clone(),
             &mut normal_failures,
             &mut first_frame,
             &mut encoder_warmed_up,
-            1,
-            1,
         )
         .unwrap();
         assert!(result.send_conn_ids.is_empty());
@@ -315,11 +302,10 @@ fn captured_frame_errors_do_not_enable_repeat() {
 #[test]
 fn unsuccessful_repeats_preserve_the_frame_budget() {
     let sp = GenericService::new("repeat-frame-budget-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
         let (tx, rx) = mpsc::unbounded_channel();
         sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let limit = max_repeat_frames(codec, BR_BALANCED, HardwareBackend::Other);
         let mut outcomes = vec![Outcome::Dropped; 40];
         outcomes.extend(vec![Outcome::Empty; 40]);
@@ -344,7 +330,6 @@ fn unsuccessful_repeats_preserve_the_frame_budget() {
 #[test]
 fn repeat_intervals_are_codec_specific_after_the_first_attempt() {
     let sp = GenericService::new("repeat-interval-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for (codec, spf_ms, first_interval_ms, repeat_interval_ms) in [
         (CodecFormat::VP8, 10, 100, 100),
         (CodecFormat::VP9, 10, 100, 100),
@@ -365,7 +350,7 @@ fn repeat_intervals_are_codec_specific_after_the_first_attempt() {
             Outcome::Dropped,
             Outcome::Error,
         ] {
-            let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+            let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
             let (mut encoder, state) = encoder(&[first, Outcome::Frame]);
             refresh.on_frame(&EncodeInput::YUV(&[1]));
             refresh.on_encoded(true);
@@ -396,7 +381,6 @@ fn repeat_intervals_are_codec_specific_after_the_first_attempt() {
 #[test]
 fn repeat_timing_uses_the_capture_loop_start() {
     let sp = GenericService::new("repeat-loop-clock-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     let spf = Duration::from_nanos(33_333_333);
     let clock_start = Instant::now() + Duration::from_secs(1);
     for first in [
@@ -409,7 +393,6 @@ fn repeat_timing_uses_the_capture_loop_start() {
             VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
-            &recorder,
             0,
             1,
             1,
@@ -447,9 +430,8 @@ fn repeat_timing_uses_the_capture_loop_start() {
 #[test]
 fn no_output_budget_is_cumulative_and_restarts_with_a_new_frame() {
     let sp = GenericService::new("repeat-no-output-budget-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let mut outcomes = Vec::new();
         for _ in 0..10 {
             outcomes.push(Outcome::Frame);
@@ -483,7 +465,6 @@ fn no_output_budget_is_cumulative_and_restarts_with_a_new_frame() {
 #[test]
 fn repeat_error_limits_are_codec_specific() {
     let sp = GenericService::new("repeat-codec-errors-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     for (codec, expected_calls) in [
         (CodecFormat::VP8, 100),
         (CodecFormat::VP9, 100),
@@ -491,7 +472,7 @@ fn repeat_error_limits_are_codec_specific() {
         (CodecFormat::H264, 3),
         (CodecFormat::H265, 3),
     ] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
         let limit = MAX_REPEAT_NO_OUTPUTS;
         let (mut encoder, state) = encoder(&vec![Outcome::Error; limit]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
@@ -509,12 +490,10 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
     use super::super::handle_one_frame;
     use Outcome::*;
     let sp = GenericService::new("repeat-normal-errors-test".to_owned(), false);
-    let recorder = Arc::new(Mutex::new(None));
     let mut refresh = new_refresh(
         VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
-        &recorder,
         0,
         1,
         1,
@@ -534,12 +513,9 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
         EncodeInput::YUV(&[1]),
         0,
         &mut encoder,
-        recorder.clone(),
         &mut normal_failures,
         &mut first_frame,
         &mut encoder_warmed_up,
-        1,
-        1,
     )
     .unwrap();
     attempt(&mut refresh, &mut encoder);
@@ -552,12 +528,9 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
             EncodeInput::YUV(&[1]),
             0,
             &mut encoder,
-            recorder.clone(),
             &mut normal_failures,
             &mut first_frame,
             &mut encoder_warmed_up,
-            1,
-            1,
         )
         .unwrap();
     }
@@ -567,12 +540,9 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
         EncodeInput::YUV(&[1]),
         0,
         &mut encoder,
-        recorder.clone(),
         &mut normal_failures,
         &mut first_frame,
         &mut encoder_warmed_up,
-        1,
-        1,
     );
     assert_eq!(result.unwrap_err().to_string(), "SWITCH");
     assert_eq!(state.borrow().disabled, 1);

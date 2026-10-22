@@ -161,8 +161,6 @@ class _RemotePageState extends State<RemotePage>
       _ffi.canvasModel.activateLocalCursor();
       showKBLayoutTypeChooserIfNeeded(
           _ffi.ffiModel.pi.platform, _ffi.dialogManager);
-      _ffi.recordingModel
-          .updateStatus(bind.sessionGetIsRecording(sessionId: _ffi.sessionId));
       // Seed shortcut action callbacks once the session is ready, so that
       // global keyboard shortcuts work even if the user never opens the
       // toolbar menu. The returned list is intentionally discarded — the
@@ -840,7 +838,6 @@ class _RemotePageState extends State<RemotePage>
           ChangeNotifierProvider.value(value: _ffi.imageModel),
           ChangeNotifierProvider.value(value: _ffi.cursorModel),
           ChangeNotifierProvider.value(value: _ffi.canvasModel),
-          ChangeNotifierProvider.value(value: _ffi.recordingModel),
         ], child: buildBody(context)));
   }
 

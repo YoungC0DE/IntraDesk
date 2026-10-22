@@ -448,20 +448,12 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(msg_out));
     }
 
-    pub fn record_screen(&self, start: bool) {
-        self.send(Data::RecordScreen(start));
-    }
-
     pub fn is_screenshot_supported(&self) -> bool {
         crate::common::is_support_screenshot_num(self.lc.read().unwrap().version)
     }
 
     pub fn take_screenshot(&self, display: i32, sid: String) {
         self.send(Data::TakeScreenshot((display, sid)));
-    }
-
-    pub fn is_recording(&self) -> bool {
-        self.lc.read().unwrap().record_state
     }
 
     pub fn save_custom_image_quality(&self, custom_image_quality: i32) {
@@ -1660,7 +1652,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_current_display(&self, disp_idx: i32);
     #[cfg(feature = "flutter")]
     fn is_multi_ui_session(&self) -> bool;
-    fn update_record_status(&self, start: bool);
     fn update_empty_dirs(&self, _res: ReadEmptyDirsResponse) {}
     fn printer_request(&self, id: i32, path: String);
     fn handle_screenshot_resp(&self, sid: String, msg: String);

@@ -96,8 +96,7 @@ bool allowDisplaySwitchInPrivacyMode(PeerInfo pi, String privacyModeImpl) {
 /// Action IDs that `toolbarControls` is the sole registrar for. Wiped on
 /// every call so stale closures don't outlive the menu entry that owned
 /// them. Actions registered by `registerSessionShortcutActions` MUST NOT
-/// appear here. `kShortcutActionToggleRecording` is platform-conditional
-/// and handled separately in the unregister pass below.
+/// appear here.
 const _kToolbarOwnedActionIds = <String>[
   kShortcutActionSendCtrlAltDel,
   kShortcutActionRestartRemote,
@@ -457,11 +456,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
   for (final actionId in _kToolbarOwnedActionIds) {
     ffi.shortcutModel.unregister(actionId);
   }
-  // toggle_recording is mobile-only here; desktop's registration is owned by
-  // `registerSessionShortcutActions` and must not be touched.
-  if (!(isDesktop || isWeb)) {
-    ffi.shortcutModel.unregister(kShortcutActionToggleRecording);
-  }
 
   List<TTextMenu> v = [];
   // elevation
@@ -709,30 +703,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
       actionId: kShortcutActionRefresh,
     ));
   }
-  // record
-  if (!(isDesktop || isWeb) &&
-      bind.mainGetLocalOption(key: kOptionHideRecordingButton) != 'Y' &&
-      (ffi.recordingModel.start || (perms["recording"] != false))) {
-    v.add(TTextMenu(
-        child: Row(
-          children: [
-            Text(translate(ffi.recordingModel.start
-                ? 'Stop session recording'
-                : 'Start session recording')),
-            Padding(
-              padding: EdgeInsets.only(left: 12),
-              child: Icon(
-                  ffi.recordingModel.start
-                      ? Icons.pause_circle_filled
-                      : Icons.videocam_outlined,
-                  color: MyTheme.accent),
-            )
-          ],
-        ),
-        onPressed: () => ffi.recordingModel.toggle(),
-        actionId: kShortcutActionToggleRecording));
-  }
-
   // to-do:
   // 1. Web desktop
   // 2. Mobile, copy the image to the clipboard
@@ -1436,10 +1406,7 @@ void registerToolbarShortcuts(BuildContext context, String id, FFI ffi) {
     });
   }
 
-  register([
-    ..._kToolbarOwnedActionIds,
-    if (!(isDesktop || isWeb)) kShortcutActionToggleRecording,
-  ], () => toolbarControls(context, id, ffi));
+  register(_kToolbarOwnedActionIds, () => toolbarControls(context, id, ffi));
   register(_kToolbarKeyboardToggleActionIds, () => toolbarKeyboardToggles(ffi));
   register(_kToolbarCursorActionIds, () => toolbarCursor(context, id, ffi));
   register(_kToolbarDisplayToggleActionIds,

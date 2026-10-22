@@ -337,20 +337,6 @@ pub fn session_is_multi_ui_session(session_id: SessionID) -> SyncReturn<bool> {
     }
 }
 
-pub fn session_record_screen(session_id: SessionID, start: bool) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.record_screen(start);
-    }
-}
-
-pub fn session_get_is_recording(session_id: SessionID) -> SyncReturn<bool> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        SyncReturn(session.is_recording())
-    } else {
-        SyncReturn(false)
-    }
-}
-
 pub fn session_reconnect(session_id: SessionID, force_relay: bool) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.reconnect(force_relay);
@@ -1623,10 +1609,6 @@ pub fn main_change_language(lang: String) {
     main_broadcast_message(&HashMap::from([("name", "language"), ("lang", &lang)]));
     #[cfg(not(any(target_os = "ios")))]
     send_to_cm(&crate::ipc::Data::Language(lang));
-}
-
-pub fn main_video_save_directory(root: bool) -> SyncReturn<String> {
-    SyncReturn(video_save_directory(root))
 }
 
 pub fn main_set_user_default_option(key: String, value: String) {

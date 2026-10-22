@@ -32,7 +32,6 @@ use crate::{
 };
 use hbb_common::{
     anyhow::anyhow,
-    config,
     tokio::sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         Mutex as TokioMutex,
@@ -47,7 +46,6 @@ use scrap::Capturer;
 use scrap::{
     aom::AomEncoderConfig,
     codec::{Encoder, EncoderCfg},
-    record::{Recorder, RecorderContext},
     vpxcodec::{VpxEncoderConfig, VpxVideoCodecId},
     CodecFormat, Display, EncodeInput, TraitCapturer, TraitPixelBuffer,
 };
@@ -652,21 +650,13 @@ fn run(vs: VideoService) -> ResultType<()> {
     let mut video_qos = VIDEO_QOS.lock().unwrap();
     let mut spf = video_qos.spf();
     let mut quality = video_qos.ratio();
-    let record_incoming = config::option2bool(
-        "allow-auto-record-incoming",
-        &Config::get_option("allow-auto-record-incoming"),
-    );
-    let client_record = video_qos.record();
     drop(video_qos);
-    let (mut encoder, encoder_cfg, codec_format, use_i444, recorder) = match setup_encoder(
+    let (mut encoder, encoder_cfg, codec_format, use_i444) = match setup_encoder(
         &c,
         sp.name(),
         quality,
-        client_record,
-        record_incoming,
         last_portable_service_running,
         vs.source,
-        display_idx,
     ) {
         Ok(result) => result,
         Err(err) => {
@@ -682,11 +672,8 @@ fn run(vs: VideoService) -> ResultType<()> {
                 &c,
                 sp.name(),
                 quality,
-                client_record,
-                record_incoming,
                 last_portable_service_running,
                 vs.source,
-                display_idx,
             )?
         }
     };
@@ -731,17 +718,12 @@ fn run(vs: VideoService) -> ResultType<()> {
     let mut first_frame = true;
     // Set once the encoder emits its first packet; until then it may legitimately return nothing.
     let mut encoder_warmed_up = false;
-    let capture_width = c.width;
-    let capture_height = c.height;
     let mut static_refresh = static_refresh::StaticRefresh::new(
         vs.source,
         codec_format,
         &encoder_cfg,
         &sp,
-        &recorder,
         display_idx,
-        capture_width,
-        capture_height,
     );
     let (mut second_instant, mut send_counter) = (Instant::now(), 0);
 
@@ -752,7 +734,6 @@ fn run(vs: VideoService) -> ResultType<()> {
             &mut encoder,
             &mut quality,
             &mut spf,
-            client_record,
             &mut send_counter,
             &mut second_instant,
             &sp.name(),
@@ -874,12 +855,9 @@ fn run(vs: VideoService) -> ResultType<()> {
                         frame,
                         ms,
                         &mut encoder,
-                        recorder.clone(),
                         &mut encode_fail_counter,
                         &mut first_frame,
                         &mut encoder_warmed_up,
-                        capture_width,
-                        capture_height,
                     )?;
                     static_refresh.on_frame_encoded(&result);
                     frame_controller.set_send(now, result.send_conn_ids);
@@ -940,12 +918,9 @@ fn run(vs: VideoService) -> ResultType<()> {
                             EncodeInput::YUV(&yuv),
                             ms,
                             &mut encoder,
-                            recorder.clone(),
                             &mut encode_fail_counter,
                             &mut first_frame,
                             &mut encoder_warmed_up,
-                            capture_width,
-                            capture_height,
                         )?
                         .send_conn_ids;
                         static_refresh.on_encoded(!send_conn_ids.is_empty());
@@ -1068,39 +1043,27 @@ fn setup_encoder(
     c: &CapturerInfo,
     name: String,
     quality: f32,
-    client_record: bool,
-    record_incoming: bool,
     last_portable_service_running: bool,
     source: VideoSource,
-    display_idx: usize,
-) -> ResultType<(
-    Encoder,
-    EncoderCfg,
-    CodecFormat,
-    bool,
-    Arc<Mutex<Option<Recorder>>>,
-)> {
+) -> ResultType<(Encoder, EncoderCfg, CodecFormat, bool)> {
     let encoder_cfg = get_encoder_config(
         &c,
         name.to_string(),
         quality,
-        client_record || record_incoming,
         last_portable_service_running,
         source,
     );
     Encoder::set_fallback(&encoder_cfg);
     let codec_format = Encoder::negotiated_codec();
-    let recorder = get_recorder(record_incoming, display_idx, source == VideoSource::Camera);
     let use_i444 = Encoder::use_i444(&encoder_cfg);
     let encoder = Encoder::new(encoder_cfg.clone(), use_i444)?;
-    Ok((encoder, encoder_cfg, codec_format, use_i444, recorder))
+    Ok((encoder, encoder_cfg, codec_format, use_i444))
 }
 
 fn get_encoder_config(
     c: &CapturerInfo,
     _name: String,
     quality: f32,
-    record: bool,
     _portable_service: bool,
     _source: VideoSource,
 ) -> EncoderCfg {
@@ -1111,8 +1074,7 @@ fn get_encoder_config(
     }
     #[cfg(feature = "vram")]
     Encoder::update(scrap::codec::EncodingUpdate::Check);
-    // https://www.wowza.com/community/t/the-correct-keyframe-interval-in-obs-studio/95162
-    let keyframe_interval = if record { Some(240) } else { None };
+    let keyframe_interval = None;
     let negotiated_codec = Encoder::negotiated_codec();
     match negotiated_codec {
         CodecFormat::H264 | CodecFormat::H265 => {
@@ -1171,41 +1133,6 @@ fn get_encoder_config(
             keyframe_interval,
         }),
     }
-}
-
-fn get_recorder(
-    record_incoming: bool,
-    display_idx: usize,
-    camera: bool,
-) -> Arc<Mutex<Option<Recorder>>> {
-    #[cfg(windows)]
-    let root = crate::platform::is_root();
-    #[cfg(not(windows))]
-    let root = false;
-    let recorder = if record_incoming {
-        use crate::hbbs_http::record_upload;
-
-        let tx = if record_upload::is_enable() {
-            let (tx, rx) = std::sync::mpsc::channel();
-            record_upload::run(rx);
-            Some(tx)
-        } else {
-            None
-        };
-        Recorder::new(RecorderContext {
-            server: true,
-            id: Config::get_id(),
-            dir: crate::ui_interface::video_save_directory(root),
-            display_idx,
-            camera,
-            tx,
-        })
-        .map_or(Default::default(), |r| Arc::new(Mutex::new(Some(r))))
-    } else {
-        Default::default()
-    };
-
-    recorder
 }
 
 #[cfg(target_os = "android")]
@@ -1280,12 +1207,9 @@ fn handle_one_frame(
     frame: EncodeInput,
     ms: i64,
     encoder: &mut Encoder,
-    recorder: Arc<Mutex<Option<Recorder>>>,
     encode_fail_counter: &mut usize,
     first_frame: &mut bool,
     encoder_warmed_up: &mut bool,
-    width: usize,
-    height: usize,
 ) -> ResultType<static_refresh::FrameEncodeResult> {
     sp.snapshot(|sps| {
         // so that new sub and old sub share the same encoder after switch
@@ -1307,11 +1231,6 @@ fn handle_one_frame(
             vf.display = display as _;
             let mut msg = Message::new();
             msg.set_video_frame(vf);
-            recorder
-                .lock()
-                .unwrap()
-                .as_mut()
-                .map(|r| r.write_message(&msg, width, height));
             send_conn_ids = sp.send_video_frame(msg);
         }
         Err(e) => {
@@ -1466,7 +1385,6 @@ fn check_qos(
     encoder: &mut Encoder,
     ratio: &mut f32,
     spf: &mut Duration,
-    client_record: bool,
     send_counter: &mut usize,
     second_instant: &mut Instant,
     name: &str,
@@ -1485,10 +1403,6 @@ fn check_qos(
                 bail!("SWITCH");
             }
         }
-    }
-    if client_record != video_qos.record() {
-        log::info!("switch due to record changed");
-        bail!("SWITCH");
     }
     if second_instant.elapsed() > Duration::from_secs(1) {
         *second_instant = Instant::now();

@@ -74,11 +74,7 @@ use base::{
     message_proto::{option_message::BoolOption, *},
 };
 pub use helper::*;
-use scrap::{
-    codec::Decoder,
-    record::{Recorder, RecorderContext},
-    CodecFormat, ImageFormat, ImageRgb, ImageTexture,
-};
+use scrap::{codec::Decoder, CodecFormat, ImageFormat, ImageRgb, ImageTexture};
 
 #[cfg(not(target_os = "ios"))]
 use crate::clipboard::CLIPBOARD_INTERVAL;
@@ -2580,8 +2576,6 @@ pub struct VideoHandler {
     decoder: Decoder,
     pub rgb: ImageRgb,
     pub texture: ImageTexture,
-    recorder: Arc<Mutex<Option<Recorder>>>,
-    record: bool,
     _display: usize, // useful for debug
     fail_counter: usize,
     first_frame: bool,
@@ -2607,8 +2601,6 @@ impl VideoHandler {
             decoder: Decoder::new(format, luid),
             rgb: ImageRgb::new(rgba_format, crate::get_dst_align_rgba()),
             texture: Default::default(),
-            recorder: Default::default(),
-            record: false,
             _display,
             fail_counter: 0,
             first_frame: true,
@@ -2653,16 +2645,6 @@ impl VideoHandler {
                     }
                 }
                 self.first_frame = false;
-                if self.record {
-                    self.recorder.lock().unwrap().as_mut().map(|r| {
-                        let (w, h) = if *pixelbuffer {
-                            (self.rgb.w, self.rgb.h)
-                        } else {
-                            (self.texture.w, self.texture.h)
-                        };
-                        r.write_frame(frame, w, h).ok();
-                    });
-                }
                 res
             }
             _ => Ok(false),
@@ -2682,26 +2664,6 @@ impl VideoHandler {
         self.decoder = Decoder::new(format, luid);
         self.fail_counter = 0;
         self.first_frame = true;
-    }
-
-    /// Start or stop screen record.
-    pub fn record_screen(&mut self, start: bool, id: String, display_idx: usize, camera: bool) {
-        self.record = false;
-        if start {
-            self.recorder = Recorder::new(RecorderContext {
-                server: false,
-                id,
-                dir: crate::ui_interface::video_save_directory(false),
-                display_idx,
-                camera,
-                tx: None,
-            })
-            .map_or(Default::default(), |r| Arc::new(Mutex::new(Some(r))));
-        } else {
-            self.recorder = Default::default();
-        }
-
-        self.record = start;
     }
 }
 
@@ -2814,8 +2776,6 @@ pub struct LoginConfigHandler {
     password_source: PasswordSource, // where the sent password comes from
     shared_password: Option<String>, // Store the shared password
     pub enable_trusted_devices: bool,
-    pub record_state: bool,
-    pub record_permission: bool,
 }
 
 impl Deref for LoginConfigHandler {
@@ -2935,8 +2895,6 @@ impl LoginConfigHandler {
         self.adapter_luid = adapter_luid;
         self.selected_windows_session_id = None;
         self.shared_password = shared_password;
-        self.record_state = false;
-        self.record_permission = true;
 
         // `std::env::remove_var("IS_TERMINAL_ADMIN");` is called in `session_add_sync()` - `flutter_ffi.rs`.
         let is_terminal_admin = conn_type == ConnType::TERMINAL
@@ -3902,7 +3860,6 @@ pub enum MediaData {
     AudioFrame(Box<AudioFrame>),
     AudioFormat(AudioFormat),
     Reset,
-    RecordScreen(bool),
 }
 
 pub type MediaSender = mpsc::Sender<MediaData>;
@@ -3914,7 +3871,6 @@ pub type MediaSender = mpsc::Sender<MediaData>;
 /// * `video_callback` - The callback for video frame. Being called when a video frame is ready.
 pub fn start_video_thread<F, T>(
     session: Session<T>,
-    display: usize,
     video_receiver: mpsc::Receiver<MediaData>,
     video_queue: Arc<RwLock<ArrayQueue<VideoFrame>>>,
     fps: Arc<RwLock<Option<usize>>>,
@@ -3927,7 +3883,6 @@ pub fn start_video_thread<F, T>(
 {
     let mut video_callback = video_callback;
     let mut last_chroma = None;
-    let is_view_camera = session.is_view_camera();
 
     std::thread::spawn(move || {
         #[cfg(windows)]
@@ -3965,14 +3920,7 @@ pub fn start_video_thread<F, T>(
                         let start = std::time::Instant::now();
                         let format = CodecFormat::from(&vf);
                         if video_handler.is_none() {
-                            let mut handler = VideoHandler::new(format, display);
-                            let record_state = session.lc.read().unwrap().record_state;
-                            let record_permission = session.lc.read().unwrap().record_permission;
-                            let id = session.lc.read().unwrap().id.clone();
-                            if record_state && record_permission {
-                                handler.record_screen(true, id, display, is_view_camera);
-                            }
-                            video_handler = Some(handler);
+                            video_handler = Some(VideoHandler::new(format, display));
                         }
                         if let Some(handler) = video_handler.as_mut() {
                             let mut pixelbuffer = true;
@@ -4046,12 +3994,6 @@ pub fn start_video_thread<F, T>(
                     MediaData::Reset => {
                         if let Some(handler) = video_handler.as_mut() {
                             handler.reset(None);
-                        }
-                    }
-                    MediaData::RecordScreen(start) => {
-                        let id = session.lc.read().unwrap().id.clone();
-                        if let Some(handler) = video_handler.as_mut() {
-                            handler.record_screen(start, id, display, is_view_camera);
                         }
                     }
                     _ => {}
@@ -4899,7 +4841,6 @@ pub enum Data {
     SetConfirmOverrideFile((i32, i32, bool, bool, bool)),
     AddJob((i32, JobType, String, String, i32, bool, bool)),
     ResumeJob((i32, bool)),
-    RecordScreen(bool),
     ElevateDirect,
     ElevateWithLogon(String, String),
     NewVoiceCall,

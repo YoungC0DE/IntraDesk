@@ -44,7 +44,6 @@ pub const OPTION_TERMINAL_PERSISTENT: &str = "terminal-persistent";
 pub const OPTION_ENABLE_AUDIO: &str = "enable-audio";
 pub const OPTION_ENABLE_TUNNEL: &str = "enable-tunnel";
 pub const OPTION_ENABLE_REMOTE_RESTART: &str = "enable-remote-restart";
-pub const OPTION_ENABLE_RECORD_SESSION: &str = "enable-record-session";
 pub const OPTION_ENABLE_BLOCK_INPUT: &str = "enable-block-input";
 pub const OPTION_ENABLE_PRIVACY_MODE: &str = "enable-privacy-mode";
 pub const OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW: &str = "enable-perm-change-in-accept-window";
@@ -60,12 +59,6 @@ pub const OPTION_ID_WHITELIST: &str = "id-whitelist";
 pub const OPTION_ALLOW_AUTO_DISCONNECT: &str = "allow-auto-disconnect";
 pub const OPTION_AUTO_DISCONNECT_TIMEOUT: &str = "auto-disconnect-timeout";
 pub const OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN: &str = "allow-only-conn-window-open";
-pub const OPTION_ALLOW_AUTO_RECORD_INCOMING: &str = "allow-auto-record-incoming";
-pub const OPTION_ALLOW_AUTO_RECORD_OUTGOING: &str = "allow-auto-record-outgoing";
-pub const OPTION_HIDE_RECORDING_BUTTON: &str = "hide-recording-button";
-pub const OPTION_WINDOWS_SERVICE_VIDEO_SAVE_DIRECTORY: &str =
-    "windows-service-video-save-directory";
-pub const OPTION_VIDEO_SAVE_DIRECTORY: &str = "video-save-directory";
 pub const OPTION_ENABLE_ABR: &str = "enable-abr";
 pub const OPTION_ALLOW_REMOVE_WALLPAPER: &str = "allow-remove-wallpaper";
 pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-render";
@@ -253,9 +246,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_PRINTER_INCOMING_JOB_ACTION,
     OPTION_PRINTER_ALLOW_AUTO_PRINT,
     OPTION_PRINTER_SELECTED_NAME,
-    OPTION_ALLOW_AUTO_RECORD_OUTGOING,
-    OPTION_HIDE_RECORDING_BUTTON,
-    OPTION_VIDEO_SAVE_DIRECTORY,
     OPTION_ENABLE_TCP_PUNCH,
     OPTION_ENABLE_UDP_PUNCH,
     OPTION_ENABLE_IPV6_PUNCH,
@@ -280,7 +270,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_AUDIO,
     OPTION_ENABLE_TUNNEL,
     OPTION_ENABLE_REMOTE_RESTART,
-    OPTION_ENABLE_RECORD_SESSION,
     OPTION_ENABLE_BLOCK_INPUT,
     OPTION_ENABLE_PRIVACY_MODE,
     OPTION_ALLOW_SCOPE_VIOLATION_CLOSE,
@@ -295,8 +284,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ALLOW_AUTO_DISCONNECT,
     OPTION_AUTO_DISCONNECT_TIMEOUT,
     OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN,
-    OPTION_ALLOW_AUTO_RECORD_INCOMING,
-    OPTION_WINDOWS_SERVICE_VIDEO_SAVE_DIRECTORY,
     OPTION_ENABLE_ABR,
     OPTION_ALLOW_REMOVE_WALLPAPER,
     OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER,

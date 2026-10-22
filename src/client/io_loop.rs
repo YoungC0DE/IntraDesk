@@ -99,7 +99,6 @@ pub struct Remote<T: InvokeUiSession> {
     peer_info: ParsedPeerInfo,
     video_threads: HashMap<usize, VideoThread>,
     chroma: Arc<RwLock<Option<Chroma>>>,
-    last_record_state: bool,
     sent_close_reason: bool,
     cursor_dedupe: CursorDedupe,
 }
@@ -151,7 +150,6 @@ impl<T: InvokeUiSession> Remote<T> {
             peer_info: Default::default(),
             video_threads: Default::default(),
             chroma: Default::default(),
-            last_record_state: false,
             sent_close_reason: false,
             cursor_dedupe: Default::default(),
         }
@@ -1157,10 +1155,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handle_job_status(id, -1, err);
                 }
             }
-            Data::RecordScreen(start) => {
-                self.handler.lc.write().unwrap().record_state = start;
-                self.update_record_state();
-            }
             Data::ElevateDirect => {
                 let mut request = ElevationRequest::new();
                 request.set_direct(true);
@@ -2087,11 +2081,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             Ok(Permission::Restart) => {
                                 self.handler.set_permission("restart", p.enabled);
                             }
-                            Ok(Permission::Recording) => {
-                                self.handler.lc.write().unwrap().record_permission = p.enabled;
-                                self.update_record_state();
-                                self.handler.set_permission("recording", p.enabled);
-                            }
                             Ok(Permission::BlockInput) => {
                                 self.handler.set_permission("block_input", p.enabled);
                             }
@@ -2633,7 +2622,6 @@ impl<T: InvokeUiSession> Remote<T> {
         let handler = self.handler.ui_handler.clone();
         crate::client::start_video_thread(
             self.handler.clone(),
-            display,
             video_receiver,
             video_queue,
             decode_fps,
@@ -2653,37 +2641,6 @@ impl<T: InvokeUiSession> Remote<T> {
             },
         );
         self.video_threads.insert(display, video_thread);
-        if self.video_threads.len() == 1 {
-            let auto_record = LocalConfig::get_bool_option(keys::OPTION_ALLOW_AUTO_RECORD_OUTGOING);
-            self.handler.lc.write().unwrap().record_state = auto_record;
-            self.update_record_state();
-        }
-    }
-
-    fn update_record_state(&mut self) {
-        // state
-        let permission = self.handler.lc.read().unwrap().record_permission;
-        if !permission {
-            self.handler.lc.write().unwrap().record_state = false;
-        }
-        let state = self.handler.lc.read().unwrap().record_state;
-        let start = state && permission;
-        if self.last_record_state == start {
-            return;
-        }
-        self.last_record_state = start;
-        log::info!("record screen start: {start}");
-        // update local
-        for (_, v) in self.video_threads.iter_mut() {
-            v.video_sender.send(MediaData::RecordScreen(start)).ok();
-        }
-        self.handler.update_record_status(start);
-        // update remote
-        let mut misc = Misc::new();
-        misc.set_client_record_status(start);
-        let mut msg = Message::new();
-        msg.set_misc(misc);
-        self.sender.send(Data::Message(msg)).ok();
     }
 
     /// A shape that decoded, for the UI to ask for again; see `Session::cursor_shapes`.

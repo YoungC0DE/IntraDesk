@@ -16,7 +16,6 @@ ShortcutPlatformCapabilities capabilities({
   bool includeToolbarShortcut = true,
   bool includeCloseTabShortcut = true,
   bool includeSwitchSidesShortcut = true,
-  bool includeRecordingShortcut = true,
   bool includeResetCanvasShortcut = true,
   bool includePinToolbarShortcut = true,
   bool includeViewModeShortcut = true,
@@ -31,7 +30,6 @@ ShortcutPlatformCapabilities capabilities({
     includeToolbarShortcut: includeToolbarShortcut,
     includeCloseTabShortcut: includeCloseTabShortcut,
     includeSwitchSidesShortcut: includeSwitchSidesShortcut,
-    includeRecordingShortcut: includeRecordingShortcut,
     includeResetCanvasShortcut: includeResetCanvasShortcut,
     includePinToolbarShortcut: includePinToolbarShortcut,
     includeViewModeShortcut: includeViewModeShortcut,
@@ -197,7 +195,6 @@ void main() {
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        includeRecordingShortcut: false,
         includeResetCanvasShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
@@ -224,9 +221,8 @@ void main() {
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        // Recording / Reset Canvas are intentionally still included here —
-        // they have non-desktop platforms (mobile Android / mobile both).
-        includeRecordingShortcut: true,
+        // Reset Canvas is intentionally still included here — it has
+        // non-desktop platforms (mobile).
         includeResetCanvasShortcut: true,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
@@ -251,22 +247,8 @@ void main() {
     expect(ids, contains(kShortcutActionInsertLock));
     expect(ids, contains(kShortcutActionRestartRemote));
     expect(ids, contains(kShortcutActionSwitchDisplayNext));
-    expect(ids, contains(kShortcutActionToggleRecording));
     expect(ids, contains(kShortcutActionResetCanvas));
     expect(ids, contains(kShortcutActionToggleMute));
-  });
-
-  test(
-      'filterKeyboardShortcutActionGroupsForPlatform hides Toggle Recording on Web/iOS',
-      () {
-    final groups = filterKeyboardShortcutActionGroupsForPlatform(
-      capabilities(includeRecordingShortcut: false),
-    );
-    final ids = idSet(groups);
-    expect(ids, isNot(contains(kShortcutActionToggleRecording)));
-    // Other Session Control entries unaffected.
-    expect(ids, contains(kShortcutActionSendCtrlAltDel));
-    expect(ids, contains(kShortcutActionInsertLock));
   });
 
   test(
@@ -299,7 +281,6 @@ void main() {
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        includeRecordingShortcut: false,
         includeResetCanvasShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
@@ -433,7 +414,6 @@ void main() {
       kShortcutActionKeyboardModeMap,
       kShortcutActionToggleShowMyCursor,
       kShortcutActionToggleZoomCursor,
-      kShortcutActionToggleRecording,
       kShortcutActionToggleVoiceCall,
       kShortcutActionResetCanvas,
       kShortcutActionToggleMute,
@@ -447,7 +427,6 @@ void main() {
       ],
     }));
     final cap = capabilities(
-      includeRecordingShortcut: false,
       includeVoiceCallShortcut: false,
       includeResetCanvasShortcut: false,
       excludedActions: {

@@ -26,7 +26,6 @@ pub mod action_id {
     pub const INSERT_LOCK: &str          = "insert_lock";
     pub const REFRESH: &str              = "refresh";
     pub const TOGGLE_BLOCK_INPUT: &str   = "toggle_block_input";
-    pub const TOGGLE_RECORDING: &str     = "toggle_recording";
     pub const SWITCH_SIDES: &str         = "switch_sides";
     pub const CLOSE_TAB: &str            = "close_tab";
     pub const TOGGLE_TOOLBAR: &str       = "toggle_toolbar";
@@ -292,7 +291,7 @@ fn action_available_on_platform(action: &str, platform: &str, is_wayland: bool) 
         | action_id::KEYBOARD_MODE_TRANSLATE | action_id::KEYBOARD_MODE_LEGACY
         | action_id::TOGGLE_SHOW_MY_CURSOR | action_id::TOGGLE_ZOOM_CURSOR => !mobile,
         action_id::RESET_CANVAS => mobile,
-        action_id::TOGGLE_RECORDING | action_id::TOGGLE_VOICE_CALL => platform != "ios",
+        action_id::TOGGLE_VOICE_CALL => platform != "ios",
         _ => true,
     }
 }
@@ -972,7 +971,7 @@ mod tests {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let actions = [action_id::SWITCH_DISPLAY_ALL, action_id::KEYBOARD_MODE_MAP,
             action_id::TOGGLE_SHOW_MY_CURSOR, action_id::TOGGLE_ZOOM_CURSOR,
-            action_id::TOGGLE_RECORDING, action_id::TOGGLE_VOICE_CALL,
+            action_id::TOGGLE_VOICE_CALL,
             action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL];
         let saved = Bindings { enabled: true, pass_through: false,
             bindings: actions.iter().map(|action| Binding {
@@ -980,7 +979,7 @@ mod tests {
             }).collect() };
         let raw = serde_json::to_string(&saved).unwrap();
         for (platform, expected) in [
-            ("android", vec![action_id::TOGGLE_RECORDING, action_id::TOGGLE_VOICE_CALL,
+            ("android", vec![action_id::TOGGLE_VOICE_CALL,
                 action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
             ("ios", vec![action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
             ("macos", actions.iter().copied().filter(|a| *a != action_id::RESET_CANVAS).collect()),

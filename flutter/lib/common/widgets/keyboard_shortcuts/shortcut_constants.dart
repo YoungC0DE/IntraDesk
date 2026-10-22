@@ -9,7 +9,6 @@ const kShortcutActionScreenshot = 'screenshot';
 const kShortcutActionInsertLock = 'insert_lock';
 const kShortcutActionRefresh = 'refresh';
 const kShortcutActionToggleBlockInput = 'toggle_block_input';
-const kShortcutActionToggleRecording = 'toggle_recording';
 const kShortcutActionSwitchSides = 'switch_sides';
 const kShortcutActionCloseTab = 'close_tab';
 const kShortcutActionToggleToolbar = 'toggle_toolbar';

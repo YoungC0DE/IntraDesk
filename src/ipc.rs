@@ -339,7 +339,6 @@ pub enum Data {
         file: bool,
         file_transfer_enabled: bool,
         restart: bool,
-        recording: bool,
         block_input: bool,
         privacy_mode: bool,
         from_switch: bool,

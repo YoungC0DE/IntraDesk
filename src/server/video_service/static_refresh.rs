@@ -3,12 +3,10 @@ use base::message_proto::Message;
 use hbb_common::{bail, ResultType};
 use scrap::{
     codec::{Encoder, EncoderCfg, BR_BALANCED, BR_BEST, BR_SPEED},
-    record::Recorder,
     CodecFormat, EncodeInput,
 };
 use std::{
     collections::HashSet,
-    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -73,10 +71,7 @@ pub(super) struct StaticRefresh<'a> {
     codec_format: CodecFormat,
     hardware_backend: HardwareBackend,
     sp: &'a GenericService,
-    recorder: &'a Arc<Mutex<Option<Recorder>>>,
     display_idx: usize,
-    width: usize,
-    height: usize,
     last_encode: Instant,
     #[cfg(test)]
     elapsed_since_encode: Duration,
@@ -95,10 +90,7 @@ impl<'a> StaticRefresh<'a> {
         codec_format: CodecFormat,
         encoder_config: &EncoderCfg,
         sp: &'a GenericService,
-        recorder: &'a Arc<Mutex<Option<Recorder>>>,
         display_idx: usize,
-        width: usize,
-        height: usize,
     ) -> Self {
         let hardware_backend = match encoder_config {
             #[cfg(feature = "hwcodec")]
@@ -126,10 +118,7 @@ impl<'a> StaticRefresh<'a> {
             codec_format,
             hardware_backend,
             sp,
-            recorder,
             display_idx,
-            width,
-            height,
             last_encode: Instant::now(),
             #[cfg(test)]
             elapsed_since_encode: Duration::ZERO,
@@ -278,11 +267,6 @@ impl<'a> StaticRefresh<'a> {
             vf.display = self.display_idx as _;
             let mut msg = Message::new();
             msg.set_video_frame(vf);
-            self.recorder
-                .lock()
-                .unwrap()
-                .as_mut()
-                .map(|r| r.write_message(&msg, self.width, self.height));
             let send_conn_ids = self.sp.send_video_frame(msg);
             frame_controller.set_send(now, send_conn_ids);
             // Static refinement must not count as motion for adaptive bitrate.
@@ -308,7 +292,6 @@ mod tests {
         source: VideoSource,
         codec_format: CodecFormat,
         sp: &'a GenericService,
-        recorder: &'a Arc<Mutex<Option<Recorder>>>,
         display_idx: usize,
         width: usize,
         height: usize,
@@ -321,16 +304,7 @@ mod tests {
             codec: VpxVideoCodecId::VP9,
             keyframe_interval: None,
         });
-        StaticRefresh::new(
-            source,
-            codec_format,
-            &config,
-            sp,
-            recorder,
-            display_idx,
-            width,
-            height,
-        )
+        StaticRefresh::new(source, codec_format, &config, sp, display_idx)
     }
 
     struct CountingEncoder(Rc<Cell<usize>>);
@@ -412,12 +386,10 @@ mod tests {
     #[test]
     fn long_network_waits_preserve_budget_and_new_frames_restart_it() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         let mut refresh = new_refresh(
             VideoSource::Monitor,
             CodecFormat::VP9,
             &sp,
-            &recorder,
             0,
             1,
             1,
@@ -447,12 +419,10 @@ mod tests {
     #[test]
     fn initial_delay_repeat_interval_and_qos_limit_refresh_rate() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         let mut refresh = new_refresh(
             VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
-            &recorder,
             0,
             1,
             1,
@@ -513,12 +483,10 @@ mod tests {
     #[cfg(all(windows, feature = "vram"))]
     fn texture_frames_request_repeats_without_accessing_capture_resources() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         let mut refresh = new_refresh(
             VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
-            &recorder,
             0,
             1,
             1,
@@ -550,14 +518,13 @@ mod tests {
     #[test]
     fn cameras_av1_and_missing_frames_are_not_refreshed() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         let calls = Rc::new(Cell::new(0));
         for (source, codec_format, yuv) in [
             (VideoSource::Camera, CodecFormat::VP9, &[1][..]),
             (VideoSource::Monitor, CodecFormat::AV1, &[1][..]),
             (VideoSource::Monitor, CodecFormat::VP9, &[][..]),
         ] {
-            let mut refresh = new_refresh(source, codec_format, &sp, &recorder, 0, 1, 1);
+            let mut refresh = new_refresh(source, codec_format, &sp, 0, 1, 1);
             refresh.on_frame(&EncodeInput::YUV(yuv));
             refresh.on_encoded(true);
             refresh.elapsed_since_encode = Duration::from_secs(60);
@@ -600,12 +567,10 @@ mod tests {
     #[test]
     fn quality_changes_preserve_the_largest_budget_until_a_new_frame() {
         let sp = GenericService::new("repeat-quality-change-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         let mut refresh = new_refresh(
             VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
-            &recorder,
             0,
             1,
             1,
@@ -650,7 +615,6 @@ mod tests {
     #[test]
     fn quality_bands_stop_each_backend_at_its_output_budget() {
         let sp = GenericService::new("repeat-quality-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         assert_eq!(
             [0.1, BR_SPEED, BR_BALANCED, BR_BEST]
                 .map(|q| { max_repeat_frames(CodecFormat::H264, q, HardwareBackend::Vaapi) }),
@@ -681,7 +645,7 @@ mod tests {
                 HardwareBackend::MediaCodec,
                 HardwareBackend::Other,
             ] {
-                let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, &recorder, 0, 1, 1);
+                let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
                 refresh.hardware_backend = backend;
                 for quality in [
                     0.1,
@@ -728,7 +692,6 @@ mod tests {
     #[cfg(feature = "hwcodec")]
     fn ram_config_selects_the_actual_backend_and_preserves_other_encoders() {
         let sp = GenericService::new("repeat-backend-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         for (name, expected) in [
             ("h264_nvenc", HardwareBackend::Nvenc),
             ("hevc_nvenc", HardwareBackend::Nvenc),
@@ -756,16 +719,8 @@ mod tests {
             } else {
                 CodecFormat::H264
             };
-            let mut refresh = StaticRefresh::new(
-                VideoSource::Monitor,
-                codec_format,
-                &config,
-                &sp,
-                &recorder,
-                0,
-                1920,
-                1080,
-            );
+            let mut refresh =
+                StaticRefresh::new(VideoSource::Monitor, codec_format, &config, &sp, 0);
             for quality in [0.1, BR_SPEED, BR_BALANCED, BR_BEST] {
                 let limit = max_repeat_frames(codec_format, quality, expected);
                 assert_output_budget(&mut refresh, &sp, quality, limit);
@@ -777,7 +732,6 @@ mod tests {
     #[cfg(feature = "vram")]
     fn vram_config_resolves_ffmpeg_to_the_actual_hardware_backend() {
         let sp = GenericService::new("repeat-vram-backend-test".to_owned(), false);
-        let recorder = Arc::new(Mutex::new(None));
         for (vendor, expected) in [
             ("NV", HardwareBackend::Nvenc),
             ("MFX", HardwareBackend::Qsv),
@@ -798,16 +752,8 @@ mod tests {
                 }))
                 .unwrap(),
             });
-            let mut refresh = StaticRefresh::new(
-                VideoSource::Monitor,
-                CodecFormat::H264,
-                &config,
-                &sp,
-                &recorder,
-                0,
-                1920,
-                1080,
-            );
+            let mut refresh =
+                StaticRefresh::new(VideoSource::Monitor, CodecFormat::H264, &config, &sp, 0);
             for quality in [0.1, BR_SPEED, BR_BALANCED, BR_BEST] {
                 let limit = max_repeat_frames(CodecFormat::H264, quality, expected);
                 assert_output_budget(&mut refresh, &sp, quality, limit);

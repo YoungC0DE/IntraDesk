@@ -66,8 +66,6 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
         kShortcutActionToggleBlockInput, 'Block user input'),
     KeyboardShortcutActionEntry(kShortcutActionSwitchSides, 'Switch Sides'),
     KeyboardShortcutActionEntry(kShortcutActionRefresh, 'Refresh'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleRecording, 'Toggle session recording'),
     KeyboardShortcutActionEntry(kShortcutActionScreenshot, 'Take screenshot'),
   ]),
   // Display: subgroups (View Mode → Image Quality → Codec → Virtual display)
@@ -240,9 +238,6 @@ List<KeyboardShortcutActionGroup> filterKeyboardShortcutActionGroupsForPlatform(
       return false;
     }
     if (!cap.includeSwitchSidesShortcut && id == kShortcutActionSwitchSides) {
-      return false;
-    }
-    if (!cap.includeRecordingShortcut && id == kShortcutActionToggleRecording) {
       return false;
     }
     if (!cap.includeResetCanvasShortcut && id == kShortcutActionResetCanvas) {

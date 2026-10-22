@@ -1223,18 +1223,6 @@ pub fn get_available_sessions(name: bool) -> Vec<WindowsSession> {
     v
 }
 
-pub fn get_active_user_home() -> Option<PathBuf> {
-    let username = get_active_username();
-    if !username.is_empty() {
-        let drive = std::env::var("SystemDrive").unwrap_or("C:".to_owned());
-        let home = PathBuf::from(format!("{}\\Users\\{}", drive, username));
-        if home.exists() {
-            return Some(home);
-        }
-    }
-    None
-}
-
 pub fn is_prelogin() -> bool {
     let Some(username) = get_current_session_username() else {
         return false;

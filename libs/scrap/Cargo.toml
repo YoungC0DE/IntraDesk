@@ -32,7 +32,6 @@ num_cpus = "1.15"
 lazy_static = "1.4"
 hbb_common = { path = "../hbb_common" }
 base = { path = "../base" }
-webm = { git = "https://github.com/rustdesk-org/rust-webm" }
 serde = {version="1.0", features=["derive"]}
 
 [dependencies.winapi]

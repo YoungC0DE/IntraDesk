@@ -379,7 +379,6 @@ pub struct Connection {
     audio: bool,
     file: bool,
     restart: bool,
-    recording: bool,
     block_input: bool,
     privacy_mode: bool,
     control_permissions: Option<ControlPermissions>,
@@ -593,7 +592,6 @@ impl Connection {
             // to-do: make sure is the option correct here
             file: Self::permission(keys::OPTION_ENABLE_FILE_TRANSFER, &control_permissions),
             restart: Self::permission(keys::OPTION_ENABLE_REMOTE_RESTART, &control_permissions),
-            recording: Self::permission(keys::OPTION_ENABLE_RECORD_SESSION, &control_permissions),
             block_input: Self::permission(keys::OPTION_ENABLE_BLOCK_INPUT, &control_permissions),
             privacy_mode: Self::permission(keys::OPTION_ENABLE_PRIVACY_MODE, &control_permissions),
             control_permissions,
@@ -686,9 +684,6 @@ impl Connection {
         }
         if !conn.restart {
             conn.send_permission(Permission::Restart, false).await;
-        }
-        if !conn.recording {
-            conn.send_permission(Permission::Recording, false).await;
         }
         if !conn.block_input {
             conn.send_permission(Permission::BlockInput, false).await;
@@ -858,9 +853,6 @@ impl Connection {
                             } else if &name == "restart" {
                                 conn.restart = enabled;
                                 conn.send_permission(Permission::Restart, enabled).await;
-                            } else if &name == "recording" {
-                                conn.recording = enabled;
-                                conn.send_permission(Permission::Recording, enabled).await;
                             } else if &name == "block_input" {
                                 conn.block_input = enabled;
                                 conn.send_permission(Permission::BlockInput, enabled).await;
@@ -2368,7 +2360,6 @@ impl Connection {
             file: self.file,
             file_transfer_enabled: self.file,
             restart: self.restart,
-            recording: self.recording,
             block_input: self.block_input,
             privacy_mode: self.privacy_mode,
             from_switch: self.from_switch,
@@ -2706,7 +2697,6 @@ impl Connection {
                 keys::OPTION_ENABLE_TERMINAL => Some(Permission::terminal),
                 keys::OPTION_ENABLE_TUNNEL => Some(Permission::tunnel),
                 keys::OPTION_ENABLE_REMOTE_RESTART => Some(Permission::restart),
-                keys::OPTION_ENABLE_RECORD_SESSION => Some(Permission::recording),
                 keys::OPTION_ENABLE_BLOCK_INPUT => Some(Permission::block_input),
                 keys::OPTION_ENABLE_PRIVACY_MODE => Some(Permission::privacy_mode),
                 _ => None,
@@ -4013,10 +4003,6 @@ impl Connection {
                         .lock()
                         .unwrap()
                         .user_auto_adjust_fps(self.inner.id(), fps),
-                    Some(misc::Union::ClientRecordStatus(status)) => video_service::VIDEO_QOS
-                        .lock()
-                        .unwrap()
-                        .user_record(self.inner.id(), status),
                     #[cfg(windows)]
                     Some(misc::Union::SelectedSid(sid)) => {
                         if let Some(current_process_sid) =

@@ -264,7 +264,6 @@ struct UserData {
     custom_fps: Option<u32>,
     quality: Option<(i64, Quality)>, // (time, quality)
     delay: UserDelay,
-    record: bool,
     joined_at: Option<Instant>, // set by on_connection_open; the start-up guard's clock
 }
 
@@ -373,11 +372,6 @@ impl VideoQoS {
         self.ratio
     }
 
-    // Check if any user is in recording mode
-    pub fn record(&self) -> bool {
-        self.users.iter().any(|u| u.1.record)
-    }
-
     pub fn set_support_changing_quality(&mut self, video_service_name: &str, support: bool) {
         if let Some(display) = self.displays.get_mut(video_service_name) {
             display.support_changing_quality = support;
@@ -451,12 +445,6 @@ impl VideoQoS {
             user.quality = quality;
             // update ratio directly
             self.ratio = self.latest_quality().ratio();
-        }
-    }
-
-    pub fn user_record(&mut self, id: i32, v: bool) {
-        if let Some(user) = self.users.get_mut(&id) {
-            user.record = v;
         }
     }
 

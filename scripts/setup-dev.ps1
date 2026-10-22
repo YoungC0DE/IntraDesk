@@ -134,8 +134,6 @@ Write-Ok "Ferramentas em: $DevRoot"
 
 Write-Step 'Git'
 if (Test-Command 'git') { Write-Ok 'git encontrado' } else { Install-WingetPackage 'Git.Git' }
-Invoke-Native 'git' @('-C', $RepoRoot, 'submodule', 'update', '--init', '--recursive')
-Write-Ok 'Submódulos atualizados (libs/hbb_common)'
 
 # --- Visual Studio Build Tools ----------------------------------------------
 

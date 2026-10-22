@@ -47,10 +47,10 @@ aba **Actions** o artefato `IntraDesk-windows-x64` com o `.exe` portátil.
 
 ### Na sua máquina
 
-0. Clone com os submódulos:
+0. Clone o repositório:
 
    ```powershell
-   git clone --recurse-submodules https://github.com/YoungC0DE/IntraDesk.git
+   git clone https://github.com/YoungC0DE/IntraDesk.git
    ```
 
 1. Prepare o ambiente uma vez (instala Git, Python, VS Build Tools, LLVM 15,

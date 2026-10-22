@@ -74,9 +74,11 @@ Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
 - `flutter/lib/common/widgets/peer_*.dart` — cards e abas de peers
 - `libs/portable/` — empacotador que gera **um único .exe** autoextraível
 - `libs/hbb_common/` — rede, sockets, `Config`, protos de rendezvous.
-  **Submódulo git** de https://github.com/rustdesk/hbb_common, no commit fixado
-  pelo upstream. Depois de clonar: `git submodule update --init --recursive`.
-  Para alterá-lo, veja T0.6 no `todo.md` (fork próprio do `hbb_common`)
+  **`git subtree`** de https://github.com/rustdesk/hbb_common (base: `5d52530`,
+  o commit fixado pelo upstream), com o histórico original preservado. É código
+  do IntraDesk: altere direto, num commit normal. Para trazer mudanças do
+  original (raro): `git subtree pull --prefix libs/hbb_common
+  https://github.com/rustdesk/hbb_common.git <ref>`
 - `libs/base/` — chaves de opção, proto de mensagens, código de plataforma do
   cliente. `libs/base/src/config/keys.rs` é o único caminho de import para opções
 - `libs/scrap/` captura de tela · `libs/enigo/` entrada · `libs/clipboard/` área de transferência

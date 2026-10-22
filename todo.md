@@ -45,7 +45,7 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
 
 ## Fase 0 — Preparação (bloqueia todo o resto)
 
-- [x] **T0.1** `libs/hbb_common` como submódulo de https://github.com/rustdesk/hbb_common, no commit fixado pelo upstream (`5d52530`).
+- [x] **T0.1** `libs/hbb_common` obtido de https://github.com/rustdesk/hbb_common, no commit fixado pelo upstream (`5d52530`) (hoje via subtree, ver T0.6).
   Área: `libs/hbb_common`, `.gitmodules` · @dono: claude
 - [x] **T0.2** Repositório = fork do RustDesk (https://github.com/YoungC0DE/IntraDesk), branch `master`, histórico do upstream preservado. `.gitignore` deixou de ignorar `*png`, `*svg`, `*jpg` (escondia os ícones do projeto).
   dep: T0.1 · Área: raiz · @dono: claude
@@ -59,7 +59,7 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
 - [ ] **T0.5** Teste manual de base: dois PCs Windows na mesma LAN, sem internet, usando o acesso direto por IP do RustDesk original (habilitar "Permitir acesso direto por IP"). Registrar o que funciona e o que falha.
   dep: T0.3 · Área: este arquivo · @dono:
 
-- [ ] **T0.6** Fork do `hbb_common`: antes da primeira tarefa que altera `libs/hbb_common` (T2.1, T2.2, T2.5, T2.7), criar o fork `YoungC0DE/hbb_common`, apontar `.gitmodules` para ele (branch `intradesk`) e atualizar o submódulo. Mudanças no `hbb_common` viram commits no fork + bump do submódulo aqui.
+- [x] **T0.6** `libs/hbb_common` convertido de submódulo para `git subtree` (base `5d52530`, histórico preservado, `.gitmodules` removido). Pode ser alterado direto neste repositório; não há fork separado.
   dep: T0.2 · Área: `.gitmodules`, `libs/hbb_common` · @dono:
 
 ## Fase 1 — Limpeza do projeto

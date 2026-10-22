@@ -25,7 +25,6 @@ pub mod action_id {
     pub const SCREENSHOT: &str           = "screenshot";
     pub const INSERT_LOCK: &str          = "insert_lock";
     pub const REFRESH: &str              = "refresh";
-    pub const TOGGLE_BLOCK_INPUT: &str   = "toggle_block_input";
     pub const SWITCH_SIDES: &str         = "switch_sides";
     pub const CLOSE_TAB: &str            = "close_tab";
     pub const TOGGLE_TOOLBAR: &str       = "toggle_toolbar";
@@ -39,8 +38,6 @@ pub mod action_id {
     pub const TOGGLE_SHOW_REMOTE_CURSOR: &str = "toggle_show_remote_cursor";
     pub const TOGGLE_SHOW_MY_CURSOR: &str     = "toggle_show_my_cursor";
     pub const TOGGLE_DISABLE_CLIPBOARD: &str  = "toggle_disable_clipboard";
-    pub const PRIVACY_MODE_1: &str            = "privacy_mode_1";
-    pub const PRIVACY_MODE_2: &str            = "privacy_mode_2";
     pub const KEYBOARD_MODE_MAP: &str         = "keyboard_mode_map";
     pub const KEYBOARD_MODE_TRANSLATE: &str   = "keyboard_mode_translate";
     pub const KEYBOARD_MODE_LEGACY: &str      = "keyboard_mode_legacy";
@@ -113,7 +110,6 @@ pub fn default_bindings() -> Vec<Binding> {
         Binding { action: action_id::SCREENSHOT.into(),                mods: prefix(), key: "p".into() },
         Binding { action: action_id::TOGGLE_SHOW_REMOTE_CURSOR.into(), mods: prefix(), key: "m".into() },
         Binding { action: action_id::TOGGLE_MUTE.into(),               mods: prefix(), key: "s".into() },
-        Binding { action: action_id::TOGGLE_BLOCK_INPUT.into(),        mods: prefix(), key: "i".into() },
     ]
 }
 

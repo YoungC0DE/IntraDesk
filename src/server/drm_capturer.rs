@@ -2475,8 +2475,6 @@ pub(super) fn get_capturer_info(
         height: cap_h,
         ndisplay,
         current: display_idx,
-        privacy_mode_id: 0,
-        _capturer_privacy_mode_id: 0,
         capturer: Box::new(capturer),
     })
 }

@@ -2731,7 +2731,6 @@ pub struct LoginConfigHandler {
     pub remember: bool,
     config: PeerConfig,
     pub version: i64,
-    features: Option<Features>,
     pub session_id: u64, // used for local <-> server communication
     pub supported_encoding: SupportedEncoding,
     restarting_remote_device: bool,
@@ -3115,14 +3114,6 @@ impl LoginConfigHandler {
                 BoolOption::No
             })
             .into();
-        } else if name == "privacy-mode" {
-            // try toggle privacy mode
-            option.privacy_mode = (if config.privacy_mode.v {
-                BoolOption::No
-            } else {
-                BoolOption::Yes
-            })
-            .into();
         } else if name == "enable-file-copy-paste" {
             config.enable_file_copy_paste.v = !config.enable_file_copy_paste.v;
             option.enable_file_transfer = (if config.enable_file_copy_paste.v {
@@ -3131,10 +3122,6 @@ impl LoginConfigHandler {
                 BoolOption::No
             })
             .into();
-        } else if name == "block-input" {
-            option.block_input = BoolOption::Yes.into();
-        } else if name == "unblock-input" {
-            option.block_input = BoolOption::No.into();
         } else if name == "show-quality-monitor" {
             config.show_quality_monitor.v = !config.show_quality_monitor.v;
         } else if name == "allow_swap_key" {
@@ -3193,9 +3180,7 @@ impl LoginConfigHandler {
             crate::clipboard::try_empty_clipboard_files(crate::clipboard::ClipboardSide::Client, 0);
         }
 
-        if !name.contains("block-input") {
-            self.save_config(config);
-        }
+        self.save_config(config);
         let mut misc = Misc::new();
         misc.set_option(option);
         let mut msg_out = Message::new();
@@ -3325,8 +3310,6 @@ impl LoginConfigHandler {
             self.config.show_remote_cursor.v
         } else if name == "lock-after-session-end" {
             self.config.lock_after_session_end.v
-        } else if name == "privacy-mode" {
-            self.config.privacy_mode.v
         } else if name == keys::OPTION_ENABLE_FILE_COPY_PASTE {
             self.config.enable_file_copy_paste.v
         } else if name == "disable-audio" {
@@ -3347,14 +3330,6 @@ impl LoginConfigHandler {
             self.config.follow_remote_window.v
         } else {
             !self.get_option(name).is_empty()
-        }
-    }
-
-    pub fn is_privacy_mode_supported(&self) -> bool {
-        if let Some(features) = &self.features {
-            features.privacy_mode
-        } else {
-            false
         }
     }
 
@@ -3508,7 +3483,6 @@ impl LoginConfigHandler {
         if !pi.version.is_empty() {
             self.version = hbb_common::get_version_number(&pi.version);
         }
-        self.features = pi.features.clone().into_option();
         let serde = PeerInfoSerde {
             username: pi.username.clone(),
             hostname: pi.hostname.clone(),

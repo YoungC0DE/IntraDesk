@@ -8,7 +8,6 @@ const kShortcutActionSwitchDisplayAll = 'switch_display_all';
 const kShortcutActionScreenshot = 'screenshot';
 const kShortcutActionInsertLock = 'insert_lock';
 const kShortcutActionRefresh = 'refresh';
-const kShortcutActionToggleBlockInput = 'toggle_block_input';
 const kShortcutActionSwitchSides = 'switch_sides';
 const kShortcutActionCloseTab = 'close_tab';
 const kShortcutActionToggleToolbar = 'toggle_toolbar';
@@ -39,8 +38,6 @@ const kShortcutActionToggleQualityMonitor = 'toggle_quality_monitor';
 const kShortcutActionToggleShowRemoteCursor = 'toggle_show_remote_cursor';
 const kShortcutActionToggleShowMyCursor = 'toggle_show_my_cursor';
 const kShortcutActionToggleDisableClipboard = 'toggle_disable_clipboard';
-const kShortcutActionPrivacyMode1 = 'privacy_mode_1';
-const kShortcutActionPrivacyMode2 = 'privacy_mode_2';
 // Keyboard mode (Map / Translate / Legacy).
 const kShortcutActionKeyboardModeMap = 'keyboard_mode_map';
 const kShortcutActionKeyboardModeTranslate = 'keyboard_mode_translate';
@@ -107,7 +104,6 @@ final List<Map<String, Object>> kDefaultShortcutBindings = [
     // Cmd+Option+Shift+S chord, also in Safari. Other physical keyboards are
     // unverified; Mute can be rebound to a chord that reaches the app.
     [kShortcutActionToggleMute,             's'],
-    [kShortcutActionToggleBlockInput,       'i'],
   ])
     {
       'action': entry[0],

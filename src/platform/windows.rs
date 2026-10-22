@@ -3,7 +3,6 @@ use crate::{
     common::PORTABLE_APPNAME_RUNTIME_ENV_KEY,
     custom_server::*,
     ipc,
-    privacy_mode::win_topmost_window::{self, WIN_TOPMOST_INJECTED_PROCESS_EXE},
 };
 use base::message_proto::{DisplayInfo, Resolution, WindowsSession};
 use hbb_common::{
@@ -640,10 +639,6 @@ fn authorize_service_scoped_ipc_connection(
         return false;
     }
     true
-}
-
-extern "system" {
-    fn BlockInput(v: BOOL) -> BOOL;
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -1378,51 +1373,6 @@ fn get_default_install_path() -> String {
     format!("{}\\{}", pf, crate::get_app_name())
 }
 
-pub fn check_update_broker_process() -> ResultType<()> {
-    let process_exe = win_topmost_window::INJECTED_PROCESS_EXE;
-    let origin_process_exe = win_topmost_window::ORIGIN_PROCESS_EXE;
-
-    let exe_file = std::env::current_exe()?;
-    let Some(cur_dir) = exe_file.parent() else {
-        bail!("Cannot get parent of current exe file");
-    };
-    let cur_exe = cur_dir.join(process_exe);
-
-    // Force update broker exe if failed to check modified time.
-    let cmds = format!(
-        "
-        chcp 65001
-        taskkill /F /IM {process_exe}
-        copy /Y \"{origin_process_exe}\" \"{cur_exe}\"
-    ",
-        cur_exe = cur_exe.to_string_lossy(),
-    );
-
-    if !std::path::Path::new(&cur_exe).exists() {
-        run_cmds(cmds, false, "update_broker")?;
-        return Ok(());
-    }
-
-    let ori_modified = fs::metadata(origin_process_exe)?.modified()?;
-    if let Ok(metadata) = fs::metadata(&cur_exe) {
-        if let Ok(cur_modified) = metadata.modified() {
-            if cur_modified == ori_modified {
-                return Ok(());
-            } else {
-                log::info!(
-                    "broker process updated, modify time from {:?} to {:?}",
-                    cur_modified,
-                    ori_modified
-                );
-            }
-        }
-    }
-
-    run_cmds(cmds, false, "update_broker")?;
-
-    Ok(())
-}
-
 fn get_install_info_with_subkey(subkey: String) -> (String, String, String, String) {
     let mut path = get_reg_of(&subkey, "InstallLocation");
     if path.is_empty() {
@@ -1451,15 +1401,7 @@ pub fn copy_raw_cmd(src_raw: &str, _raw: &str, _path: &str) -> ResultType<String
 }
 
 pub fn copy_exe_cmd(src_exe: &str, exe: &str, path: &str) -> ResultType<String> {
-    let main_exe = copy_raw_cmd(src_exe, exe, path)?;
-    Ok(format!(
-        "
-        {main_exe}
-        copy /Y \"{ORIGIN_PROCESS_EXE}\" \"{path}\\{broker_exe}\"
-        ",
-        ORIGIN_PROCESS_EXE = win_topmost_window::ORIGIN_PROCESS_EXE,
-        broker_exe = win_topmost_window::INJECTED_PROCESS_EXE,
-    ))
+    copy_raw_cmd(src_exe, exe, path)
 }
 
 #[inline]
@@ -1745,13 +1687,11 @@ fn get_before_uninstall(kill_self: bool) -> String {
     chcp 65001
     sc stop {app_name}
     sc delete {app_name}
-    taskkill /F /IM {broker_exe}
     taskkill /F /IM {app_name}.exe{filter}
     reg delete HKEY_CLASSES_ROOT\\.{ext} /f
     reg delete HKEY_CLASSES_ROOT\\{ext} /f
     netsh advfirewall firewall delete rule name=\"{app_name} Service\"
     ",
-        broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
     )
 }
 
@@ -1830,17 +1770,6 @@ pub fn toggle_blank_screen(v: bool) {
     let v = if v { TRUE } else { FALSE };
     unsafe {
         blank_screen(v);
-    }
-}
-
-pub fn block_input(v: bool) -> (bool, String) {
-    let v = if v { TRUE } else { FALSE };
-    unsafe {
-        if BlockInput(v) == TRUE {
-            (true, "".to_owned())
-        } else {
-            (false, format!("Error: {}", io::Error::last_os_error()))
-        }
     }
 }
 
@@ -3209,11 +3138,9 @@ pub fn uninstall_service(show_new_window: bool, _: bool) -> bool {
     sc stop {app_name}
     sc delete {app_name}
     if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
-    taskkill /F /IM {broker_exe}
     taskkill /F /IM {app_name}.exe{filter}
     ",
         app_name = crate::get_app_name(),
-        broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
     );
     if let Err(err) = run_cmds(cmds, false, "uninstall") {
         Config::set_option("stop-service".into(), "".into());
@@ -3882,17 +3809,6 @@ pub fn try_remove_temp_update_files() {
     }
 }
 
-#[inline]
-pub fn try_kill_broker() {
-    allow_err!(std::process::Command::new("cmd")
-        .arg("/c")
-        .arg(&format!(
-            "taskkill /F /IM {}",
-            WIN_TOPMOST_INJECTED_PROCESS_EXE
-        ))
-        .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
-        .spawn());
-}
 
 pub fn message_box(text: &str) {
     let mut text = text.to_owned();

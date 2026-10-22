@@ -59,8 +59,6 @@ mod hbbs_http;
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub mod clipboard_file;
 
-pub mod privacy_mode;
-
 #[cfg(windows)]
 pub mod virtual_display_manager;
 

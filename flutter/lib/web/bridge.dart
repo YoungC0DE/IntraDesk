@@ -250,17 +250,6 @@ class RustdeskImpl {
         () => js.context.callMethod('setByName', ['option:toggle', value]));
   }
 
-  Future<void> sessionTogglePrivacyMode(
-      {required UuidValue sessionId,
-      required String implKey,
-      required bool on,
-      dynamic hint}) {
-    return Future(() => js.context.callMethod('setByName', [
-          'toggle_privacy_mode',
-          jsonEncode({'impl_key': implKey, 'on': on})
-        ]));
-  }
-
   Future<String?> sessionGetFlutterOption(
       {required UuidValue sessionId, required String k, dynamic hint}) {
     return Future(
@@ -1738,14 +1727,6 @@ class RustdeskImpl {
 
   bool isSelinuxEnforcing({dynamic hint}) {
     return false;
-  }
-
-  String mainDefaultPrivacyModeImpl({dynamic hint}) {
-    throw UnimplementedError("mainDefaultPrivacyModeImpl");
-  }
-
-  String mainSupportedPrivacyModeImpls({dynamic hint}) {
-    return '[]';
   }
 
   String mainSupportedInputSource({dynamic hint}) {

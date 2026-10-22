@@ -1117,14 +1117,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             _OptionCheckBox(
                 context, 'Enable remote restart', kOptionEnableRemoteRestart,
                 enabled: enabled, fakeValue: fakeValue),
-            if (isWindows)
-              _OptionCheckBox(context, 'Enable blocking user input',
-                  kOptionEnableBlockInput,
-                  enabled: enabled, fakeValue: fakeValue),
-            if (bind.mainSupportedPrivacyModeImpls() != '[]')
-              _OptionCheckBox(
-                  context, 'Enable privacy mode', kOptionEnablePrivacyMode,
-                  enabled: enabled, fakeValue: fakeValue),
             _OptionCheckBox(context, 'Enable remote configuration modification',
                 kOptionAllowRemoteConfigModification,
                 enabled: enabled, fakeValue: fakeValue),
@@ -1856,7 +1848,6 @@ class _DisplayState extends State<_Display> {
       imageQuality(context),
       codec(context),
       if (isDesktop) trackpadSpeed(context),
-      if (!isWeb) privacyModeImpl(context),
       other(context),
     ]).marginOnly(bottom: _kListViewBottomMargin);
   }
@@ -2042,42 +2033,6 @@ class _DisplayState extends State<_Display> {
           onChanged: isOptFixed ? null : onChanged),
       ...hwRadios,
     ]);
-  }
-
-  Widget privacyModeImpl(BuildContext context) {
-    final supportedPrivacyModeImpls = bind.mainSupportedPrivacyModeImpls();
-    late final List<dynamic> privacyModeImpls;
-    try {
-      privacyModeImpls = jsonDecode(supportedPrivacyModeImpls);
-    } catch (e) {
-      debugPrint('failed to parse supported privacy mode impls, err=$e');
-      return Offstage();
-    }
-    if (privacyModeImpls.length < 2) {
-      return Offstage();
-    }
-
-    final key = 'privacy-mode-impl-key';
-    onChanged(String value) async {
-      await bind.mainSetOption(key: key, value: value);
-      setState(() {});
-    }
-
-    String groupValue = bind.mainGetOptionSync(key: key);
-    if (groupValue.isEmpty) {
-      groupValue = bind.mainDefaultPrivacyModeImpl();
-    }
-    return _Card(
-      title: 'Privacy mode',
-      children: privacyModeImpls.map((impl) {
-        final d = impl as List<dynamic>;
-        return _Radio(context,
-            value: d[0] as String,
-            groupValue: groupValue,
-            label: d[1] as String,
-            onChanged: onChanged);
-      }).toList(),
-    );
   }
 
   Widget otherRow(String label, String key) {

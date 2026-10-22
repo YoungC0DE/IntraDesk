@@ -14,7 +14,6 @@ pub const OPTION_SHOW_QUALITY_MONITOR: &str = "show_quality_monitor";
 pub const OPTION_DISABLE_AUDIO: &str = "disable_audio";
 pub const OPTION_DISABLE_CLIPBOARD: &str = "disable_clipboard";
 pub const OPTION_LOCK_AFTER_SESSION_END: &str = "lock_after_session_end";
-pub const OPTION_PRIVACY_MODE: &str = "privacy_mode";
 pub const OPTION_TOUCH_MODE: &str = "touch-mode";
 pub const OPTION_SYNC_INIT_CLIPBOARD: &str = "sync-init-clipboard";
 pub const OPTION_THEME: &str = "theme";
@@ -39,8 +38,6 @@ pub const OPTION_ENABLE_CLIPBOARD: &str = "enable-clipboard";
 pub const OPTION_ENABLE_FILE_TRANSFER: &str = "enable-file-transfer";
 pub const OPTION_ENABLE_AUDIO: &str = "enable-audio";
 pub const OPTION_ENABLE_REMOTE_RESTART: &str = "enable-remote-restart";
-pub const OPTION_ENABLE_BLOCK_INPUT: &str = "enable-block-input";
-pub const OPTION_ENABLE_PRIVACY_MODE: &str = "enable-privacy-mode";
 pub const OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW: &str = "enable-perm-change-in-accept-window";
 pub const OPTION_HIDE_ELEVATE_BUTTON_IN_ACCEPT_WINDOW: &str =
     "hide-elevate-button-in-accept-window";
@@ -179,7 +176,6 @@ pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
     OPTION_ENABLE_FILE_COPY_PASTE,
     OPTION_DISABLE_CLIPBOARD,
     OPTION_LOCK_AFTER_SESSION_END,
-    OPTION_PRIVACY_MODE,
     OPTION_TOUCH_MODE,
     OPTION_I444,
     OPTION_REVERSE_MOUSE_WHEEL,
@@ -250,8 +246,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_FILE_TRANSFER,
     OPTION_ENABLE_AUDIO,
     OPTION_ENABLE_REMOTE_RESTART,
-    OPTION_ENABLE_BLOCK_INPUT,
-    OPTION_ENABLE_PRIVACY_MODE,
     OPTION_ALLOW_SCOPE_VIOLATION_CLOSE,
     OPTION_ALLOW_SCOPE_VIOLATION_ALARM,
     OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION,

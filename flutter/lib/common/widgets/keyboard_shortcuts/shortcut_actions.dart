@@ -62,16 +62,13 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
     KeyboardShortcutActionEntry(
         kShortcutActionRestartRemote, 'Restart remote device'),
     KeyboardShortcutActionEntry(kShortcutActionInsertLock, 'Insert Lock'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleBlockInput, 'Block user input'),
     KeyboardShortcutActionEntry(kShortcutActionSwitchSides, 'Switch Sides'),
     KeyboardShortcutActionEntry(kShortcutActionRefresh, 'Refresh'),
     KeyboardShortcutActionEntry(kShortcutActionScreenshot, 'Take screenshot'),
   ]),
   // Display: subgroups (View Mode → Image Quality → Codec → Virtual display)
-  // first, then the direct items (cursor toggles + display toggles), then
-  // Privacy mode subgroup last — matching `_DisplayMenu.menuChildrenGetter`
-  // exactly. Rebalancing this order should also rebalance the toolbar.
+  // first, then the direct items (cursor toggles + display toggles) —
+  // matching `_DisplayMenu.menuChildrenGetter` exactly. Rebalancing this order should also rebalance the toolbar.
   KeyboardShortcutActionGroup('Display', [
     KeyboardShortcutActionSubgroup('View Mode', [
       KeyboardShortcutActionEntry(
@@ -121,19 +118,6 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
         kShortcutActionToggleLockAfterSessionEnd, 'Lock after session end'),
     KeyboardShortcutActionEntry(
         kShortcutActionToggleTrueColor, 'True color (4:4:4)'),
-    // Privacy mode at the bottom — mirrors `_DisplayMenu` where it's the
-    // last submenu added (line ~1023 of remote_toolbar.dart, after toggles).
-    KeyboardShortcutActionSubgroup('Privacy mode', [
-      // Reuse toolbar's existing impl-name i18n keys. The handler at
-      // runtime matches `privacy_mode_impl_mag_tip` /
-      // `privacy_mode_impl_virtual_display_tip` against the peer's
-      // advertised impls — same logic the toolbar's `toolbarPrivacyMode`
-      // submenu uses.
-      KeyboardShortcutActionEntry(
-          kShortcutActionPrivacyMode1, 'privacy_mode_impl_mag_tip'),
-      KeyboardShortcutActionEntry(
-          kShortcutActionPrivacyMode2, 'privacy_mode_impl_virtual_display_tip'),
-    ]),
   ]),
   // Keyboard: Keyboard mode subgroup first, then direct items
   // (inputSource → viewMode → showMyCursor → toolbarKeyboardToggles),

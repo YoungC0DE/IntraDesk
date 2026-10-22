@@ -782,17 +782,12 @@ class _RemotePageState extends State<RemotePage>
         final imageReady = _ffi.ffiModel.pi.isSet.isTrue &&
             _ffi.ffiModel.waitForFirstImage.isFalse;
         if (imageReady) {
-          // If the privacy mode(disable physical displays) is switched,
-          // we should not dismiss the dialog immediately.
-          if (DateTime.now().difference(togglePrivacyModeTime) >
-              const Duration(milliseconds: 3000)) {
-            // `dismissAll()` is to ensure that the state is clean.
-            // It's ok to call dismissAll() here.
-            _ffi.dialogManager.dismissAll();
-            // Recreate the block state to refresh the state.
-            _blockableOverlayState = BlockableOverlayState();
-            _blockableOverlayState.applyFfi(_ffi);
-          }
+          // `dismissAll()` is to ensure that the state is clean.
+          // It's ok to call dismissAll() here.
+          _ffi.dialogManager.dismissAll();
+          // Recreate the block state to refresh the state.
+          _blockableOverlayState = BlockableOverlayState();
+          _blockableOverlayState.applyFfi(_ffi);
           // Block the whole `bodyWidget()` when dialog shows.
           return BlockableOverlay(
             underlying: bodyWidget(),

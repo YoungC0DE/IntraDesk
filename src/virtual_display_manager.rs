@@ -525,7 +525,6 @@ pub mod amyuni_idd {
     }
 
     pub fn reset_all() -> ResultType<()> {
-        let _ = crate::privacy_mode::turn_off_privacy(0, None);
         let _ = plug_out_monitor(super::IDD_PLUG_OUT_ALL_INDEX, true, false);
         *LAST_PLUG_IN_HEADLESS_TIME.lock().unwrap() = None;
         Ok(())

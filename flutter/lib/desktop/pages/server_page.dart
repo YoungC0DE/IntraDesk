@@ -733,39 +733,6 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
                     translate('Enable remote restart'),
                     canModify: canModifyPermission,
                   ),
-                  // only windows support block input
-                  if (isWindows)
-                    buildPermissionIcon(
-                      client.blockInput,
-                      Icons.block,
-                      (enabled) {
-                        bind.cmSwitchPermission(
-                            connId: client.id,
-                            name: "block_input",
-                            enabled: enabled);
-                        setState(() {
-                          client.blockInput = enabled;
-                        });
-                      },
-                      translate('Enable blocking user input'),
-                      canModify: canModifyPermission,
-                    ),
-                  if (bind.mainSupportedPrivacyModeImpls() != '[]')
-                    buildPermissionIcon(
-                      client.privacyMode,
-                      Icons.visibility_off,
-                      (enabled) {
-                        bind.cmSwitchPermission(
-                            connId: client.id,
-                            name: "privacy_mode",
-                            enabled: enabled);
-                        setState(() {
-                          client.privacyMode = enabled;
-                        });
-                      },
-                      translate('Enable privacy mode'),
-                      canModify: canModifyPermission,
-                    )
                 ],
             ),
           ),

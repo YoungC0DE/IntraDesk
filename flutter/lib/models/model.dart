@@ -54,7 +54,6 @@ final _constSessionId = Uuid().v4obj();
 const _restartReconnectSilentDelaySecs = 5;
 
 class CachedPeerData {
-  Map<String, dynamic> updatePrivacyMode = {};
   Map<String, dynamic> peerInfo = {};
   // No shapes: the core keeps them for the session, and the window a tab moves to asks it
   // for the one in use.
@@ -70,7 +69,6 @@ class CachedPeerData {
   @override
   String toString() {
     return jsonEncode({
-      'updatePrivacyMode': updatePrivacyMode,
       'peerInfo': peerInfo,
       'lastCursorId': lastCursorId,
       'permissions': permissions,
@@ -84,7 +82,6 @@ class CachedPeerData {
     try {
       final map = jsonDecode(s);
       final data = CachedPeerData();
-      data.updatePrivacyMode = map['updatePrivacyMode'];
       data.peerInfo = map['peerInfo'];
       data.lastCursorId = map['lastCursorId'];
       map['permissions'].forEach((key, value) {
@@ -109,7 +106,6 @@ class FfiModel with ChangeNotifier {
   Timer? _pendingRestoreTimer;
   Rect? _rect;
 
-  var _inputBlocked = false;
   final _permissions = <String, bool>{};
   bool? _secure;
   bool? _direct;
@@ -153,8 +149,6 @@ class FfiModel with ChangeNotifier {
 
   PeerInfo get pi => _pi;
 
-  bool get inputBlocked => _inputBlocked;
-
   bool get touchMode => _touchMode;
 
   bool get isPeerAndroid => _pi.platform == kPeerPlatformAndroid;
@@ -165,10 +159,6 @@ class FfiModel with ChangeNotifier {
 
   bool get viewOnly => _viewOnly;
   bool get showMyCursor => _showMyCursor;
-
-  set inputBlocked(v) {
-    _inputBlocked = v;
-  }
 
   FfiModel(this.parent) {
     clear();
@@ -250,7 +240,6 @@ class FfiModel with ChangeNotifier {
     _cancelPendingMonitorRestore();
     _secure = null;
     _direct = null;
-    _inputBlocked = false;
     _timer?.cancel();
     _timer = null;
     _androidDocumentPickerActive = false;
@@ -304,7 +293,6 @@ class FfiModel with ChangeNotifier {
   }
 
   clearPermissions() {
-    _inputBlocked = false;
     _permissions.clear();
   }
 
@@ -315,7 +303,6 @@ class FfiModel with ChangeNotifier {
       'text': kMsgboxTextWaitingForImage,
       'link': '',
     }, sessionId, peerId);
-    updatePrivacyMode(data.updatePrivacyMode, sessionId, peerId);
     setConnectionType(peerId, data.secure, data.direct, data.streamType);
     await handlePeerInfo(data.peerInfo, peerId, true);
     if (data.lastCursorId.isNotEmpty) {
@@ -384,10 +371,6 @@ class FfiModel with ChangeNotifier {
         parent.target?.serverModel.onClientRemove(evt);
       } else if (name == 'update_quality_status') {
         parent.target?.qualityMonitorModel.updateQualityStatus(evt);
-      } else if (name == 'update_block_input_state') {
-        updateBlockInputState(evt, peerId);
-      } else if (name == 'update_privacy_mode') {
-        updatePrivacyMode(evt, sessionId, peerId);
       } else if (name == 'show_elevation') {
         final show = evt['show'].toString() == 'true';
         parent.target?.serverModel.setShowElevation(show);
@@ -750,10 +733,6 @@ class FfiModel with ChangeNotifier {
       showRelayHintDialog(sessionId, type, title, text, dialogManager, peerId);
     } else if (text == kMsgboxTextWaitingForImage) {
       showConnectedWaitingForImage(dialogManager, sessionId, type, title, text);
-    } else if (title == 'Privacy mode') {
-      final hasRetry = evt['hasRetry'] == 'true';
-      showPrivacyFailedDialog(
-          sessionId, type, title, text, link, hasRetry, dialogManager);
     } else {
       var hasRetry = evt['hasRetry'] == 'true';
       if (!hasRetry) {
@@ -994,22 +973,6 @@ class FfiModel with ChangeNotifier {
     bind.sessionOnWaitingForImageDialogShow(sessionId: sessionId);
   }
 
-  void showPrivacyFailedDialog(
-      SessionID sessionId,
-      String type,
-      String title,
-      String text,
-      String link,
-      bool hasRetry,
-      OverlayDialogManager dialogManager) {
-    // There are display changes on the remote side,
-    // which will cause some messages to refresh the canvas and dismiss dialogs.
-    // So we add a delay here to ensure the dialog is displayed.
-    Future.delayed(Duration(milliseconds: 3000), () {
-      showMsgBox(sessionId, type, title, text, link, hasRetry, dialogManager);
-    });
-  }
-
   _updateSessionWidthHeight(SessionID sessionId) {
     if (_rect == null) return;
     if (_rect!.width <= 0 || _rect!.height <= 0) {
@@ -1236,8 +1199,6 @@ class FfiModel with ChangeNotifier {
         waitForFirstImage.value = true;
         isRefreshing = false;
       }
-      Map<String, dynamic> features = json.decode(evt['features']);
-      _pi.features.privacyMode = features['privacy_mode'] == true;
       if (!isCache) {
         handleResolutions(peerId, evt["resolutions"]);
       }
@@ -1562,37 +1523,6 @@ class FfiModel with ChangeNotifier {
     updateCurDisplay(sessionId, updateCursorPos: updateCursorPos);
     try {
       CurrentDisplayState.find(peerId).value = display;
-    } catch (e) {
-      //
-    }
-  }
-
-  updateBlockInputState(Map<String, dynamic> evt, String peerId) {
-    _inputBlocked = evt['input_state'] == 'on';
-    notifyListeners();
-    try {
-      BlockInputState.find(peerId).value = evt['input_state'] == 'on';
-    } catch (e) {
-      //
-    }
-  }
-
-  updatePrivacyMode(
-      Map<String, dynamic> evt, SessionID sessionId, String peerId) async {
-    notifyListeners();
-    try {
-      final isOn = bind.sessionGetToggleOptionSync(
-          sessionId: sessionId, arg: 'privacy-mode');
-      if (isOn) {
-        var privacyModeImpl = await bind.sessionGetOption(
-            sessionId: sessionId, arg: 'privacy-mode-impl-key');
-        // For compatibility, version < 1.2.4, the default value is 'privacy_mode_impl_mag'.
-        final initDefaultPrivacyMode = 'privacy_mode_impl_mag';
-        PrivacyModeState.find(peerId).value =
-            privacyModeImpl ?? initDefaultPrivacyMode;
-      } else {
-        PrivacyModeState.find(peerId).value = '';
-      }
     } catch (e) {
       //
     }
@@ -4186,10 +4116,6 @@ class Resolution {
   }
 }
 
-class Features {
-  bool privacyMode = false;
-}
-
 const kInvalidDisplayIndex = -1;
 
 class PeerInfo with ChangeNotifier {
@@ -4202,7 +4128,6 @@ class PeerInfo with ChangeNotifier {
   int currentDisplay = 0;
   int primaryDisplay = kInvalidDisplayIndex;
   RxList<Display> displays = <Display>[].obs;
-  Features features = Features();
   List<Resolution> resolutions = [];
   Map<String, dynamic> platformAdditions = {};
 

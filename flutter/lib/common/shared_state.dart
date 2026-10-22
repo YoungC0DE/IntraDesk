@@ -5,52 +5,6 @@ import '../consts.dart';
 
 // TODO: A lot of dup code.
 
-class PrivacyModeState {
-  static String tag(String id) => 'privacy_mode_$id';
-
-  static void init(String id) {
-    final key = tag(id);
-    if (!Get.isRegistered<RxString>(tag: key)) {
-      final RxString state = ''.obs;
-      Get.put<RxString>(state, tag: key);
-    }
-  }
-
-  static void delete(String id) {
-    final key = tag(id);
-    if (Get.isRegistered<RxString>(tag: key)) {
-      Get.delete<RxString>(tag: key);
-    } else {
-      Get.find<RxString>(tag: key).value = '';
-    }
-  }
-
-  static RxString find(String id) => Get.find<RxString>(tag: tag(id));
-}
-
-class BlockInputState {
-  static String tag(String id) => 'block_input_$id';
-
-  static void init(String id) {
-    final key = tag(id);
-    if (!Get.isRegistered<RxBool>(tag: key)) {
-      final RxBool state = false.obs;
-      Get.put<RxBool>(state, tag: key);
-    } else {
-      Get.find<RxBool>(tag: key).value = false;
-    }
-  }
-
-  static void delete(String id) {
-    final key = tag(id);
-    if (Get.isRegistered<RxBool>(tag: key)) {
-      Get.delete<RxBool>(tag: key);
-    }
-  }
-
-  static RxBool find(String id) => Get.find<RxBool>(tag: tag(id));
-}
-
 class CurrentDisplayState {
   static String tag(String id) => 'current_display_$id';
 
@@ -317,8 +271,6 @@ class PeerStringOption {
 }
 
 initSharedStates(String id) {
-  PrivacyModeState.init(id);
-  BlockInputState.init(id);
   CurrentDisplayState.init(id);
   KeyboardEnabledState.init(id);
   ShowRemoteCursorState.init(id);
@@ -330,8 +282,6 @@ initSharedStates(String id) {
 }
 
 removeSharedStates(String id) {
-  PrivacyModeState.delete(id);
-  BlockInputState.delete(id);
   CurrentDisplayState.delete(id);
   ShowRemoteCursorState.delete(id);
   ShowRemoteCursorLockState.delete(id);

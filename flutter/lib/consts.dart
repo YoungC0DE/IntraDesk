@@ -27,12 +27,6 @@ const String kPlatformAdditionsRustDeskVirtualDisplays =
 const String kPlatformAdditionsAmyuniVirtualDisplays =
     "amyuni_virtual_displays";
 const String kPlatformAdditionsHasFileClipboard = "has_file_clipboard";
-const String kPlatformAdditionsSupportedPrivacyModeImpl =
-    "supported_privacy_mode_impl";
-
-const String kPrivacyModeImplMag = 'privacy_mode_impl_mag';
-const String kPrivacyModeImplExcludeFromCapture =
-    'privacy_mode_impl_exclude_from_capture';
 
 const String kPeerPlatformWindows = "Windows";
 const String kPeerPlatformLinux = "Linux";
@@ -102,8 +96,6 @@ const String kOptionEnableClipboard = "enable-clipboard";
 const String kOptionEnableFileTransfer = "enable-file-transfer";
 const String kOptionEnableAudio = "enable-audio";
 const String kOptionEnableRemoteRestart = "enable-remote-restart";
-const String kOptionEnableBlockInput = "enable-block-input";
-const String kOptionEnablePrivacyMode = "enable-privacy-mode";
 const String kOptionEnablePermChangeInAcceptWindow =
     "enable-perm-change-in-accept-window";
 const String kOptionHideElevateButtonInAcceptWindow =
@@ -126,7 +118,6 @@ const String kOptionEnableFileCopyPaste = "enable-file-copy-paste";
 // "Settings -> Display -> Other default options"
 const String kOptionDisableClipboard = "disable_clipboard";
 const String kOptionLockAfterSessionEnd = "lock_after_session_end";
-const String kOptionPrivacyMode = "privacy_mode";
 const String kOptionTouchMode = "touch-mode";
 const String kOptionI444 = "i444";
 const String kOptionSwapLeftRightMouse = "swap-left-right-mouse";

@@ -10,7 +10,7 @@ use hbb_common::dlopen::{
     Error as LibError,
 };
 use hbb_common::{
-    anyhow::anyhow, bail, config::LocalConfig, get_version_number, log,
+    anyhow::anyhow, bail, config::LocalConfig, log,
     rendezvous_proto::ConnType, ResultType,
 };
 use base::message_proto::*;
@@ -703,10 +703,6 @@ impl InvokeUiSession for FlutterHandler {
     /// unused in flutter, use switch_display or set_peer_info
     fn set_display(&self, _x: i32, _y: i32, _w: i32, _h: i32, _cursor_embedded: bool, _scale: f64) {}
 
-    fn update_privacy_mode(&self) {
-        self.push_event::<&str>("update_privacy_mode", &[], &[]);
-    }
-
     fn set_permission(&self, name: &str, value: bool) {
         self.push_event("permission", &[(name, &value.to_string())], &[]);
     }
@@ -899,15 +895,6 @@ impl InvokeUiSession for FlutterHandler {
 
     fn set_peer_info(&self, pi: &PeerInfo) {
         let displays = Self::make_displays_msg(&pi.displays);
-        let mut features: HashMap<&str, bool> = Default::default();
-        for ref f in pi.features.iter() {
-            features.insert("privacy_mode", f.privacy_mode);
-        }
-        // compatible with 1.1.9
-        if get_version_number(&pi.version) < get_version_number("1.2.0") {
-            features.insert("privacy_mode", false);
-        }
-        let features = serde_json::ser::to_string(&features).unwrap_or("".to_owned());
         let resolutions = serialize_resolutions(&pi.resolutions.resolutions);
         *self.peer_info.write().unwrap() = pi.clone();
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -930,7 +917,6 @@ impl InvokeUiSession for FlutterHandler {
                 ("sas_enabled", &pi.sas_enabled.to_string()),
                 ("displays", &displays),
                 ("version", &pi.version),
-                ("features", &features),
                 ("current_display", &pi.current_display.to_string()),
                 ("resolutions", &resolutions),
                 ("platform_additions", &pi.platform_additions),
@@ -1042,14 +1028,6 @@ impl InvokeUiSession for FlutterHandler {
                     &display.original_resolution.height.to_string(),
                 ),
             ],
-            &[],
-        );
-    }
-
-    fn update_block_input_state(&self, on: bool) {
-        self.push_event(
-            "update_block_input_state",
-            &[("input_state", if on { "on" } else { "off" })],
             &[],
         );
     }

@@ -11,7 +11,7 @@ use crate::keyboard::client::map_key_to_control_key;
 use crate::platform::WallPaperRemover;
 #[cfg(windows)]
 use crate::portable_service::client as portable_client;
-use crate::{display_service, ipc, privacy_mode, video_service, VERSION};
+use crate::{display_service, ipc, video_service, VERSION};
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use crate::{common::DEVICE_NAME, flutter::connection_manager::start_channel};
 use cidr_utils::cidr::IpCidr;
@@ -235,8 +235,6 @@ enum MessageInput {
     Key((KeyEvent, bool)),
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     Pointer((PointerDeviceEvent, i32)),
-    BlockOn,
-    BlockOff,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
@@ -324,8 +322,6 @@ pub struct Connection {
     audio: bool,
     file: bool,
     restart: bool,
-    block_input: bool,
-    privacy_mode: bool,
     control_permissions: Option<ControlPermissions>,
     last_test_delay: Option<Instant>,
     network_delay: u32,
@@ -379,7 +375,6 @@ pub struct Connection {
     follow_remote_cursor: bool,
     follow_remote_window: bool,
     multi_ui_session: bool,
-    tx_from_authed: mpsc::UnboundedSender<ipc::Data>,
     // For post requests that need to be sent sequentially.
     // eg. post_conn_audit
     tx_post_seq: mpsc::UnboundedSender<(String, Value)>,
@@ -481,7 +476,6 @@ impl Connection {
         let (tx, mut rx) = mpsc::unbounded_channel::<(Instant, Arc<Message>)>();
         let (tx_video, mut rx_video) = mpsc::unbounded_channel::<(Instant, Arc<Message>)>();
         let (tx_input, _rx_input) = std_mpsc::channel();
-        let (tx_from_authed, mut rx_from_authed) = mpsc::unbounded_channel::<ipc::Data>();
         let mut hbbs_rx = crate::hbbs_http::sync::signal_receiver();
         let (tx_post_seq, rx_post_seq) = mpsc::unbounded_channel();
         tokio::spawn(async move {
@@ -489,7 +483,6 @@ impl Connection {
         });
 
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        let tx_cloned = tx.clone();
         let mut conn = Self {
             inner: ConnInner {
                 id,
@@ -516,8 +509,6 @@ impl Connection {
             // to-do: make sure is the option correct here
             file: Self::permission(keys::OPTION_ENABLE_FILE_TRANSFER, &control_permissions),
             restart: Self::permission(keys::OPTION_ENABLE_REMOTE_RESTART, &control_permissions),
-            block_input: Self::permission(keys::OPTION_ENABLE_BLOCK_INPUT, &control_permissions),
-            privacy_mode: Self::permission(keys::OPTION_ENABLE_PRIVACY_MODE, &control_permissions),
             control_permissions,
             last_test_delay: None,
             network_delay: 0,
@@ -564,7 +555,6 @@ impl Connection {
             delayed_read_dir: None,
             #[cfg(target_os = "macos")]
             retina: Retina::default(),
-            tx_from_authed,
             tx_post_seq,
             cm_read_job_ids: HashSet::new(),
             scope_violation_messages: HashSet::new(),
@@ -599,12 +589,8 @@ impl Connection {
         if !conn.restart {
             conn.send_permission(Permission::Restart, false).await;
         }
-        if !conn.block_input {
-            conn.send_permission(Permission::BlockInput, false).await;
-        }
-        if !conn.privacy_mode {
-            conn.send_permission(Permission::PrivacyMode, false).await;
-        }
+        conn.send_permission(Permission::BlockInput, false).await;
+        conn.send_permission(Permission::PrivacyMode, false).await;
         let mut test_delay_timer =
             crate::rustdesk_interval(time::interval_at(Instant::now(), TEST_DELAY_TIMEOUT));
         let mut last_recv_time = Instant::now();
@@ -615,7 +601,7 @@ impl Connection {
         conn.stream.set_send_timeout(SEND_TIMEOUT_VIDEO);
 
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        std::thread::spawn(move || Self::handle_input(_rx_input, tx_cloned));
+        std::thread::spawn(move || Self::handle_input(_rx_input));
         let mut second_timer = crate::rustdesk_interval(time::interval(Duration::from_secs(1)));
 
         #[cfg(feature = "unix-file-copy-paste")]
@@ -743,49 +729,6 @@ impl Connection {
                             } else if &name == "restart" {
                                 conn.restart = enabled;
                                 conn.send_permission(Permission::Restart, enabled).await;
-                            } else if &name == "block_input" {
-                                conn.block_input = enabled;
-                                conn.send_permission(Permission::BlockInput, enabled).await;
-                            } else if &name == "privacy_mode" {
-                                // Keep permission state and runtime state consistent:
-                                // when revoking the permission, try to leave privacy mode first.
-                                // Otherwise we could end up in an inconsistent state where
-                                // permission looks disabled while privacy mode is still active.
-                                if !enabled && privacy_mode::is_in_privacy_mode() {
-                                    if let Some(conn_id) = privacy_mode::get_privacy_mode_conn_id() {
-                                        if conn_id == conn.inner.id() {
-                                            let impl_key =
-                                                privacy_mode::get_cur_impl_key().unwrap_or_default();
-                                            let turn_off_res =
-                                                privacy_mode::turn_off_privacy(conn_id, None);
-                                            match turn_off_res {
-                                                Some(Ok(_)) => {
-                                                    let msg_out = crate::common::make_privacy_mode_msg(
-                                                        back_notification::PrivacyModeState::PrvOffByPeer,
-                                                        impl_key.clone(),
-                                                    );
-                                                    conn.send(msg_out).await;
-                                                }
-                                                _ => {
-                                                    let msg_out = Self::turn_off_privacy_result_to_msg(
-                                                        turn_off_res,
-                                                        impl_key,
-                                                    );
-                                                    conn.send(msg_out).await;
-                                                    // Turn-off failed, so revert CM's optimistic toggle
-                                                    // and keep the previous permission value.
-                                                    conn.send_to_cm(ipc::Data::SwitchPermission {
-                                                        name: "privacy_mode".to_owned(),
-                                                        enabled: conn.privacy_mode,
-                                                    });
-                                                    continue;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                conn.privacy_mode = enabled;
-                                conn.send_permission(Permission::PrivacyMode, enabled).await;
                             }
                         }
                         ipc::Data::RawMessage(bytes) => {
@@ -817,29 +760,6 @@ impl Connection {
                                     allow_err!(conn.stream.send(&clip_2_msg(clip)).await);
                                 }
                             }
-                        }
-                        ipc::Data::PrivacyModeState((_, state, impl_key)) => {
-                            let msg_out = match state {
-                                privacy_mode::PrivacyModeState::OffSucceeded => {
-                                    crate::common::make_privacy_mode_msg(
-                                        back_notification::PrivacyModeState::PrvOffSucceeded,
-                                        impl_key,
-                                    )
-                                }
-                                privacy_mode::PrivacyModeState::OffByPeer => {
-                                    crate::common::make_privacy_mode_msg(
-                                        back_notification::PrivacyModeState::PrvOffByPeer,
-                                        impl_key,
-                                    )
-                                }
-                                privacy_mode::PrivacyModeState::OffUnknown => {
-                                     crate::common::make_privacy_mode_msg(
-                                        back_notification::PrivacyModeState::PrvOffUnknown,
-                                        impl_key,
-                                    )
-                                }
-                            };
-                            conn.send(msg_out).await;
                         }
                         #[cfg(windows)]
                         ipc::Data::DataPortableService(ipc::DataPortableService::RequestStart) => {
@@ -1008,19 +928,6 @@ impl Connection {
                         break;
                     }
                 },
-                Some(data) = rx_from_authed.recv() => {
-                    match data {
-                        ipc::Data::Close => {
-                            conn.send(crate::common::make_privacy_mode_msg(
-                                back_notification::PrivacyModeState::PrvOnByOther,
-                                String::new(),
-                            )).await;
-                            conn.on_close("privacy mode", false).await;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
                 _ = second_timer.tick() => {
                     #[cfg(windows)]
                     conn.portable_check();
@@ -1078,11 +985,6 @@ impl Connection {
             conn.try_empty_file_clipboard();
         }
 
-        if let Some(video_privacy_conn_id) = privacy_mode::get_privacy_mode_conn_id() {
-            if video_privacy_conn_id == id {
-                let _ = Self::turn_off_privacy_to_msg(id, String::new());
-            }
-        }
         video_service::notify_video_frame_fetched_by_conn_id(id, None);
 
         conn.post_conn_audit(json!({
@@ -1099,8 +1001,7 @@ impl Connection {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn handle_input(receiver: std_mpsc::Receiver<MessageInput>, tx: Sender) {
-        let mut block_input_mode = false;
+    fn handle_input(receiver: std_mpsc::Receiver<MessageInput>) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             rdev::set_mouse_extra_info(enigo::ENIGO_INPUT_EXTRA_VALUE);
@@ -1136,35 +1037,8 @@ impl Connection {
                     MessageInput::Pointer((msg, id)) => {
                         handle_pointer(&msg, id);
                     }
-                    MessageInput::BlockOn => {
-                        let (ok, msg) = crate::platform::block_input(true);
-                        if ok {
-                            block_input_mode = true;
-                        } else {
-                            Self::send_block_input_error(
-                                &tx,
-                                back_notification::BlockInputState::BlkOnFailed,
-                                msg,
-                            );
-                        }
-                    }
-                    MessageInput::BlockOff => {
-                        let (ok, msg) = crate::platform::block_input(false);
-                        if ok {
-                            block_input_mode = false;
-                        } else {
-                            Self::send_block_input_error(
-                                &tx,
-                                back_notification::BlockInputState::BlkOffFailed,
-                                msg,
-                            );
-                        }
-                    }
                 },
                 Err(err) => {
-                    if block_input_mode {
-                        let _ = crate::platform::block_input(true);
-                    }
                     if std_mpsc::RecvTimeoutError::Disconnected == err {
                         break;
                     }
@@ -1193,16 +1067,6 @@ impl Connection {
         let mut msg_out = Message::new();
         msg_out.set_misc(misc);
         self.send(msg_out).await;
-    }
-
-    async fn check_privacy_mode_on(&mut self) -> bool {
-        if privacy_mode::is_in_privacy_mode() {
-            self.send_login_error("Someone turns on privacy mode, exit")
-                .await;
-            false
-        } else {
-            true
-        }
     }
 
     async fn check_whitelist(&mut self, addr: &SocketAddr) -> bool {
@@ -1619,7 +1483,6 @@ impl Connection {
             self.inner.id(),
             auth_conn_type,
             self.session_key(),
-            self.tx_from_authed.clone(),
         ));
         self.session_last_recv_time = SESSIONS
             .lock()
@@ -1677,17 +1540,6 @@ impl Connection {
             if crate::platform::is_installed() {
                 platform_additions.extend(virtual_display_manager::get_platform_additions());
             }
-            platform_additions.insert(
-                "supported_privacy_mode_impl".into(),
-                json!(privacy_mode::get_supported_privacy_mode_impl()),
-            );
-        }
-        #[cfg(target_os = "macos")]
-        {
-            platform_additions.insert(
-                "supported_privacy_mode_impl".into(),
-                json!(privacy_mode::get_supported_privacy_mode_impl()),
-            );
         }
 
         #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
@@ -1757,11 +1609,6 @@ impl Connection {
         }
         pi.username = username;
         pi.sas_enabled = sas_enabled;
-        pi.features = Some(Features {
-            privacy_mode: privacy_mode::is_privacy_mode_supported(),
-            ..Default::default()
-        })
-        .into();
 
         let mut sub_service = false;
         #[allow(unused_mut)]
@@ -1985,8 +1832,6 @@ impl Connection {
             file: self.file,
             file_transfer_enabled: self.file,
             restart: self.restart,
-            block_input: self.block_input,
-            privacy_mode: self.privacy_mode,
             from_switch: self.from_switch,
         });
     }
@@ -2308,8 +2153,6 @@ impl Connection {
                 keys::OPTION_ENABLE_FILE_TRANSFER => Some(Permission::file),
                 keys::OPTION_ENABLE_AUDIO => Some(Permission::audio),
                 keys::OPTION_ENABLE_REMOTE_RESTART => Some(Permission::restart),
-                keys::OPTION_ENABLE_BLOCK_INPUT => Some(Permission::block_input),
-                keys::OPTION_ENABLE_PRIVACY_MODE => Some(Permission::privacy_mode),
                 _ => None,
             };
             if let Some(permission) = permission {
@@ -2510,11 +2353,7 @@ impl Connection {
                     sleep(1.).await;
                     return false;
                 }
-                _ => {
-                    if !self.check_privacy_mode_on().await {
-                        return false;
-                    }
-                }
+                _ => {}
             }
 
             self.stream.set_send_timeout(
@@ -3354,7 +3193,11 @@ impl Connection {
                         self.toggle_virtual_display(t).await;
                     }
                     Some(misc::Union::TogglePrivacyMode(t)) => {
-                        self.toggle_privacy_mode(t).await;
+                        self.send(crate::common::make_privacy_mode_msg(
+                            back_notification::PrivacyModeState::PrvNotSupported,
+                            t.impl_key,
+                        ))
+                        .await;
                     }
                     Some(misc::Union::Option(o)) => {
                         if self.authed_conn_type() == Some(AuthConnType::Remote) {
@@ -3890,13 +3733,6 @@ impl Connection {
         }
     }
 
-    async fn toggle_privacy_mode(&mut self, t: TogglePrivacyMode) {
-        if t.on {
-            self.turn_on_privacy(t.impl_key).await;
-        } else {
-            self.turn_off_privacy(t.impl_key).await;
-        }
-    }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn change_resolution(&mut self, d: Option<usize>, r: &Resolution) {
@@ -4091,45 +3927,15 @@ impl Connection {
                 }
             }
         }
-        // For compatibility with old versions ( < 1.2.4 ).
-        if hbb_common::get_version_number(&self.lr.version)
-            < hbb_common::get_version_number("1.2.4")
-        {
-            if let Ok(q) = o.privacy_mode.enum_value() {
-                if self.keyboard {
-                    match q {
-                        BoolOption::Yes => {
-                            self.turn_on_privacy("".to_owned()).await;
-                        }
-                        BoolOption::No => {
-                            self.turn_off_privacy("".to_owned()).await;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
         if let Ok(q) = o.block_input.enum_value() {
-            if self.keyboard && self.block_input {
-                match q {
-                    BoolOption::Yes => {
-                        self.tx_input.send(MessageInput::BlockOn).ok();
-                    }
-                    BoolOption::No => {
-                        self.tx_input.send(MessageInput::BlockOff).ok();
-                    }
-                    _ => {}
-                }
-            } else {
-                if q != BoolOption::NotSet {
-                    let state = if q == BoolOption::Yes {
-                        back_notification::BlockInputState::BlkOnFailed
-                    } else {
-                        back_notification::BlockInputState::BlkOffFailed
-                    };
-                    if let Some(tx) = &self.inner.tx {
-                        Self::send_block_input_error(tx, state, "No permission".to_string());
-                    }
+            if q != BoolOption::NotSet {
+                let state = if q == BoolOption::Yes {
+                    back_notification::BlockInputState::BlkOnFailed
+                } else {
+                    back_notification::BlockInputState::BlkOffFailed
+                };
+                if let Some(tx) = &self.inner.tx {
+                    Self::send_block_input_error(tx, state, "Unsupported".to_string());
                 }
             }
         }
@@ -4138,142 +3944,6 @@ impl Connection {
             if q != BoolOption::NotSet {
                 self.show_my_cursor = q == BoolOption::Yes;
             }
-        }
-    }
-
-    async fn turn_on_privacy(&mut self, impl_key: String) {
-        if !self.is_authed_remote_conn() || !self.privacy_mode {
-            let msg_out = crate::common::make_privacy_mode_msg(
-                back_notification::PrivacyModeState::PrvOnFailedDenied,
-                impl_key,
-            );
-            self.send(msg_out).await;
-            return;
-        }
-
-        let msg_out = if !privacy_mode::is_privacy_mode_supported() {
-            crate::common::make_privacy_mode_msg_with_details(
-                back_notification::PrivacyModeState::PrvNotSupported,
-                "Unsupported. 1 Multi-screen is not supported. 2 Please confirm the license is activated.".to_string(),
-                impl_key,
-            )
-        } else {
-            let is_pre_privacy_on = privacy_mode::is_in_privacy_mode();
-            let pre_impl_key = privacy_mode::get_cur_impl_key();
-
-            if is_pre_privacy_on {
-                if let Some(pre_impl_key) = pre_impl_key {
-                    if !privacy_mode::is_current_privacy_mode_impl(&pre_impl_key) {
-                        let off_msg = crate::common::make_privacy_mode_msg(
-                            back_notification::PrivacyModeState::PrvOffSucceeded,
-                            pre_impl_key,
-                        );
-                        self.send(off_msg).await;
-                    }
-                }
-            }
-
-            let turn_on_res = privacy_mode::turn_on_privacy(&impl_key, self.inner.id).await;
-            match turn_on_res {
-                Some(Ok(res)) => {
-                    if res {
-                        let err_msg = privacy_mode::check_privacy_mode_err(
-                            self.inner.id,
-                            self.display_idx,
-                            5_000,
-                        );
-                        if err_msg.is_empty() {
-                            privacy_mode::close_other_remote_connections_for_privacy(self.inner.id);
-                            crate::common::make_privacy_mode_msg(
-                                back_notification::PrivacyModeState::PrvOnSucceeded,
-                                impl_key,
-                            )
-                        } else {
-                            log::error!(
-                                "Check privacy mode failed: {}, turn off privacy mode.",
-                                &err_msg
-                            );
-                            let _ = Self::turn_off_privacy_to_msg(self.inner.id, String::new());
-                            crate::common::make_privacy_mode_msg_with_details(
-                                back_notification::PrivacyModeState::PrvOnFailed,
-                                err_msg,
-                                impl_key,
-                            )
-                        }
-                    } else {
-                        crate::common::make_privacy_mode_msg(
-                            back_notification::PrivacyModeState::PrvOnFailed,
-                            impl_key,
-                        )
-                    }
-                }
-                Some(Err(e)) => {
-                    log::error!("Failed to turn on privacy mode. {}", e);
-                    if privacy_mode::is_in_privacy_mode() {
-                        // Use this connection's ID so a failed request cannot disable another
-                        // connection's privacy mode: INVALID_PRIVACY_MODE_CONN_ID would bypass
-                        // the ownership check (see `check_off_conn_id`).
-                        let _ = Self::turn_off_privacy_to_msg(self.inner.id, String::new());
-                    }
-                    crate::common::make_privacy_mode_msg_with_details(
-                        back_notification::PrivacyModeState::PrvOnFailed,
-                        e.to_string(),
-                        impl_key,
-                    )
-                }
-                None => crate::common::make_privacy_mode_msg_with_details(
-                    back_notification::PrivacyModeState::PrvOffFailed,
-                    "Not supported".to_string(),
-                    impl_key,
-                ),
-            }
-        };
-        self.send(msg_out).await;
-    }
-
-    async fn turn_off_privacy(&mut self, impl_key: String) {
-        let msg_out = if !privacy_mode::is_privacy_mode_supported() {
-            crate::common::make_privacy_mode_msg_with_details(
-                back_notification::PrivacyModeState::PrvNotSupported,
-                // This error message is used for magnifier. It is ok to use it here.
-                "Unsupported. 1 Multi-screen is not supported. 2 Please confirm the license is activated.".to_string(),
-                impl_key,
-            )
-        } else {
-            Self::turn_off_privacy_to_msg(self.inner.id, impl_key)
-        };
-        self.send(msg_out).await;
-    }
-
-    pub fn turn_off_privacy_to_msg(_conn_id: i32, impl_key: String) -> Message {
-        Self::turn_off_privacy_result_to_msg(
-            privacy_mode::turn_off_privacy(_conn_id, None),
-            impl_key,
-        )
-    }
-
-    fn turn_off_privacy_result_to_msg(
-        turn_off_res: Option<hbb_common::ResultType<()>>,
-        impl_key: String,
-    ) -> Message {
-        match turn_off_res {
-            Some(Ok(_)) => crate::common::make_privacy_mode_msg(
-                back_notification::PrivacyModeState::PrvOffSucceeded,
-                impl_key,
-            ),
-            Some(Err(e)) => {
-                log::error!("Failed to turn off privacy mode {}", e);
-                crate::common::make_privacy_mode_msg_with_details(
-                    back_notification::PrivacyModeState::PrvOffFailed,
-                    e.to_string(),
-                    impl_key,
-                )
-            }
-            None => crate::common::make_privacy_mode_msg_with_details(
-                back_notification::PrivacyModeState::PrvOffFailed,
-                "Not supported".to_string(),
-                impl_key,
-            ),
         }
     }
 
@@ -5538,7 +5208,6 @@ pub struct AuthedConn {
     pub conn_id: i32,
     pub conn_type: AuthConnType,
     pub session_key: SessionKey,
-    pub sender: mpsc::UnboundedSender<Data>,
 }
 
 mod raii {
@@ -5585,13 +5254,11 @@ mod raii {
             conn_id: i32,
             conn_type: AuthConnType,
             session_key: SessionKey,
-            sender: mpsc::UnboundedSender<Data>,
         ) -> Self {
             AUTHED_CONNS.lock().unwrap().push(AuthedConn {
                 conn_id,
                 conn_type,
                 session_key,
-                sender,
             });
             Self::check_wake_lock();
             use std::sync::Once;
@@ -6307,7 +5974,6 @@ mod test {
             conn_id,
             conn_type,
             session_key,
-            sender: mpsc::unbounded_channel().0,
         };
         let mine = key(7, "peer");
         let remote = AuthConnType::Remote;

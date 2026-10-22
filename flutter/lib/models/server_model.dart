@@ -531,17 +531,14 @@ class ServerModel with ChangeNotifier {
           _clients.add(client);
         } else {
           if (_clients[index].authorized) {
-            _clients[index].privacyMode = client.privacyMode;
             notifyListeners();
             return;
           }
           _clients[index].authorized = true;
-          _clients[index].privacyMode = client.privacyMode;
         }
       } else {
         final index = _clients.indexWhere((c) => c.id == client.id);
         if (index >= 0) {
-          _clients[index].privacyMode = client.privacyMode;
           notifyListeners();
           return;
         }
@@ -785,8 +782,6 @@ class Client {
   bool audio = false;
   bool file = false;
   bool restart = false;
-  bool blockInput = false;
-  bool privacyMode = false;
   bool disconnected = false;
   bool fromSwitch = false;
 
@@ -807,8 +802,6 @@ class Client {
     audio = json['audio'];
     file = json['file'];
     restart = json['restart'];
-    blockInput = json['block_input'];
-    privacyMode = json['privacy_mode'] ?? privacyMode;
     disconnected = json['disconnected'];
     fromSwitch = json['from_switch'];
   }
@@ -826,8 +819,6 @@ class Client {
     data['audio'] = audio;
     data['file'] = file;
     data['restart'] = restart;
-    data['block_input'] = blockInput;
-    data['privacy_mode'] = privacyMode;
     data['disconnected'] = disconnected;
     data['from_switch'] = fromSwitch;
     return data;

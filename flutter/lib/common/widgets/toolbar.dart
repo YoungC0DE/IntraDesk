@@ -73,26 +73,6 @@ Widget waylandKeyboardScopeChip(BuildContext context, String text) {
   );
 }
 
-bool _isWindowsMode1PrivacyImpl(String privacyModeImpl) {
-  return privacyModeImpl == kPrivacyModeImplMag ||
-      privacyModeImpl == kPrivacyModeImplExcludeFromCapture;
-}
-
-// macOS privacy mode blacks out all online displays. Windows Mode 1 also
-// covers every local monitor with privacy overlay windows, so remote display
-// switching does not weaken local privacy protection.
-//
-// Keep this separate from the capture backend capability. The legacy Windows
-// magnifier capturer is not reliable for multi-monitor capture; WebRTC's
-// screen_capturer_win_magnifier also disables it when SM_CMONITORS != 1:
-// https://webrtc.googlesource.com/src/+/1845922d5a1bf9c27deeffb4a8c8daea124434c1/modules/desktop_capture/win/screen_capturer_win_magnifier.cc
-bool allowDisplaySwitchInPrivacyMode(PeerInfo pi, String privacyModeImpl) {
-  return pi.platform == kPeerPlatformMacOS ||
-      (pi.platform == kPeerPlatformWindows &&
-          _isWindowsMode1PrivacyImpl(privacyModeImpl) &&
-          versionCmp(pi.version, '1.4.8') >= 0);
-}
-
 /// Action IDs that `toolbarControls` is the sole registrar for. Wiped on
 /// every call so stale closures don't outlive the menu entry that owned
 /// them. Actions registered by `registerSessionShortcutActions` MUST NOT
@@ -101,7 +81,6 @@ const _kToolbarOwnedActionIds = <String>[
   kShortcutActionSendCtrlAltDel,
   kShortcutActionRestartRemote,
   kShortcutActionInsertLock,
-  kShortcutActionToggleBlockInput,
   kShortcutActionSwitchSides,
   kShortcutActionRefresh,
   kShortcutActionScreenshot,
@@ -640,24 +619,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           actionId: kShortcutActionInsertLock),
     );
   }
-  // blockUserInput
-  if (isDefaultConn &&
-      ffi.ffiModel.keyboard &&
-      ffi.ffiModel.permissions['block_input'] != false &&
-      pi.platform == kPeerPlatformWindows) // privacy-mode != true ??
-  {
-    v.add(TTextMenu(
-        child: Obx(() => Text(translate(
-            '${BlockInputState.find(id).value ? 'Unb' : 'B'}lock user input'))),
-        onPressed: () {
-          RxBool blockInput = BlockInputState.find(id);
-          bind.sessionToggleOption(
-              sessionId: sessionId,
-              value: '${blockInput.value ? 'un' : ''}block-input');
-          blockInput.value = !blockInput.value;
-        },
-        actionId: kShortcutActionToggleBlockInput));
-  }
   // switchSides
   if (isDefaultConn &&
       isDesktop &&
@@ -1093,10 +1054,7 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         child: Text(translate('Lock after session end'))));
   }
 
-  final privacyModeState = PrivacyModeState.find(id);
   if (pi.isSupportMultiDisplay &&
-      (privacyModeState.isEmpty ||
-          allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
       pi.displaysCount.value > 1 &&
       bind.mainGetUserDefaultOption(key: kKeyShowMonitorsToolbar) == 'Y') {
     final value =
@@ -1163,109 +1121,6 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
   }
   return _registerToggleMenuShortcuts(ffi, v,
       ownedActionIds: _kToolbarDisplayToggleActionIds);
-}
-
-var togglePrivacyModeTime = DateTime.now().subtract(const Duration(hours: 1));
-
-List<TToggleMenu> toolbarPrivacyMode(
-    RxString privacyModeState, BuildContext context, String id, FFI ffi) {
-  final ffiModel = ffi.ffiModel;
-  final pi = ffiModel.pi;
-  final sessionId = ffi.sessionId;
-  final hasPrivacyModePermission =
-      ffiModel.permissions['privacy_mode'] != false;
-
-  // Backend revocation already attempts to turn privacy mode off.
-  // Still keep this menu when privacy mode is active, so users can turn it off
-  // if there is a sync delay, version mismatch, or off attempt failure.
-  if (!hasPrivacyModePermission && privacyModeState.isEmpty) {
-    return []; // No permission and not active, hide options.
-  }
-
-  bool checkDisplayAllowedForPrivacyMode(String targetImplKey, bool turnOn) {
-    if (!turnOn ||
-        allowDisplaySwitchInPrivacyMode(pi, targetImplKey) ||
-        (ffiModel.pi.currentDisplay == 0 &&
-            !bind.sessionIsMultiUiSession(sessionId: sessionId))) {
-      return true;
-    }
-    msgBox(sessionId, 'custom-nook-nocancel-hasclose', 'info',
-        'Please switch to Display 1 first', '', ffi.dialogManager);
-    return false;
-  }
-
-  getDefaultMenu(Future<void> Function(SessionID sid, String opt) toggleFunc,
-      String targetImplKey) {
-    final enabled = !ffiModel.viewOnly &&
-        (hasPrivacyModePermission || privacyModeState.isNotEmpty);
-    return TToggleMenu(
-        value: privacyModeState.isNotEmpty,
-        onChanged: enabled
-            ? (value) {
-                if (value == null) return;
-                if (!checkDisplayAllowedForPrivacyMode(targetImplKey, value)) {
-                  return;
-                }
-                final option = 'privacy-mode';
-                toggleFunc(sessionId, option);
-              }
-            : null,
-        child: Text(translate('Privacy mode')));
-  }
-
-  final privacyModeImpls =
-      pi.platformAdditions[kPlatformAdditionsSupportedPrivacyModeImpl]
-          as List<dynamic>?;
-  if (privacyModeImpls == null) {
-    return [
-      getDefaultMenu((sid, opt) async {
-        bind.sessionToggleOption(sessionId: sid, value: opt);
-        togglePrivacyModeTime = DateTime.now();
-      }, kPrivacyModeImplMag)
-    ];
-  }
-  if (privacyModeImpls.isEmpty) {
-    return [];
-  }
-
-  if (privacyModeImpls.length == 1) {
-    final implKey = (privacyModeImpls[0] as List<dynamic>)[0] as String;
-    return [
-      getDefaultMenu((sid, opt) async {
-        bind.sessionTogglePrivacyMode(
-            sessionId: sid, implKey: implKey, on: privacyModeState.isEmpty);
-        togglePrivacyModeTime = DateTime.now();
-      }, implKey)
-    ];
-  } else {
-    final visibleImpls = hasPrivacyModePermission
-        ? privacyModeImpls
-        : privacyModeImpls.where((e) {
-            final implKey = (e as List<dynamic>)[0] as String;
-            return privacyModeState.value == implKey;
-          }).toList();
-    return visibleImpls.map((e) {
-      final implKey = (e as List<dynamic>)[0] as String;
-      final implName = (e)[1] as String;
-      final enabled = !ffiModel.viewOnly &&
-          (hasPrivacyModePermission || privacyModeState.value == implKey);
-      return TToggleMenu(
-          child: Text(translate(implName)),
-          value: privacyModeState.value == implKey,
-          onChanged: enabled
-              ? (value) {
-                  if (value == null) return;
-                  if (value && !hasPrivacyModePermission) return;
-                  if (!checkDisplayAllowedForPrivacyMode(implKey, value)) {
-                    return;
-                  }
-                  togglePrivacyModeTime = DateTime.now();
-                  bind.sessionTogglePrivacyMode(
-                      sessionId: sessionId, implKey: implKey, on: value);
-                }
-              : null);
-    }).toList();
-  }
 }
 
 List<TToggleMenu> toolbarKeyboardToggles(FFI ffi) {
@@ -1398,7 +1253,6 @@ void registerToolbarShortcuts(BuildContext context, String id, FFI ffi) {
   unawaited(toolbarViewStyle(context, id, ffi));
   unawaited(toolbarImageQuality(context, id, ffi));
   unawaited(toolbarCodec(context, id, ffi));
-  toolbarPrivacyMode(PrivacyModeState.find(id), context, id, ffi);
 }
 
 bool showVirtualDisplayMenu(FFI ffi) {
@@ -1420,84 +1274,77 @@ List<Widget> getVirtualDisplayMenuChildren(
     return [];
   }
   final pi = ffi.ffiModel.pi;
-  final privacyModeState = PrivacyModeState.find(id);
   if (pi.isRustDeskIdd) {
     final virtualDisplays = ffi.ffiModel.pi.RustDeskVirtualDisplays;
     final children = <Widget>[];
     for (var i = 0; i < kMaxVirtualDisplayCount; i++) {
-      children.add(Obx(() => CkbMenuButton(
-            value: virtualDisplays.contains(i + 1),
-            onChanged: privacyModeState.isNotEmpty
-                ? null
-                : (bool? value) async {
-                    if (value != null) {
-                      bind.sessionToggleVirtualDisplay(
-                          sessionId: ffi.sessionId, index: i + 1, on: value);
-                      clickCallBack?.call();
-                    }
-                  },
-            child: Text('${translate('Virtual display')} ${i + 1}'),
-            ffi: ffi,
-          )));
+      children.add(CkbMenuButton(
+        value: virtualDisplays.contains(i + 1),
+        onChanged: (bool? value) async {
+          if (value != null) {
+            bind.sessionToggleVirtualDisplay(
+                sessionId: ffi.sessionId, index: i + 1, on: value);
+            clickCallBack?.call();
+          }
+        },
+        child: Text('${translate('Virtual display')} ${i + 1}'),
+        ffi: ffi,
+      ));
     }
     children.add(Divider());
-    children.add(Obx(() => MenuButton(
-          onPressed: privacyModeState.isNotEmpty
-              ? null
-              : () {
-                  bind.sessionToggleVirtualDisplay(
-                      sessionId: ffi.sessionId,
-                      index: kAllVirtualDisplay,
-                      on: false);
-                  clickCallBack?.call();
-                },
-          ffi: ffi,
-          child: Text(translate('Plug out all')),
-        )));
+    children.add(MenuButton(
+      onPressed: () {
+        bind.sessionToggleVirtualDisplay(
+            sessionId: ffi.sessionId, index: kAllVirtualDisplay, on: false);
+        clickCallBack?.call();
+      },
+      ffi: ffi,
+      child: Text(translate('Plug out all')),
+    ));
     return children;
   }
   if (pi.isAmyuniIdd) {
     final count = ffi.ffiModel.pi.amyuniVirtualDisplayCount;
     final children = <Widget>[
-      Obx(() => Row(
-            children: [
-              TextButton(
-                onPressed: privacyModeState.isNotEmpty || count == 0
-                    ? null
-                    : () {
-                        bind.sessionToggleVirtualDisplay(
-                            sessionId: ffi.sessionId, index: 0, on: false);
-                        clickCallBack?.call();
-                      },
-                child: Icon(Icons.remove),
-              ),
-              Text(count.toString()),
-              TextButton(
-                onPressed: privacyModeState.isNotEmpty || count == 4
-                    ? null
-                    : () {
-                        bind.sessionToggleVirtualDisplay(
-                            sessionId: ffi.sessionId, index: 0, on: true);
-                        clickCallBack?.call();
-                      },
-                child: Icon(Icons.add),
-              ),
-            ],
-          )),
-      Divider(),
-      Obx(() => MenuButton(
-            onPressed: privacyModeState.isNotEmpty || count == 0
+      Row(
+        children: [
+          TextButton(
+            onPressed: count == 0
                 ? null
                 : () {
                     bind.sessionToggleVirtualDisplay(
-                        sessionId: ffi.sessionId,
-                        index: kAllVirtualDisplay,
-                        on: false);
+                        sessionId: ffi.sessionId, index: 0, on: false);
                     clickCallBack?.call();
                   },
-            ffi: ffi,
-            child: Text(translate('Plug out all')),
-          )),
+            child: Icon(Icons.remove),
+          ),
+          Text(count.toString()),
+          TextButton(
+            onPressed: count == 4
+                ? null
+                : () {
+                    bind.sessionToggleVirtualDisplay(
+                        sessionId: ffi.sessionId, index: 0, on: true);
+                    clickCallBack?.call();
+                  },
+            child: Icon(Icons.add),
+          ),
+        ],
+      ),
+      Divider(),
+      MenuButton(
+        onPressed: count == 0
+            ? null
+            : () {
+                bind.sessionToggleVirtualDisplay(
+                    sessionId: ffi.sessionId,
+                    index: kAllVirtualDisplay,
+                    on: false);
+                clickCallBack?.call();
+              },
+        ffi: ffi,
+        child: Text(translate('Plug out all')),
+      ),
     ];
     return children;
   }

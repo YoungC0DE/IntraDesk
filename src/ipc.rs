@@ -20,9 +20,7 @@ pub(crate) use ipc_drm::DrmConn;
 pub(crate) use ipc_drm::connect_drm;
 
 use crate::{
-    common::{is_server, CheckTestNatType},
-    privacy_mode,
-    privacy_mode::PrivacyModeState,
+    common::CheckTestNatType,
     rendezvous_mediator::RendezvousMediator,
     ui_interface::{get_local_option, set_local_option},
 };
@@ -334,8 +332,6 @@ pub enum Data {
         file: bool,
         file_transfer_enabled: bool,
         restart: bool,
-        block_input: bool,
-        privacy_mode: bool,
         from_switch: bool,
     },
     SwitchPermission {
@@ -366,7 +362,6 @@ pub enum Data {
     ClipboardFileEnabled(bool),
     #[cfg(target_os = "windows")]
     ClipboardNonFile(Option<(String, Vec<ClipboardNonFile>)>),
-    PrivacyModeState((i32, PrivacyModeState, String)),
     TestRendezvousServer,
     Deployed,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -823,9 +818,6 @@ async fn handle(data: Data, stream: &mut Connection) {
             if EXIT_RECV_CLOSE.load(Ordering::SeqCst) {
                 #[cfg(not(target_os = "android"))]
                 crate::server::input_service::fix_key_down_timeout_at_exit();
-                if is_server() {
-                    let _ = privacy_mode::turn_off_privacy(0, Some(PrivacyModeState::OffByPeer));
-                }
                 #[cfg(any(target_os = "macos", target_os = "linux"))]
                 if crate::is_main() {
                     // below part is for main windows can be reopen during rustdesk installation and installing service from UI
@@ -1006,9 +998,6 @@ async fn handle(data: Data, stream: &mut Connection) {
             Some(value) => {
                 let _chk = CheckIfRestart::new();
                 let _nat = CheckTestNatType::new();
-                if let Some(v) = value.get("privacy-mode-impl-key") {
-                    crate::privacy_mode::switch(v);
-                }
                 Config::set_options(value);
                 allow_err!(stream.send(&Data::Options(None)).await);
             }

@@ -229,7 +229,6 @@ List<(String, String)> otherDefaultSettings() {
     if (isDesktop) ('Enable file copy and paste', kOptionEnableFileCopyPaste),
     ('Disable clipboard', kOptionDisableClipboard),
     ('Lock after session end', kOptionLockAfterSessionEnd),
-    ('Privacy mode', kOptionPrivacyMode),
     ('True color (4:4:4)', kOptionI444),
     ('Reverse mouse wheel', kKeyReverseMouseWheel),
     ('swap-left-right-mouse', kOptionSwapLeftRightMouse),

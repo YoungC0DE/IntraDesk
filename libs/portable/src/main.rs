@@ -188,8 +188,6 @@ fn setup(
         file.write_to_file(&dir);
     }
     write_meta(&dir, ts, &metadata_paths);
-    #[cfg(windows)]
-    win::copy_runtime_broker(&dir);
     #[cfg(linux)]
     reader.configure_permission(&dir);
     Some(dir.join(&reader.exe))
@@ -317,12 +315,6 @@ fn main() -> Result<(), String> {
 
 #[cfg(windows)]
 mod win {
-    use std::{fs, os::windows::process::CommandExt, path::Path, process::Command};
-
-    // Used for privacy mode(magnifier impl).
-    pub const RUNTIME_BROKER_EXE: &'static str = "C:\\Windows\\System32\\RuntimeBroker.exe";
-    pub const WIN_TOPMOST_INJECTED_PROCESS_EXE: &'static str = "RuntimeBroker_intradesk.exe";
-
     pub(super) fn schedule_verified_update_cleanup() -> std::io::Result<()> {
         use windows::{
             core::{HSTRING, PCWSTR},
@@ -348,26 +340,6 @@ mod win {
             )
         }
         .map_err(std::io::Error::other)
-    }
-
-    pub(super) fn copy_runtime_broker(dir: &Path) {
-        let src = RUNTIME_BROKER_EXE;
-        let tgt = WIN_TOPMOST_INJECTED_PROCESS_EXE;
-        let target_file = dir.join(tgt);
-        if target_file.exists() {
-            if let (Ok(src_file), Ok(tgt_file)) = (fs::read(src), fs::read(&target_file)) {
-                let src_md5 = format!("{:x}", md5::compute(&src_file));
-                let tgt_md5 = format!("{:x}", md5::compute(&tgt_file));
-                if src_md5 == tgt_md5 {
-                    return;
-                }
-            }
-        }
-        let _allow_err = Command::new("taskkill")
-            .args(&["/F", "/IM", "RuntimeBroker_intradesk.exe"])
-            .creation_flags(winapi::um::winbase::CREATE_NO_WINDOW)
-            .output();
-        let _allow_err = std::fs::copy(src, &format!("{}\\{}", dir.to_string_lossy(), tgt));
     }
 
     /// Check if the executable is a Quick Support version.

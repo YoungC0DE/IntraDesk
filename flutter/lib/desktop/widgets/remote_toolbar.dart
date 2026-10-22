@@ -802,10 +802,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
     final List<Widget> toolbarItems = [];
     toolbarItems.add(_PinMenu(state: widget.state));
     toolbarItems.add(Obx(() {
-      final privacyModeState = PrivacyModeState.find(widget.id);
-      if ((privacyModeState.isEmpty ||
-              allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
-          pi.displaysCount.value > 1 &&
+      if (pi.displaysCount.value > 1 &&
           mainGetLocalBoolOptionSync(kOptionAllowMonitorSwitchMainToolbar)) {
         return _MainMonitorSwitchButton(id: widget.id, ffi: widget.ffi);
       } else {
@@ -813,10 +810,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       }
     }));
     toolbarItems.add(Obx(() {
-      final privacyModeState = PrivacyModeState.find(widget.id);
-      if ((privacyModeState.isEmpty ||
-              allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
-          pi.displaysCount.value > 1) {
+      if (pi.displaysCount.value > 1) {
         return _MonitorMenu(
             id: widget.id,
             ffi: widget.ffi,
@@ -1745,35 +1739,6 @@ class _DisplayMenuState extends State<_DisplayMenu> {
         Divider(),
         toggles(),
       ];
-      // privacy mode
-      final privacyModeState = PrivacyModeState.find(id);
-      if (ffi.connType == ConnType.defaultConn &&
-          (pi.features.privacyMode || privacyModeState.isNotEmpty) &&
-          (ffiModel.keyboard || privacyModeState.isNotEmpty)) {
-        final privacyModeList =
-            toolbarPrivacyMode(privacyModeState, context, id, ffi);
-        if (privacyModeList.length == 1) {
-          menuChildren.add(CkbMenuButton(
-              value: privacyModeList[0].value,
-              onChanged: privacyModeList[0].onChanged,
-              child: privacyModeList[0].child,
-              ffi: ffi));
-        } else if (privacyModeList.length > 1) {
-          menuChildren.addAll([
-            Divider(),
-            _SubmenuButton(
-                ffi: widget.ffi,
-                child: Text(translate('Privacy mode')),
-                menuChildren: privacyModeList
-                    .map((e) => CkbMenuButton(
-                        value: e.value,
-                        onChanged: e.onChanged,
-                        child: e.child,
-                        ffi: ffi))
-                    .toList()),
-          ]);
-        }
-      }
       return menuChildren;
     }
 
@@ -3522,12 +3487,6 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
         return const Offstage();
       }
       if (cycle.total < 2) return const Offstage();
-      final privacyModeState = PrivacyModeState.find(id);
-      if (privacyModeState.isNotEmpty &&
-          !allowDisplaySwitchInPrivacyMode(
-              ffi.ffiModel.pi, privacyModeState.value)) {
-        return const Offstage();
-      }
 
       return Tooltip(
         message: cycle.tooltip,

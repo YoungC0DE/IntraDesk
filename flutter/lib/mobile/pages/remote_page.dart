@@ -1163,11 +1163,7 @@ void showOptions(
   if (image != null) {
     displays.add(Padding(padding: const EdgeInsets.only(top: 8), child: image));
   }
-  final privacyModeState = PrivacyModeState.find(id);
-  if (pi.displays.length > 1 &&
-      pi.currentDisplay != kAllDisplayValue &&
-      (privacyModeState.isEmpty ||
-          allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value))) {
+  if (pi.displays.length > 1 && pi.currentDisplay != kAllDisplayValue) {
     final cur = pi.currentDisplay;
     final children = <Widget>[];
     final isDarkTheme = MyTheme.currentThemeMode() == ThemeMode.dark;
@@ -1226,15 +1222,6 @@ void showOptions(
             child: Text(translate('Lock canvas')),
             value: gFFI.canvasModel.locked,
             onChanged: (value) => gFFI.canvasModel.setLocked(value == true)));
-  }
-
-  List<TToggleMenu> privacyModeList = [];
-  if ((gFFI.ffiModel.pi.features.privacyMode && gFFI.ffiModel.keyboard) ||
-      privacyModeState.isNotEmpty) {
-    privacyModeList = toolbarPrivacyMode(privacyModeState, context, id, gFFI);
-    if (privacyModeList.length == 1) {
-      displayToggles.add(privacyModeList[0]);
-    }
   }
 
   dialogManager.show((setState, close, context) {
@@ -1325,17 +1312,6 @@ void showOptions(
       ...displayTogglesList,
     ];
 
-    Widget privacyModeWidget = Offstage();
-    if (privacyModeList.length > 1) {
-      privacyModeWidget = ListTile(
-        contentPadding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-        title: Text(translate('Privacy mode')),
-        onTap: () => setPrivacyModeDialog(
-            dialogManager, privacyModeList, privacyModeState),
-      );
-    }
-
     var popupDialogMenus = List<Widget>.empty(growable: true);
     final resolution = getResolutionMenu(gFFI, id);
     if (resolution != null) {
@@ -1368,11 +1344,7 @@ void showOptions(
     return CustomAlertDialog(
       content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: displays +
-              radios +
-              popupDialogMenus +
-              toggles +
-              [privacyModeWidget]),
+          children: displays + radios + popupDialogMenus + toggles),
     );
   }, clickMaskDismiss: true, backDismiss: true).then((value) {
     _disableAndroidSoftKeyboard();

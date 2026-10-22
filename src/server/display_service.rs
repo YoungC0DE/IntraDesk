@@ -4,8 +4,6 @@ use crate::common::SimpleCallOnReturn;
 use crate::platform::linux::is_x11;
 #[cfg(windows)]
 use crate::virtual_display_manager;
-#[cfg(windows)]
-use hbb_common::get_version_number;
 use hbb_common::protobuf::MessageField;
 use scrap::Display;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,7 +21,6 @@ struct ChangedResolution {
 }
 
 lazy_static::lazy_static! {
-    static ref IS_CAPTURER_MAGNIFIER_SUPPORTED: bool = is_capturer_mag_supported();
     static ref CHANGED_RESOLUTIONS: Arc<RwLock<HashMap<String, ChangedResolution>>> = Default::default();
     static ref SYNC_DISPLAYS: Arc<Mutex<SyncDisplaysInfo>> = Default::default();
 }
@@ -607,23 +604,8 @@ pub fn restore_resolutions() {
 }
 
 #[inline]
-fn is_capturer_mag_supported() -> bool {
-    #[cfg(windows)]
-    return scrap::CapturerMag::is_supported();
-    #[cfg(not(windows))]
-    false
-}
-
-#[inline]
 pub fn capture_cursor_embedded() -> bool {
     scrap::is_cursor_embedded()
-}
-
-#[inline]
-#[cfg(windows)]
-pub fn is_privacy_mode_mag_supported() -> bool {
-    return *IS_CAPTURER_MAGNIFIER_SUPPORTED
-        && get_version_number(&crate::VERSION) > get_version_number("1.1.9");
 }
 
 pub fn new() -> GenericService {

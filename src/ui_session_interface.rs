@@ -373,18 +373,6 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    pub fn toggle_privacy_mode(&self, impl_key: String, on: bool) {
-        let mut misc = Misc::new();
-        misc.set_toggle_privacy_mode(TogglePrivacyMode {
-            impl_key,
-            on,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_misc(misc);
-        self.send(Data::Message(msg_out));
-    }
-
     pub fn get_toggle_option(&self, name: String) -> bool {
         self.lc.read().unwrap().get_toggle_option(&name)
     }
@@ -1457,7 +1445,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_displays(&self, displays: &Vec<DisplayInfo>);
     fn set_platform_additions(&self, data: &str);
     fn on_connected(&self, conn_type: ConnType);
-    fn update_privacy_mode(&self);
     fn set_permission(&self, name: &str, value: bool);
     fn close_success(&self);
     fn update_quality_status(&self, qs: QualityStatus);
@@ -1485,7 +1472,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
         is_upload: bool,
         is_identical: bool,
     );
-    fn update_block_input_state(&self, on: bool);
     fn job_progress(&self, id: i32, file_num: i32, speed: f64, finished_size: f64);
     fn adapt_size(&self);
     fn on_rgba(&self, display: usize, rgba: &mut scrap::ImageRgb);
@@ -1568,7 +1554,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
         } else {
             if pi.displays.is_empty() {
                 self.lc.write().unwrap().handle_peer_info(&pi);
-                self.update_privacy_mode();
                 self.msgbox("error", "Error", "No displays", "");
                 return;
             }
@@ -1587,7 +1572,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
                 current.scale,
             );
         }
-        self.update_privacy_mode();
         // Clear audit_guid when connection is established successfully
         *self.audit_guid.lock().unwrap() = String::new();
         *self.last_audit_note.lock().unwrap() = String::new();

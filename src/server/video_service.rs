@@ -23,15 +23,9 @@ use super::{display_service::check_display_changed, service::ServiceTmpl, video_
 use crate::common::SimpleCallOnReturn;
 #[cfg(target_os = "linux")]
 use crate::platform::linux::is_x11;
-use crate::privacy_mode::{get_privacy_mode_conn_id, INVALID_PRIVACY_MODE_CONN_ID};
 #[cfg(windows)]
-use crate::{
-    platform::windows::is_process_consent_running,
-    privacy_mode::{is_current_privacy_mode_impl, PRIVACY_MODE_IMPL_WIN_MAG},
-    ui_interface::is_installed,
-};
+use crate::platform::windows::is_process_consent_running;
 use hbb_common::{
-    anyhow::anyhow,
     tokio::sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         Mutex as TokioMutex,
@@ -313,107 +307,26 @@ pub fn new(source: VideoSource, idx: usize) -> GenericService {
 
 // Capturer object is expensive, avoiding to create it frequently.
 fn create_capturer(
-    privacy_mode_id: i32,
     display: Display,
     _current: usize,
     _portable_service_running: bool,
 ) -> ResultType<Box<dyn TraitCapturer>> {
-    #[cfg(not(windows))]
-    let c: Option<Box<dyn TraitCapturer>> = None;
     #[cfg(windows)]
-    let mut c: Option<Box<dyn TraitCapturer>> = None;
-    if privacy_mode_id > 0 {
-        #[cfg(windows)]
-        {
-            // Windows Mode 1 can cover every local monitor with overlay windows,
-            // but the legacy magnifier capture backend is still single-monitor
-            // constrained. Keep display-switch gating aligned with that backend
-            // limit, not just the overlay coverage.
-            if let Some(c1) = crate::privacy_mode::win_mag::create_capturer(
-                privacy_mode_id,
-                display.origin(),
-                display.width(),
-                display.height(),
-            )? {
-                c = Some(Box::new(c1));
-            }
-        }
-    }
-
-    match c {
-        Some(c1) => return Ok(c1),
-        None => {
-            #[cfg(windows)]
-            {
-                log::debug!("Create capturer dxgi|gdi");
-                return crate::portable_service::client::create_capturer(
-                    _current,
-                    display,
-                    _portable_service_running,
-                );
-            }
-            #[cfg(not(windows))]
-            {
-                log::debug!("Create capturer from scrap");
-                return Ok(Box::new(
-                    Capturer::new(display).with_context(|| "Failed to create capturer")?,
-                ));
-            }
-        }
-    };
-}
-
-// This function works on privacy mode. Windows only for now.
-pub fn test_create_capturer(
-    privacy_mode_id: i32,
-    display_idx: usize,
-    timeout_millis: u64,
-) -> String {
-    let test_begin = Instant::now();
-    loop {
-        let err = match Display::all() {
-            Ok(mut displays) => {
-                if displays.len() <= display_idx {
-                    anyhow!(
-                        "Failed to get display {}, the displays' count is {}",
-                        display_idx,
-                        displays.len()
-                    )
-                } else {
-                    let display = displays.remove(display_idx);
-                    match create_capturer(privacy_mode_id, display, display_idx, false) {
-                        Ok(_) => return "".to_owned(),
-                        Err(e) => e,
-                    }
-                }
-            }
-            Err(e) => e.into(),
-        };
-        if test_begin.elapsed().as_millis() >= timeout_millis as _ {
-            return err.to_string();
-        }
-        std::thread::sleep(Duration::from_millis(300));
-    }
-}
-
-// Note: This function is extremely expensive, do not call it frequently.
-#[cfg(windows)]
-fn check_uac_switch(privacy_mode_id: i32, capturer_privacy_mode_id: i32) -> ResultType<()> {
-    if capturer_privacy_mode_id != INVALID_PRIVACY_MODE_CONN_ID
-        && is_current_privacy_mode_impl(PRIVACY_MODE_IMPL_WIN_MAG)
     {
-        if !is_installed() {
-            if privacy_mode_id != capturer_privacy_mode_id {
-                if !is_process_consent_running()? {
-                    bail!("consent.exe is not running");
-                }
-            }
-            if is_process_consent_running()? {
-                bail!("consent.exe is running");
-            }
-        }
+        log::debug!("Create capturer dxgi|gdi");
+        return crate::portable_service::client::create_capturer(
+            _current,
+            display,
+            _portable_service_running,
+        );
     }
-    Ok(())
+    #[cfg(not(windows))]
+    {
+        log::debug!("Create capturer from scrap");
+        return Ok(Box::new(
+            Capturer::new(display).with_context(|| "Failed to create capturer")?,
+        ));
+    }
 }
 
 pub(super) struct CapturerInfo {
@@ -422,8 +335,6 @@ pub(super) struct CapturerInfo {
     pub height: usize,
     pub ndisplay: usize,
     pub current: usize,
-    pub privacy_mode_id: i32,
-    pub _capturer_privacy_mode_id: i32,
     pub capturer: Box<dyn TraitCapturer>,
 }
 
@@ -488,49 +399,13 @@ fn get_capturer_monitor(
         &name,
     );
 
-    let privacy_mode_id = get_privacy_mode_conn_id().unwrap_or(INVALID_PRIVACY_MODE_CONN_ID);
-    #[cfg(not(windows))]
-    let capturer_privacy_mode_id = privacy_mode_id;
-    #[cfg(windows)]
-    let mut capturer_privacy_mode_id = privacy_mode_id;
-    #[cfg(windows)]
-    {
-        if capturer_privacy_mode_id != INVALID_PRIVACY_MODE_CONN_ID
-            && is_current_privacy_mode_impl(PRIVACY_MODE_IMPL_WIN_MAG)
-        {
-            if !is_installed() {
-                if is_process_consent_running()? {
-                    capturer_privacy_mode_id = INVALID_PRIVACY_MODE_CONN_ID;
-                }
-            }
-        }
-    }
-    log::debug!(
-        "Try create capturer with capturer privacy mode id {}",
-        capturer_privacy_mode_id,
-    );
-
-    if privacy_mode_id != INVALID_PRIVACY_MODE_CONN_ID {
-        if privacy_mode_id != capturer_privacy_mode_id {
-            log::info!("In privacy mode, but show UAC prompt window for now");
-        } else {
-            log::info!("In privacy mode, the peer side cannot watch the screen");
-        }
-    }
-    let capturer = create_capturer(
-        capturer_privacy_mode_id,
-        display,
-        current,
-        portable_service_running,
-    )?;
+    let capturer = create_capturer(display, current, portable_service_running)?;
     Ok(CapturerInfo {
         origin,
         width,
         height,
         ndisplay,
         current,
-        privacy_mode_id,
-        _capturer_privacy_mode_id: capturer_privacy_mode_id,
         capturer,
     })
 }
@@ -681,8 +556,6 @@ fn run(vs: VideoService) -> ResultType<()> {
     let (mut second_instant, mut send_counter) = (Instant::now(), 0);
 
     while sp.ok() {
-        #[cfg(windows)]
-        check_uac_switch(c.privacy_mode_id, c._capturer_privacy_mode_id)?;
         check_qos(
             &mut encoder,
             &mut quality,
@@ -725,9 +598,6 @@ fn run(vs: VideoService) -> ResultType<()> {
             log::info!("changed to gdi when using vram");
             VRamEncoder::set_fallback_gdi(sp.name(), true);
             bail!("SWITCH");
-        }
-        if vs.source.is_monitor() {
-            check_privacy_mode_changed(&sp, display_idx, &c)?;
         }
         #[cfg(windows)]
         {
@@ -938,9 +808,6 @@ fn run(vs: VideoService) -> ResultType<()> {
         let timeout_millis = 3_000u64;
         let wait_begin = Instant::now();
         while wait_begin.elapsed().as_millis() < timeout_millis as _ {
-            if vs.source.is_monitor() {
-                check_privacy_mode_changed(&sp, display_idx, &c)?;
-            }
             frame_controller.try_wait_next(&mut fetched_conn_ids, 300);
             // break if all connections have received current frame
             if fetched_conn_ids.len() >= frame_controller.send_conn_ids.len() {
@@ -1121,27 +988,6 @@ fn check_change_scale(hardware: bool) -> ResultType<()> {
     if old_scale != new_scale {
         log::info!("switch due to scale changed, {old_scale} -> {new_scale}");
         // switch is not a must, but it is better to do so.
-        bail!("SWITCH");
-    }
-    Ok(())
-}
-
-fn check_privacy_mode_changed(
-    sp: &GenericService,
-    display_idx: usize,
-    ci: &CapturerInfo,
-) -> ResultType<()> {
-    let privacy_mode_id_2 = get_privacy_mode_conn_id().unwrap_or(INVALID_PRIVACY_MODE_CONN_ID);
-    if ci.privacy_mode_id != privacy_mode_id_2 {
-        if privacy_mode_id_2 != INVALID_PRIVACY_MODE_CONN_ID {
-            let msg_out = crate::common::make_privacy_mode_msg(
-                back_notification::PrivacyModeState::PrvOnByOther,
-                "".to_owned(),
-            );
-            sp.send_to_others(msg_out, privacy_mode_id_2);
-        }
-        log::info!("switch due to privacy mode changed");
-        try_broadcast_display_changed(&sp, display_idx, ci, true).ok();
         bail!("SWITCH");
     }
     Ok(())

@@ -27,18 +27,18 @@ C e D tocam `src/client.rs`: combinem a ordem (C primeiro em `connect`, D em `se
 
 ---
 
-## Decisões pendentes (dono do produto)
+## Decisões (dono do produto)
 
-Não remova nem implemente esses itens antes da decisão. Registre aqui a resposta.
+Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10, D11... e espere a resposta.
 
-- [ ] **D1** Transferência de arquivos: manter ou remover? *(sugestão: remover na v1)*
-- [ ] **D2** Múltiplos monitores (trocar de monitor na sessão): manter? *(sugestão: manter, é necessário quando o PC remoto tem 2 telas)*
-- [ ] **D3** Ações de controle: Ctrl+Alt+Del, bloquear, reiniciar o PC remoto: manter? *(sugestão: manter só Ctrl+Alt+Del)*
-- [ ] **D4** Modo privacidade (tela preta no remoto) e bloquear entrada do usuário remoto: manter? *(sugestão: remover)*
-- [ ] **D5** Aceite manual: o usuário remoto precisa clicar "Aceitar", ou basta a senha? *(sugestão: senha + janela de aviso "sendo acessado" sempre visível no remoto)*
-- [ ] **D6** Senha: só temporária (muda a cada execução) ou permitir senha fixa nas configurações? *(sugestão: as duas, como no AnyDesk)*
-- [ ] **D7** Elevação: pedir privilégio de administrador ao abrir? Sem admin, a sessão não controla janelas elevadas (UAC) nem a tela de login. *(sugestão: botão "Executar como administrador" opcional, não forçado)*
-- [ ] **D8** Idiomas da UI: só pt-BR, ou pt-BR + inglês? *(sugestão: pt-BR + en; remover os demais arquivos de `src/lang`)*
+- [x] **D1** Transferência de arquivos → **manter** (decidido em 22/10/2026).
+- [x] **D2** Múltiplos monitores (trocar de monitor na sessão) → **manter** (decidido em 22/10/2026).
+- [x] **D3** Ações de controle → **manter todas**: Ctrl+Alt+Del, bloquear e reiniciar o PC remoto (decidido em 22/10/2026).
+- [x] **D4** Modo privacidade (tela preta no remoto) e bloquear entrada do usuário remoto → **remover** (decidido em 22/10/2026).
+- [x] **D5** Aceite → **basta a senha**, com janela de aviso "sendo acessado" sempre visível no PC remoto (decidido em 22/10/2026).
+- [x] **D6** Senha → **as duas**: temporária (muda a cada execução) e fixa opcional nas configurações (decidido em 22/10/2026).
+- [x] **D7** Elevação → **não forçar**: botão opcional "Executar como administrador" (sem admin, a sessão não controla janelas elevadas/UAC nem a tela de login) (decidido em 22/10/2026).
+- [x] **D8** Idiomas → **pt-BR + inglês**; os demais arquivos de `src/lang` saem (decidido em 22/10/2026).
 - [x] **D9** Onde salvar a configuração → **`%APPDATA%\IntraDesk`** (decidido em 22/10/2026).
 
 ---
@@ -90,8 +90,8 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   dep: T0.4 · Área: esses arquivos · @dono:
 - [ ] **T1.11** Remover a UI Sciter legada (`src/ui/`, `src/ui.rs`, `res/inline-sciter.py`, feature `inline`).
   dep: T0.4 · Área: `src/ui*` · @dono:
-- [ ] **T1.12** Itens das decisões D1–D4 marcados como "remover".
-  dep: D1–D4 · Área: conforme decisão · @dono:
+- [ ] **T1.12** Remover o modo privacidade (`src/privacy_mode*`, `RuntimeBroker_intradesk.exe`/`WindowInjection.dll`, opção na barra e nas configurações) e o "bloquear entrada do usuário" (D4).
+  dep: D4 · Área: `src/privacy_mode*`, `src/server/connection.rs` (handlers), `remote_toolbar.dart`, `libs/portable` (cópia do RuntimeBroker) · @dono:
 - [ ] **T1.13** Traduções: manter só os idiomas de D8 em `src/lang` e apagar chaves sem uso (após T1.5–T1.12).
   dep: D8, T1.5–T1.12 · Área: `src/lang/`, `src/lang.rs` · @dono:
 
@@ -132,12 +132,12 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
 
 ## Fase 4 — Sessão remota
 
-- [ ] **T4.1** Barra da sessão só com: tela cheia, área de transferência (ligar/desligar), áudio (ligar/desligar), escala (original / ajustar / personalizada), qualidade (ótima / balanceada / velocidade / personalizada), resolução, desconectar, além do que for decidido em D2/D3.
+- [ ] **T4.1** Barra da sessão só com: tela cheia, área de transferência (ligar/desligar), áudio (ligar/desligar), escala (original / ajustar / personalizada), qualidade (ótima / balanceada / velocidade / personalizada), resolução, transferência de arquivos (D1), troca de monitor (D2), Ctrl+Alt+Del / bloquear / reiniciar o PC remoto (D3) e desconectar.
   dep: T1.5–T1.8 · Área: `flutter/lib/desktop/widgets/remote_toolbar.dart` · @dono:
 - [ ] **T4.2** Validar cada item da barra entre dois PCs Windows (ver T7.3) e corrigir o que quebrou com a limpeza.
   dep: T4.1, T3.1 · Área: conforme bug · @dono:
-- [ ] **T4.3** Área de transferência: garantir texto (e imagem, se já funcionar) nos dois sentidos; arquivos só se D1 = manter.
-  dep: T4.1, D1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
+- [ ] **T4.3** Área de transferência: garantir texto, imagem e arquivos (D1) nos dois sentidos.
+  dep: T4.1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
 - [ ] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
   dep: T4.1 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
 - [ ] **T4.5** Bug relatado: depois de muito tempo de sessão, ao abrir um CSV grande no PC acessado, **a imagem congela** mas o áudio continua e o mouse mexe.

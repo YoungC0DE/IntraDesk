@@ -17,20 +17,25 @@ são preservados — não remova avisos de copyright nem a licença AGPL-3.0)
 ### Mantém
 - Descoberta automática dos computadores da LAN e lista na tela inicial.
 - Conexão direta por IP (com senha).
-- Na sessão remota: tela cheia, área de transferência (texto), ativar/desativar
-  áudio, escala da imagem, qualidade da imagem, resolução.
+- Na sessão remota: tela cheia, área de transferência, ativar/desativar
+  áudio, escala da imagem, qualidade da imagem, resolução, troca de monitor,
+  Ctrl+Alt+Del / bloquear / reiniciar o PC remoto.
+- Transferência de arquivos.
 - Controle de mouse e teclado (base do acesso remoto).
+- Senha temporária (muda a cada execução) e senha fixa opcional; conexão só
+  com senha, sem clique de aceite, com aviso "sendo acessado" sempre visível.
+- Idiomas: pt-BR e inglês.
 
 ### Remove
 - Gravação de tela, chat, teclado virtual, chamada de voz.
+- Modo privacidade (tela preta no remoto) e bloquear entrada do usuário remoto.
 - Tudo que depende de internet/servidor: ID server, relay, login de conta,
   catálogo de endereços (address book), grupos, atualização automática, 2FA ligado a conta.
 - Suporte a Linux, macOS, Android, iOS e Web (código, scripts, CI e pastas
   `flutter/{android,ios,linux,macos}`, `flatpak`, `appimage`, `fastlane`).
 - Instalador / serviço instalado (o app roda como portátil).
-- Itens ainda em aberto (transferência de arquivos, múltiplos monitores,
-  Ctrl+Alt+Del etc.) estão em **Decisões pendentes** no `todo.md`. Não remova
-  nada dessa lista sem a decisão registrada.
+- As decisões de escopo (D1–D9) estão registradas no `todo.md`. Algo fora
+  destas listas: pergunte antes de remover.
 
 ### Rede (padrão)
 | Uso | Protocolo | Porta |

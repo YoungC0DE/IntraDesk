@@ -134,6 +134,15 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   dep: T4.1, D1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
 - [ ] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
   dep: T4.1 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
+- [ ] **T4.5** Bug relatado: depois de muito tempo de sessão, ao abrir um CSV grande no PC acessado, **a imagem congela** mas o áudio continua e o mouse mexe.
+  Evidências (logs do RustDesk 1.5.1 portátil no notebook, out/2026):
+  - Encoder em uso: **Intel Quick Sync H.265 por hardware** (`hevc_qsv`, caminho VRAM), tela 1366x768, ~1 GB de RAM livre.
+  - Em todas as sessões com o problema: `[FFMPEG_VRAM_ENC] avcodec_send_frame failed ... Invalid FrameType:0` → `encode fail: no valid frame, times: 1`, e **nenhum log de vídeo depois disso** até o usuário fechar a sessão 10–30 s depois (ex.: 08/10 19:20:50 → 19:21:19; 13/10 11:56:20 → 11:56:29).
+  - O contador de falhas nunca chega a 3, então o fallback existente (`video_service.rs`, `bail!("SWITCH")` após 3 falhas) não dispara: o loop de vídeo para de entregar quadros (provável travamento na captura DXGI/encoder QSV sob pressão de memória), enquanto áudio e cursor seguem em serviços separados (o cursor é desenhado no cliente).
+  - Não é criptografia nem a rota pela internet: o áudio continua passando pela mesma conexão criptografada. Rodar só na LAN **não resolve sozinho**.
+  Plano: (1) reproduzir no IntraDesk entre dois PCs (CSV grande no Excel, RAM baixa); (2) watchdog no serviço de vídeo: se a sessão está ativa e nenhum quadro é enviado por N segundos, registrar e reiniciar o serviço com encoder por software (VP9); (3) avaliar VP9 por software como padrão no IntraDesk, já que na LAN a banda sobra e evita bugs de driver de GPU.
+  Teste rápido hoje, no RustDesk atual: no notebook, desativar "Habilitar codificação por hardware" (opção `enable-hwcodec`) ou escolher VP9 no menu de exibição da sessão; se o congelamento sumir, a causa está confirmada.
+  dep: T0.3 · Área: `src/server/video_service.rs`, `libs/scrap/src/common/{codec,hwcodec,vram}.rs` · @dono:
 
 ## Fase 5 — Interface e marca (trilha E)
 

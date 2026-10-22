@@ -88,8 +88,10 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T0.4 · Área: `flutter/lib/common/widgets/{login,address_book,my_group,oidc_auth_status}.dart`, `src/hbbs_http*` · @dono:
 - [ ] **T1.10** Remover atualização automática e instalação: `src/updater*`, `src/manual_update.rs`, `src/update_*`, `install_page.dart`, `update_progress.dart`, `res/msi`, opções "Instalar" na UI.
   dep: T0.4 · Área: esses arquivos · @dono:
-- [ ] **T1.11** Remover a UI Sciter legada (`src/ui/`, `src/ui.rs`, `res/inline-sciter.py`, feature `inline`).
-  dep: T0.4 · Área: `src/ui*` · @dono:
+- [x] **T1.11** UI Sciter removida: `src/ui/`, `src/ui.rs`, `src/platform/delegate.rs` (macOS/Sciter), `res/inline-sciter.py`, dependência `sciter-rs`, feature `inline` e os 73 trechos `cfg(not(feature = "flutter"))`. `flutter` virou feature padrão (`cargo build` sem flags já compila a UI certa). ~11,5 mil linhas a menos. Testes iguais à linha de base (217 ok + a falha conhecida); `build.ps1` ok.
+  dep: T0.4 · Área: `src/ui*` · @dono: claude
+- [ ] **T1.14** Sobras da remoção do Sciter (código que ficou sem uso): `CHILDREN`/`Children` em `src/ui_interface.rs` (e o envio de `Config(("id", None))` que ninguém mais lê); `ClientClipboardContext` e o parâmetro de `try_start_clipboard` em `src/client.rs`; `#[allow(unused_mut)] let mut exe` em `src/server/portable_service.rs`; build-dep `winres` e `[package.metadata.winres]` no `Cargo.toml`; flag `--flutter` do `build.py` (sempre necessária agora); conferir se `Data::ConfirmDeleteFiles`/`SetNoConfirm` ainda são usados pelo Flutter; comentários que citam Sciter.
+  dep: T1.11 · Área: os arquivos citados · @dono:
 - [ ] **T1.12** Remover o modo privacidade (`src/privacy_mode*`, `RuntimeBroker_intradesk.exe`/`WindowInjection.dll`, opção na barra e nas configurações) e o "bloquear entrada do usuário" (D4).
   dep: D4 · Área: `src/privacy_mode*`, `src/server/connection.rs` (handlers), `remote_toolbar.dart`, `libs/portable` (cópia do RuntimeBroker) · @dono:
 - [ ] **T1.13** Traduções: manter só os idiomas de D8 em `src/lang` e apagar chaves sem uso (após T1.5–T1.12).

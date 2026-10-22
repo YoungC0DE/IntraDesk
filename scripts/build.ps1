@@ -50,6 +50,30 @@ foreach ($var in 'VCPKG_ROOT', 'LIBCLANG_PATH') {
     }
 }
 
+# Outside a VS developer prompt, clang (bindgen) picks the newest Visual Studio even when it
+# has no C++ tools (e.g. VS 2026 Community) and then cannot find stdint.h. Load VS 2022 explicitly.
+if (-not $env:VCToolsInstallDir) {
+    Write-Step 'Ambiente do Visual Studio 2022 (C++)'
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    $vsPath = & $vswhere -latest -products * -version '[17.0,18.0)' `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if (-not $vsPath) {
+        throw 'Visual Studio 2022 com ferramentas C++ não encontrado. Rode scripts\setup-dev.ps1.'
+    }
+    $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvars64.bat'
+    $envLines = & cmd.exe /c "`"$vcvars`" >nul 2>nul && set"
+    if ($LASTEXITCODE -ne 0) { throw "Falhou: $vcvars" }
+    foreach ($line in $envLines) {
+        $i = $line.IndexOf('=')
+        if ($i -le 0) { continue }
+        $name = $line.Substring(0, $i)
+        # vcvars points VCPKG_ROOT at the vcpkg bundled with VS; keep ours, which has the libraries.
+        if ($name -eq 'VCPKG_ROOT') { continue }
+        Set-Item -Path "Env:$name" -Value $line.Substring($i + 1)
+    }
+    Write-Host "    $vsPath"
+}
+
 Push-Location $RepoRoot
 try {
     Write-Step 'Bridge Flutter <-> Rust'

@@ -76,10 +76,11 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T1.1 · Área: `src/platform`, `Cargo.toml`, `libs/scrap` (backends não Windows), `libs/enigo`, `libs/clipboard` · @dono:
 
 ### Features (trilha B) — cada tarefa remove UI + FFI + Rust + traduções da feature
-- [ ] **T1.5** Remover gravação de tela (`_RecordMenu`, gravador em `libs/scrap/src/common/record.rs` e chamadas).
-  dep: T0.4 · Área: `remote_toolbar.dart` (menu de gravação), módulo de gravação · @dono:
-- [ ] **T1.6** Remover chat e chamada de voz (`_ChatMenu`, `_VoiceCallMenu`, `chat_page.dart`, `audio_input.dart` se só usado por voz, tratamento no servidor).
-  dep: T0.4 · Área: `remote_toolbar.dart` (menus chat/voz), `flutter/lib/common/widgets/chat_page.dart`, `src/server/connection.rs` (handlers) · @dono:
+- [x] **T1.5** Gravação de tela removida (UI, configurações, permissão "gravar sessão", FFI, `libs/scrap/.../record.rs`, dependência `webm`, upload de gravação, opções e atalho `toggle_recording`). Proto mantido.
+  dep: T0.4 · Área: gravação · @dono: claude
+- [x] **T1.6** Chat e chamada de voz removidos (menus, `chat_page.dart`, `chat_model.dart`, painéis no gerenciador de conexão, FFI, tratamento no cliente/servidor, atalhos `toggle_chat`/`toggle_voice_call`, pacotes `dash_chat_2` e `draggable_float_widget`, ícones). Áudio normal da sessão e "Dispositivo de entrada de áudio" mantidos (só saiu o override da chamada de voz). Proto mantido.
+  Testes: Rust 216 ok + falha conhecida (saiu 1 teste do diretório de gravação); Flutter 123 ok, 1 pulado (saíram 4 testes de gravação/chat).
+  dep: T0.4 · Área: chat/voz · @dono: claude
 - [ ] **T1.7** Remover teclado virtual / ações móveis (`_MobileActionMenu` e afins) e menus de teclado avançados que não fazem sentido (manter só o necessário para Windows→Windows).
   dep: T0.4 · Área: `remote_toolbar.dart`, `flutter/lib/common/widgets/keyboard_shortcuts` · @dono:
 - [ ] **T1.8** Remover encaminhamento de portas, terminal, câmera, whiteboard, impressora remota: páginas `port_forward_*`, `terminal_*`, `view_camera_*`, `src/whiteboard`, `libs/remote_printer`, `src/port_forward*.rs`.
@@ -90,7 +91,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T0.4 · Área: esses arquivos · @dono:
 - [x] **T1.11** UI Sciter removida: `src/ui/`, `src/ui.rs`, `src/platform/delegate.rs` (macOS/Sciter), `res/inline-sciter.py`, dependência `sciter-rs`, feature `inline` e os 73 trechos `cfg(not(feature = "flutter"))`. `flutter` virou feature padrão (`cargo build` sem flags já compila a UI certa). ~11,5 mil linhas a menos. Testes iguais à linha de base (217 ok + a falha conhecida); `build.ps1` ok.
   dep: T0.4 · Área: `src/ui*` · @dono: claude
-- [ ] **T1.14** Sobras da remoção do Sciter (código que ficou sem uso): `CHILDREN`/`Children` em `src/ui_interface.rs` (e o envio de `Config(("id", None))` que ninguém mais lê); `ClientClipboardContext` e o parâmetro de `try_start_clipboard` em `src/client.rs`; `#[allow(unused_mut)] let mut exe` em `src/server/portable_service.rs`; build-dep `winres` e `[package.metadata.winres]` no `Cargo.toml`; flag `--flutter` do `build.py` (sempre necessária agora); conferir se `Data::ConfirmDeleteFiles`/`SetNoConfirm` ainda são usados pelo Flutter; comentários que citam Sciter.
+- [ ] **T1.14** Sobras da remoção do Sciter (código que ficou sem uso): `CHILDREN`/`Children` em `src/ui_interface.rs` (e o envio de `Config(("id", None))` que ninguém mais lê); `ClientClipboardContext` e o parâmetro de `try_start_clipboard` em `src/client.rs`; `#[allow(unused_mut)] let mut exe` em `src/server/portable_service.rs`; build-dep `winres` e `[package.metadata.winres]` no `Cargo.toml`; flag `--flutter` do `build.py` (sempre necessária agora); conferir se `Data::ConfirmDeleteFiles`/`SetNoConfirm` ainda são usados pelo Flutter; comentários que citam Sciter. Também: nomes herdados do chat que hoje só servem ao log de transferência/tamanho da janela do gerenciador (`Client.unreadChatMessageCount`, `kConnectionManagerWindowSizeClosedChat`/`OpenChat`, `realChatPageWidth`, comentário em `overlay.dart`); import `bail` sem uso em `src/ui_cm_interface.rs`.
   dep: T1.11 · Área: os arquivos citados · @dono:
 - [ ] **T1.12** Remover o modo privacidade (`src/privacy_mode*`, `RuntimeBroker_intradesk.exe`/`WindowInjection.dll`, opção na barra e nas configurações) e o "bloquear entrada do usuário" (D4).
   dep: D4 · Área: `src/privacy_mode*`, `src/server/connection.rs` (handlers), `remote_toolbar.dart`, `libs/portable` (cópia do RuntimeBroker) · @dono:
@@ -199,6 +200,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T1.3, T7.1, T7.2 · Área: `.github/` · @dono:
 
 ## Limitações conhecidas (não são tarefas)
+
+- Gerenciador de conexão: com um cliente de transferência de arquivos e outro de controle remoto ao mesmo tempo, abrir o painel lateral e trocar para a aba do controle remoto mostra a área vazia (antes mostrava o chat).
 
 - Descoberta funciona só na mesma sub-rede (broadcast não passa por roteador/VLAN). Em redes segmentadas, conectar digitando o IP.
 - Sem instalação/serviço: não é possível acessar a tela de login do Windows nem controlar janelas elevadas sem rodar como administrador (ver D7).

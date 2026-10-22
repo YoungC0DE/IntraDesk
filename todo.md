@@ -51,8 +51,11 @@ Não remova nem implemente esses itens antes da decisão. Registre aqui a respos
   dep: T0.1 · Área: raiz · @dono: claude
 - [x] **T0.3** Ambiente de build: `scripts/setup-dev.ps1` + `scripts/build.ps1`. Build local completo validado em 21/10/2026 (`dist\IntraDesk-dev.exe`, ~25 MB). Ajustes que foram necessários: fechar o Visual Studio aberto antes do Build Tools; `rustup --no-self-update`; recarregar o PATH; compilar dentro do ambiente do VS 2022 (o VS 2026 sem C++ confundia o bindgen) preservando `VCPKG_ROOT`; `CPATH` com os headers do clang na geração do bridge (senão o ffigen gera `typedef bool`). Pendente: conferir o primeiro run do CI após habilitar o Actions no fork.
   dep: T0.2 · Área: `scripts/`, `README.md` · @dono: claude
-- [ ] **T0.4** Rodar a suíte atual (`cargo test --lib`, `flutter test`) e anotar aqui as falhas que já existem, para não serem confundidas com regressões.
-  dep: T0.3 · Área: este arquivo · @dono:
+- [x] **T0.4** Linha de base dos testes (21/10/2026, notebook de dev, features `hwcodec,vram,flutter`, release):
+  - `cargo test --lib`: 217 ok, **1 falha pré-existente**: `platform::windows::installer_handoff::directory::tests::protected_directory_enforces_creator_permissions` (`fs::remove_dir` → "Acesso negado" ao apagar o diretório protegido em `%TEMP%`; depende das permissões da máquina, sem admin). Código do instalador, que sai em T1.10.
+  - `cargo test -p clipboard`: 2 ok.
+  - `flutter test`: 127 ok, 1 pulado.
+  dep: T0.3 · Área: este arquivo · @dono: claude
 - [ ] **T0.5** Teste manual de base: dois PCs Windows na mesma LAN, sem internet, usando o acesso direto por IP do RustDesk original (habilitar "Permitir acesso direto por IP"). Registrar o que funciona e o que falha.
   dep: T0.3 · Área: este arquivo · @dono:
 

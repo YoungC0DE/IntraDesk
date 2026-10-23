@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/main.dart';
-import 'package:flutter_hbb/mobile/pages/settings_page.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
@@ -13,7 +12,6 @@ import '../common.dart';
 import '../common/formatter/id_formatter.dart';
 import '../desktop/pages/server_page.dart' as desktop;
 import '../desktop/widgets/tabbar_widget.dart';
-import '../mobile/pages/server_page.dart';
 import 'model.dart';
 
 const kLoginDialogTag = "LOGIN";
@@ -49,7 +47,6 @@ class ServerModel with ChangeNotifier {
 
   Timer? cmHiddenTimer;
 
-  final _wakelockKey = UniqueKey();
 
   bool get isStart => _isStart;
 
@@ -436,9 +433,6 @@ class ServerModel with ChangeNotifier {
     // ugly is here, because for desktop, below is useless
     await bind.mainStartService();
     updateClientState();
-    if (isAndroid) {
-      androidUpdatekeepScreenOn();
-    }
   }
 
   /// Stop the screen sharing service.
@@ -448,8 +442,6 @@ class ServerModel with ChangeNotifier {
     await parent.target?.invokeMethod("stop_service");
     await bind.mainStopService();
     notifyListeners();
-    // for androidUpdatekeepScreenOn only
-    WakelockManager.disable(_wakelockKey);
   }
 
   fetchID() async {
@@ -517,7 +509,6 @@ class ServerModel with ChangeNotifier {
     }
     if (_clients.length != oldClientLenght) {
       notifyListeners();
-      if (isAndroid) androidUpdatekeepScreenOn();
     }
   }
 
@@ -557,8 +548,6 @@ class ServerModel with ChangeNotifier {
       }
       scrollToBottom();
       notifyListeners();
-      if (isAndroid && !client.authorized) showLoginDialog(client);
-      if (isAndroid) androidUpdatekeepScreenOn();
     } catch (e) {
       debugPrint("Failed to call loginRequest,error:$e");
     }
@@ -581,60 +570,6 @@ class ServerModel with ChangeNotifier {
         cmHiddenTimer = null;
       });
     }
-  }
-
-  void showLoginDialog(Client client) {
-    showClientDialog(
-      client,
-      client.isFileTransfer ? "Transfer file" : "Share screen",
-      'Do you accept?',
-      'android_new_connection_tip',
-      () => sendLoginResponse(client, false),
-      () => sendLoginResponse(client, true),
-    );
-  }
-
-  showClientDialog(Client client, String title, String contentTitle,
-      String content, VoidCallback onCancel, VoidCallback onSubmit) {
-    parent.target?.dialogManager.show((setState, close, context) {
-      cancel() {
-        onCancel();
-        close();
-      }
-
-      submit() {
-        onSubmit();
-        close();
-      }
-
-      return CustomAlertDialog(
-        title:
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(translate(title)),
-          IconButton(onPressed: close, icon: const Icon(Icons.close))
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(translate(contentTitle)),
-            ClientInfo(client),
-            Text(
-              translate(content),
-              style: Theme.of(globalKey.currentContext!).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-        actions: [
-          dialogButton("Dismiss", onPressed: cancel, isOutline: true),
-          if (approveMode != 'password')
-            dialogButton("Accept", onPressed: submit),
-        ],
-        onSubmit: submit,
-        onCancel: cancel,
-      );
-    }, tag: getLoginDialogTag(client.id));
   }
 
   scrollToBottom() {
@@ -661,7 +596,6 @@ class ServerModel with ChangeNotifier {
       final index = _clients.indexOf(client);
       tabController.remove(index);
       _clients.remove(client);
-      if (isAndroid) androidUpdatekeepScreenOn();
     }
   }
 
@@ -685,7 +619,6 @@ class ServerModel with ChangeNotifier {
       if (desktopType == DesktopType.cm && _clients.isEmpty) {
         hideCmWindow();
       }
-      if (isAndroid) androidUpdatekeepScreenOn();
       notifyListeners();
     } catch (e) {
       debugPrint("onClientRemove failed,error:$e");
@@ -701,7 +634,6 @@ class ServerModel with ChangeNotifier {
         : bind.cmCloseConnectionWindow(connId: client.id)));
     _clients.clear();
     tabController.state.value.tabs.clear();
-    if (isAndroid) androidUpdatekeepScreenOn();
   }
 
   void jumpTo(int id) {
@@ -743,25 +675,6 @@ class ServerModel with ChangeNotifier {
       notifyListeners();
     }
     _togglingCMSidePage = false;
-  }
-
-  void androidUpdatekeepScreenOn() async {
-    if (!isAndroid) return;
-    var floatingWindowDisabled =
-        bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) == "Y" ||
-            !await AndroidPermissionManager.check(kSystemAlertWindow);
-    final keepScreenOn = floatingWindowDisabled
-        ? KeepScreenOn.never
-        : optionToKeepScreenOn(
-            bind.mainGetLocalOption(key: kOptionKeepScreenOn));
-    final on = ((keepScreenOn == KeepScreenOn.serviceOn) && _isStart) ||
-        (keepScreenOn == KeepScreenOn.duringControlled &&
-            _clients.map((e) => !e.disconnected).isNotEmpty);
-    if (on) {
-      WakelockManager.enable(_wakelockKey, isServer: true);
-    } else {
-      WakelockManager.disable(_wakelockKey);
-    }
   }
 }
 

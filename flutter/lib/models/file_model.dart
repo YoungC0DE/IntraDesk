@@ -8,8 +8,6 @@ import 'package:flutter_hbb/utils/download_paths.dart';
 import 'package:flutter_hbb/utils/event_loop.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
-import 'package:flutter_hbb/web/dummy.dart'
-    if (dart.library.html) 'package:flutter_hbb/web/web_unique.dart';
 
 import '../consts.dart';
 import 'model.dart';
@@ -290,56 +288,6 @@ class FileModel {
         onCancel: cancel,
       );
     }, useAnimation: false);
-  }
-
-  void onSelectedFiles(dynamic obj) {
-    localController.selectedItems.clear();
-
-    try {
-      int handleIndex = int.parse(obj['handleIndex']);
-      final file = jsonDecode(obj['file']);
-      var entry = Entry.fromJson(file);
-      entry.path = entry.name;
-      final otherSideData = remoteController.directoryData();
-      final toPath = otherSideData.directory.path;
-      final isWindows = otherSideData.options.isWindows;
-      final showHidden = otherSideData.options.showHidden;
-      final jobID = jobController.addTransferJob(entry, false);
-      jobController.registerTransferConflictBatch([jobID],
-          batchId: int.tryParse(obj['batchId']?.toString() ?? ''));
-      webSendLocalFiles(
-        handleIndex: handleIndex,
-        actId: jobID,
-        path: entry.path,
-        to: PathUtil.join(toPath, entry.name, isWindows),
-        fileNum: 0,
-        includeHidden: showHidden,
-        isRemote: false,
-      );
-    } catch (e) {
-      debugPrint("Failed to decode onSelectedFiles: $e");
-    }
-  }
-
-  void sendEmptyDirs(dynamic obj) {
-    late final List<dynamic> emptyDirs;
-    try {
-      emptyDirs = jsonDecode(obj['dirs'] as String);
-    } catch (e) {
-      debugPrint("Failed to decode sendEmptyDirs: $e");
-    }
-    final otherSideData = remoteController.directoryData();
-    final toPath = otherSideData.directory.path;
-    final isPeerWindows = otherSideData.options.isWindows;
-
-    final isLocalWindows = isWindows || isWebOnWindows;
-    for (var dir in emptyDirs) {
-      if (isLocalWindows != isPeerWindows) {
-        dir = PathUtil.convert(dir, isLocalWindows, isPeerWindows);
-      }
-      var peerPath = PathUtil.join(toPath, dir, isPeerWindows);
-      remoteController.createDirWithRemote(peerPath, true);
-    }
   }
 }
 

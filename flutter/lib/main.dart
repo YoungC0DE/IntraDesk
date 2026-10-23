@@ -21,9 +21,6 @@ import 'package:window_manager/window_manager.dart';
 
 import 'common.dart';
 import 'consts.dart';
-import 'mobile/pages/home_page.dart';
-import 'mobile/pages/server_page.dart';
-import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
 
 /// Basic window and launch properties.
@@ -38,10 +35,6 @@ Future<void> main(List<String> args) async {
   debugPrint("launch args: $args");
   kBootArgs = List.from(args);
 
-  if (!isDesktop) {
-    runMobileApp();
-    return;
-  }
   // main window
   if (args.isNotEmpty && args.first == 'multi_window') {
     kWindowId = int.parse(args[1]);
@@ -144,17 +137,6 @@ void runMainApp(bool startService) async {
     // Do not use `windowManager.setResizable()` here.
     setResizable(!bind.isIncomingOnly());
   });
-}
-
-void runMobileApp() async {
-  await initEnv(kAppTypeMain);
-  if (isAndroid) androidChannelInit();
-  if (isAndroid) platformFFI.syncAndroidServiceAppDirConfigPath();
-  draggablePositions.load();
-  await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
-  gFFI.userModel.refreshCurrentUser();
-  runApp(App());
-  await initUniLinks();
 }
 
 void runMultiWindow(
@@ -418,17 +400,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         child: GetMaterialApp(
           navigatorKey: globalKey,
           debugShowCheckedModeBanner: false,
-          title: isWeb
-              ? '${bind.mainGetAppNameSync()} Web Client V2 (Preview)'
-              : bind.mainGetAppNameSync(),
+          title: bind.mainGetAppNameSync(),
           theme: MyTheme.lightTheme,
           darkTheme: MyTheme.darkTheme,
           themeMode: MyTheme.currentThemeMode(),
-          home: isDesktop
-              ? const DesktopTabPage()
-              : isWeb
-                  ? WebHomePage()
-                  : HomePage(),
+          home: const DesktopTabPage(),
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
@@ -486,14 +462,6 @@ _registerEventHandler() {
     });
     platformFFI.registerEventHandler('language', 'language', (_) async {
       reloadAllWindows();
-    });
-  }
-  if (isAndroid) {
-    platformFFI.registerEventHandler(
-        'android_needs_deploy', 'android_needs_deploy', (_) async {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showDeployPromptDialog();
-      });
     });
   }
 }

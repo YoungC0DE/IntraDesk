@@ -78,9 +78,6 @@ const kShortcutEventName = 'shortcut_triggered';
 
 /// Canonical default keyboard-shortcut bindings, mirroring Rust's
 /// `default_bindings()` in `src/keyboard/shortcuts.rs`. Used by:
-///   * the Web bridge (`flutter/lib/web/bridge.dart::mainGetDefaultKeyboardShortcuts`)
-///     — Web has no Rust at runtime, so the seed list is read from this Dart
-///     constant instead of going through FFI.
 ///   * the configuration page when seeding defaults on first enable, after
 ///     [filterDefaultBindingsForPlatform] has trimmed platform-specific
 ///     entries.

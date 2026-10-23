@@ -30,18 +30,11 @@ import 'package:window_size/window_size.dart' as window_size;
 
 import '../consts.dart';
 import 'common/widgets/overlay.dart';
-import 'mobile/pages/file_manager_page.dart';
-import 'mobile/pages/remote_page.dart';
-import 'desktop/pages/remote_page.dart' as desktop_remote;
-import 'desktop/pages/file_manager_page.dart' as desktop_file_manager;
-import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'models/model.dart';
 import 'models/platform_model.dart';
 
-import 'package:flutter_hbb/native/win32.dart'
-    if (dart.library.html) 'package:flutter_hbb/web/win32.dart';
-import 'package:flutter_hbb/native/common.dart'
-    if (dart.library.html) 'package:flutter_hbb/web/common.dart';
+import 'package:flutter_hbb/native/win32.dart';
+import 'package:flutter_hbb/native/common.dart';
 import 'package:flutter_hbb/utils/http_service.dart' as http;
 
 final globalKey = GlobalKey<NavigatorState>();
@@ -2473,78 +2466,23 @@ connect(BuildContext context, String id,
   id = await bind.mainHandleRelayId(id: id);
   forceRelay = id != oldId || forceRelay;
 
-  if (isDesktop) {
-    if (desktopType == DesktopType.main) {
-      await connectMainDesktop(
-        id,
-        isFileTransfer: isFileTransfer,
-        password: password,
-        isSharedPassword: isSharedPassword,
-        forceRelay: forceRelay,
-      );
-    } else {
-      await rustDeskWinManager.call(WindowType.Main, kWindowConnect, {
-        'id': id,
-        'isFileTransfer': isFileTransfer,
-        'password': password,
-        'isSharedPassword': isSharedPassword,
-        'forceRelay': forceRelay,
-        'connToken': connToken,
-      });
-    }
+  if (desktopType == DesktopType.main) {
+    await connectMainDesktop(
+      id,
+      isFileTransfer: isFileTransfer,
+      password: password,
+      isSharedPassword: isSharedPassword,
+      forceRelay: forceRelay,
+    );
   } else {
-    if (isFileTransfer) {
-      if (isWeb) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) =>
-                desktop_file_manager.FileManagerPage(
-                    id: id,
-                    password: password,
-                    isSharedPassword: isSharedPassword),
-          ),
-        );
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) => FileManagerPage(
-                id: id,
-                password: password,
-                isSharedPassword: isSharedPassword,
-                forceRelay: forceRelay),
-          ),
-        );
-      }
-    } else {
-      if (isWeb) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) => desktop_remote.RemotePage(
-              key: ValueKey(id),
-              id: id,
-              toolbarState: ToolbarState(),
-              password: password,
-              isSharedPassword: isSharedPassword,
-            ),
-          ),
-        );
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (BuildContext context) => RemotePage(
-                id: id,
-                password: password,
-                isSharedPassword: isSharedPassword,
-                forceRelay: forceRelay),
-          ),
-        );
-      }
-    }
-    stateGlobal.isInMainPage = false;
+    await rustDeskWinManager.call(WindowType.Main, kWindowConnect, {
+      'id': id,
+      'isFileTransfer': isFileTransfer,
+      'password': password,
+      'isSharedPassword': isSharedPassword,
+      'forceRelay': forceRelay,
+      'connToken': connToken,
+    });
   }
 
   FocusScopeNode currentFocus = FocusScope.of(context);

@@ -24,9 +24,6 @@ appimage/AppDir
 appimage/*.AppImage
 appimage/appimage-build
 appimage/*.xz
-# flutter
-flutter/linux/build/**
-flutter/linux/cmake-build-debug/**
 # flatpak
 flatpak/.flatpak-builder/**
 flatpak/ccache/**

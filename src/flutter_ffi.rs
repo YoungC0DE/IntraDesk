@@ -907,10 +907,6 @@ pub fn main_get_async_status() -> String {
     get_async_job_status()
 }
 
-pub fn main_get_http_status(url: String) -> Option<String> {
-    get_async_http_status(url)
-}
-
 pub fn main_get_option(key: String) -> String {
     get_option(key)
 }
@@ -1048,10 +1044,6 @@ pub fn main_uri_prefix_sync() -> SyncReturn<String> {
     SyncReturn(crate::get_uri_prefix())
 }
 
-pub fn main_get_license() -> String {
-    get_license()
-}
-
 pub fn main_get_version() -> String {
     get_version()
 }
@@ -1099,34 +1091,6 @@ pub fn main_is_using_public_server() -> bool {
 
 pub fn main_discover() {
     discover();
-}
-
-pub fn main_get_api_server() -> String {
-    get_api_server()
-}
-
-pub fn main_deploy_device(token: String, id: String) -> String {
-    #[cfg(target_os = "android")]
-    {
-        let new_id = match id.trim() {
-            "" => None,
-            id => Some(id.to_owned()),
-        };
-        ui_interface::deploy_device(token, new_id).message()
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = (token, id);
-        "Deployment is not supported on this platform.".to_owned()
-    }
-}
-
-pub fn main_resolve_avatar_url(avatar: String) -> SyncReturn<String> {
-    SyncReturn(resolve_avatar_url(avatar))
-}
-
-pub fn main_http_request(url: String, method: String, body: Option<String>, header: String) {
-    http_request(url, method, body, header)
 }
 
 pub fn main_get_local_option(key: String) -> SyncReturn<String> {
@@ -1439,23 +1403,6 @@ pub fn main_load_recent_peers() {
     }
 }
 
-pub fn main_load_recent_peers_for_ab(filter: String) -> String {
-    let id_filters = serde_json::from_str::<Vec<String>>(&filter).unwrap_or_default();
-    let id_filters = if id_filters.is_empty() {
-        None
-    } else {
-        Some(id_filters)
-    };
-    if !config::APP_DIR.read().unwrap().is_empty() {
-        let peers: Vec<HashMap<&str, String>> = PeerConfig::peers(id_filters)
-            .drain(..)
-            .map(|(id, _, p)| peer_to_map(id, p))
-            .collect();
-        return serde_json::ser::to_string(&peers).unwrap_or("".to_owned());
-    }
-    "".to_string()
-}
-
 pub fn main_load_fav_peers() {
     let push_to_flutter = |peers| {
         let data = HashMap::from([("name", "load_fav_peers".to_owned()), ("peers", peers)]);
@@ -1726,42 +1673,6 @@ pub fn main_start_dbus_server() {
     }
 }
 
-pub fn main_save_ab(json: String) {
-    if json.len() > 1024 {
-        std::thread::spawn(|| {
-            config::Ab::store(json);
-        });
-    } else {
-        config::Ab::store(json);
-    }
-}
-
-pub fn main_clear_ab() {
-    config::Ab::remove();
-}
-
-pub fn main_load_ab() -> String {
-    serde_json::to_string(&config::Ab::load()).unwrap_or_default()
-}
-
-pub fn main_save_group(json: String) {
-    if json.len() > 1024 {
-        std::thread::spawn(|| {
-            config::Group::store(json);
-        });
-    } else {
-        config::Group::store(json);
-    }
-}
-
-pub fn main_clear_group() {
-    config::Group::remove();
-}
-
-pub fn main_load_group() -> String {
-    serde_json::to_string(&config::Group::load()).unwrap_or_default()
-}
-
 pub fn session_send_pointer(session_id: SessionID, msg: String) {
     super::flutter::session_send_pointer(session_id, msg);
 }
@@ -1901,43 +1812,6 @@ pub fn session_send_mouse(session_id: SessionID, msg: String) {
 pub fn session_restart_remote_device(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.restart_remote_device();
-    }
-}
-
-pub fn session_get_audit_server_sync(session_id: SessionID, typ: String) -> SyncReturn<String> {
-    let res = if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.get_audit_server(typ)
-    } else {
-        "".to_owned()
-    };
-    SyncReturn(res)
-}
-
-pub fn session_send_note(session_id: SessionID, note: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.send_note(note)
-    }
-}
-
-pub fn session_get_last_audit_note(session_id: SessionID) -> SyncReturn<String> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        SyncReturn(session.last_audit_note.lock().unwrap().clone())
-    } else {
-        SyncReturn("".to_owned())
-    }
-}
-
-pub fn session_set_audit_guid(session_id: SessionID, guid: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        *session.audit_guid.lock().unwrap() = guid;
-    }
-}
-
-pub fn session_get_audit_guid(session_id: SessionID) -> SyncReturn<String> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        SyncReturn(session.audit_guid.lock().unwrap().clone())
-    } else {
-        SyncReturn("".to_owned())
     }
 }
 
@@ -2225,20 +2099,6 @@ fn set_cur_session_id_(session_id: SessionID, _keyboard_mode: &str) {
     crate::keyboard::update_grab_get_key_name(_keyboard_mode);
 }
 
-pub fn main_account_auth(op: String, remember_me: bool) {
-    let id = get_id();
-    let uuid = get_uuid();
-    account_auth(op, id, uuid, remember_me);
-}
-
-pub fn main_account_auth_cancel() {
-    account_auth_cancel()
-}
-
-pub fn main_account_auth_result() -> String {
-    account_auth_result()
-}
-
 pub fn main_on_main_window_close() {
     // may called more than one times
     #[cfg(windows)]
@@ -2314,18 +2174,6 @@ pub fn is_disable_settings() -> SyncReturn<bool> {
     SyncReturn(config::is_disable_settings())
 }
 
-pub fn is_disable_ab() -> SyncReturn<bool> {
-    SyncReturn(config::is_disable_ab())
-}
-
-pub fn is_disable_account() -> SyncReturn<bool> {
-    SyncReturn(config::is_disable_account())
-}
-
-pub fn is_disable_group_panel() -> SyncReturn<bool> {
-    SyncReturn(LocalConfig::get_option("disable-group-panel") == "Y")
-}
-
 pub fn is_preset_password() -> bool {
     // On desktop, service owns the authoritative config; query it via IPC and return only a boolean.
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -2390,14 +2238,6 @@ pub fn main_verify2fa(code: String) -> bool {
 
 pub fn main_has_valid_2fa_sync() -> SyncReturn<bool> {
     SyncReturn(has_valid_2fa())
-}
-
-pub fn main_verify_bot(token: String) -> String {
-    verify_bot(token)
-}
-
-pub fn main_has_valid_bot_sync() -> SyncReturn<bool> {
-    SyncReturn(has_valid_bot())
 }
 
 pub fn main_get_hard_option(key: String) -> SyncReturn<String> {
@@ -2477,16 +2317,6 @@ pub fn main_get_common(key: String) -> String {
 }
 
 pub fn main_get_common_sync(key: String) -> SyncReturn<String> {
-    if let Some(args) = key.strip_prefix("resolve-api-server:") {
-        let response = match serde_json::from_str::<(String, String)>(args) {
-            Ok((api, custom)) => serde_json::json!({"url": crate::get_api_server(api, custom)}),
-            Err(err) => {
-                log::trace!("Invalid API server preview arguments: {err}");
-                serde_json::json!({"error": err.to_string()})
-            }
-        };
-        return SyncReturn(response.to_string());
-    }
     // Metadata verification performs blocking network requests. Keep this key on
     // the asynchronous FFI path to avoid blocking the calling Flutter isolate.
     if key.starts_with("verified-download-url-") {

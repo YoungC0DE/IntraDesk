@@ -37,7 +37,6 @@ mod auth_2fa;
 mod clipboard;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod core_main;
-mod custom_server;
 mod lang;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -47,7 +46,6 @@ mod ui_cm_interface;
 mod ui_interface;
 mod ui_session_interface;
 
-mod hbbs_http;
 
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub mod clipboard_file;

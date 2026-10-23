@@ -46,7 +46,6 @@ const String kAppTypeDesktopRemote = "remote";
 const String kAppTypeDesktopFileTransfer = "file transfer";
 
 const String kWindowMainWindowOnTop = "main_window_on_top";
-const String kWindowRefreshCurrentUser = "refresh_current_user";
 const String kWindowGetScreenList = "get_screen_list";
 // This method is not used, maybe it can be removed.
 const String kWindowDisableGrabKeyboard = "disable_grab_keyboard";
@@ -128,14 +127,12 @@ const String kOptionRemoteMenubarEdge = "remote-menubar-edge";
 const String kOptionRemoteMenubarFraction = "remote-menubar-frac";
 const String kOptionAllowMultiEdgeToolbarDock =
     "allow-multi-edge-toolbar-dock";
-const String kOptionHideAbTagsPanel = "hideAbTagsPanel";
 const String kOptionRemoteMenubarState = "remoteMenubarState";
 const String kOptionPeerSorting = "peer-sorting";
 const String kOptionPeerTabIndex = "peer-tab-index";
 const String kOptionPeerTabOrder = "peer-tab-order";
 const String kOptionPeerTabVisible = "peer-tab-visible";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
-const String kOptionCurrentAbName = "current-ab-name";
 const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
 const String kOptionAllowRemoveWallpaper = "allow-remove-wallpaper";
@@ -153,7 +150,6 @@ const String kOptionEnableTrustedDevices = "enable-trusted-devices";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
 const String kOptionVirtualMouseScale = "virtual-mouse-scale";
 const String kOptionShowVirtualJoystick = "show-virtual-joystick";
-const String kOptionAllowAskForNoteAtEndOfConnection = "allow-ask-for-note";
 const String kOptionAllowMonitorSwitchMainToolbar = "allow-monitor-switch-main-toolbar";
 const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-toolbar";
 
@@ -164,7 +160,6 @@ const String kOptionDisableUdp = "disable-udp";
 const String kOptionEnableFlutterHttpOnRust = "enable-flutter-http-on-rust";
 
 // builtin options
-const String kOptionHideServerSetting = "hide-server-settings";
 const String kOptionHideProxySetting = "hide-proxy-settings";
 const String kOptionHideWebSocketSetting = "hide-websocket-settings";
 const String kOptionHideStopService = "hide-stop-service";

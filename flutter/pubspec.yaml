@@ -137,12 +137,6 @@ flutter:
     - family: PeerSearchbar
       fonts:
         - asset: assets/peer_searchbar.ttf
-    - family: AddressBook
-      fonts:
-        - asset: assets/address_book.ttf
-    - family: DeviceGroup
-      fonts:
-        - asset: assets/device_group.ttf
     - family: More
       fonts:
         - asset: assets/more.ttf

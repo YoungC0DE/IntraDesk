@@ -105,8 +105,6 @@ void runMainApp(bool startService) async {
   if (startService) {
     gFFI.serverModel.startService();
   }
-  await Future.wait([gFFI.abModel.loadCache(), gFFI.groupModel.loadCache()]);
-  gFFI.userModel.refreshCurrentUser();
   runApp(App());
 
   bool? alwaysOnTop;

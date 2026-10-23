@@ -21,7 +21,6 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common/widgets/dialog.dart';
-import '../../common/widgets/login.dart';
 
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
@@ -51,7 +50,6 @@ enum SettingsTabKey {
   safety,
   network,
   display,
-  account,
   about,
 }
 
@@ -69,7 +67,6 @@ class DesktopSettingPage extends StatefulWidget {
         bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) != 'Y')
       SettingsTabKey.network,
     if (!bind.isIncomingOnly()) SettingsTabKey.display,
-    if (!bind.isDisableAccount()) SettingsTabKey.account,
     SettingsTabKey.about,
   ];
 
@@ -193,10 +190,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(_TabInfo(tab, 'Display',
               Icons.desktop_windows_outlined, Icons.desktop_windows));
           break;
-        case SettingsTabKey.account:
-          settingTabs.add(
-              _TabInfo(tab, 'Account', Icons.person_outline, Icons.person));
-          break;
         case SettingsTabKey.about:
           settingTabs
               .add(_TabInfo(tab, 'About', Icons.info_outline, Icons.info));
@@ -221,9 +214,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
         case SettingsTabKey.display:
           children.add(const _Display());
-          break;
-        case SettingsTabKey.account:
-          children.add(const _Account());
           break;
         case SettingsTabKey.about:
           children.add(const _About());
@@ -613,21 +603,6 @@ class _GeneralState extends State<_General> {
       ));
     }
 
-    if (!bind.isDisableAccount()) {
-      children.add(_OptionCheckBox(
-        context,
-        'note-at-conn-end-tip',
-        kOptionAllowAskForNoteAtEndOfConnection,
-        isServer: false,
-        optSetter: (key, value) async {
-          if (value && !gFFI.userModel.isLogin) {
-            final res = await loginDialog();
-            if (res != true) return;
-          }
-          await mainSetLocalBoolOption(key, value);
-        },
-      ));
-    }
     children.add(_OptionCheckBox(
       context,
       'Show monitor switch button on the main toolbar',
@@ -914,7 +889,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     // Simple temp wrapper for PR check
     tmpWrapper() {
       RxBool has2fa = bind.mainHasValid2FaSync().obs;
-      RxBool hasBot = bind.mainHasValidBotSync().obs;
       update() async {
         has2fa.value = bind.mainHasValid2FaSync();
         setState(() {});
@@ -955,47 +929,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       if (!has2fa.value) {
         return tfa;
       }
-      updateBot() async {
-        hasBot.value = bind.mainHasValidBotSync();
-        setState(() {});
-      }
-
-      onChangedBot(bool? checked) async {
-        if (checked == false) {
-          CommonConfirmDialog(
-              gFFI.dialogManager, translate('cancel-bot-confirm-tip'), () {
-            changeBot(callback: updateBot);
-          });
-        } else {
-          changeBot(callback: updateBot);
-        }
-      }
-
-      final bot = GestureDetector(
-        child: Tooltip(
-          waitDuration: Duration(milliseconds: 300),
-          message: translate("enable-bot-tip"),
-          child: InkWell(
-              child: Obx(() => Row(
-                    children: [
-                      Checkbox(
-                              value: hasBot.value,
-                              onChanged: enabled ? onChangedBot : null)
-                          .marginOnly(right: 5),
-                      Expanded(
-                          child: Text(
-                        translate('Telegram bot'),
-                        style: TextStyle(
-                            color: disabledTextColor(context, enabled)),
-                      ))
-                    ],
-                  ))),
-        ),
-        onTap: () {
-          onChangedBot(!hasBot.value);
-        },
-      ).marginOnly(left: _kCheckBoxLeftMargin + 30);
-
       final trust = Row(
         children: [
           Flexible(
@@ -1021,7 +954,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       ).marginOnly(left: 30);
 
       return Column(
-        children: [tfa, bot, trust],
+        children: [tfa, trust],
       );
     }
 
@@ -1619,14 +1552,12 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
   }
 
   Widget network(BuildContext context) {
-    final hideServer =
-        bind.mainGetBuildinOption(key: kOptionHideServerSetting) == 'Y';
     final hideProxy =
         isWeb || bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
     final hideWebSocket = isWeb ||
         bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y';
 
-    if (hideServer && hideProxy && hideWebSocket) {
+    if (hideProxy && hideWebSocket) {
       return Offstage();
     }
 
@@ -1720,7 +1651,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                   title: 'Socks5/Http(s) Proxy',
                   onTap: changeSocks5Proxy,
                 ),
-              if (!hideWebSocket && (!hideServer || !hideProxy)) divider,
+              if (!hideWebSocket && !hideProxy) divider,
               if (!hideWebSocket)
                 switchWidget(
                     Icons.web_asset_outlined,
@@ -1736,7 +1667,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                     } else {
                       return Column(
                         children: [
-                          if (!hideServer || !hideProxy || !hideWebSocket)
+                          if (!hideProxy || !hideWebSocket)
                             divider,
                           switchWidget(
                               Icons.no_encryption_outlined,
@@ -2016,99 +1947,6 @@ class _DisplayState extends State<_Display> {
   }
 }
 
-class _Account extends StatefulWidget {
-  const _Account({Key? key}) : super(key: key);
-
-  @override
-  State<_Account> createState() => _AccountState();
-}
-
-class _AccountState extends State<_Account> {
-  @override
-  Widget build(BuildContext context) {
-    final scrollController = ScrollController();
-    return ListView(
-      controller: scrollController,
-      children: [
-        _Card(title: 'Account', children: [accountAction(), useInfo()]),
-      ],
-    ).marginOnly(bottom: _kListViewBottomMargin);
-  }
-
-  Widget accountAction() {
-    return Obx(() => _Button(
-        gFFI.userModel.userName.value.isEmpty
-            ? 'Login'
-            : '${translate('Logout')} (${gFFI.userModel.accountLabelWithHandle})',
-        () => {
-              gFFI.userModel.userName.value.isEmpty
-                  ? loginDialog()
-                  : logOutConfirmDialog()
-            }));
-  }
-
-  Widget useInfo() {
-    return Obx(() => Offstage(
-          offstage: gFFI.userModel.userName.value.isEmpty,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Builder(builder: (context) {
-              final avatarWidget = _buildUserAvatar();
-              return Row(
-                children: [
-                  if (avatarWidget != null) avatarWidget,
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          gFFI.userModel.displayNameOrUserName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        SelectionArea(
-                          child: Text(
-                            '@${gFFI.userModel.userName.value}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color:
-                                  Theme.of(context).textTheme.bodySmall?.color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
-        )).marginOnly(left: 18, top: 16);
-  }
-
-  Widget? _buildUserAvatar() {
-    // Resolve relative avatar path at display time
-    final avatar =
-        bind.mainResolveAvatarUrl(avatar: gFFI.userModel.avatar.value);
-    return buildAvatarWidget(
-      avatar: avatar,
-      size: 44,
-    );
-  }
-}
-
 class _Checkbox extends StatefulWidget {
   final String label;
   final bool Function() getValue;
@@ -2171,20 +2009,17 @@ class _AboutState extends State<_About> {
   @override
   Widget build(BuildContext context) {
     return futureBuilder(future: () async {
-      final license = await bind.mainGetLicense();
       final version = await bind.mainGetVersion();
       final buildDate = await bind.mainGetBuildDate();
       final fingerprint = await bind.mainGetFingerprint();
       final myId = await bind.mainGetMyId();
       return {
-        'license': license,
         'version': version,
         'buildDate': buildDate,
         'fingerprint': fingerprint,
         'myId': myId
       };
     }(), hasData: (data) {
-      final license = data['license'].toString();
       final version = data['version'].toString();
       final buildDate = data['buildDate'].toString();
       final fingerprint = data['fingerprint'].toString();
@@ -2241,7 +2076,7 @@ class _AboutState extends State<_About> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.\n$license',
+                            'Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.',
                             style: const TextStyle(color: Colors.white),
                           ),
                           Text(

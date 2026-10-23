@@ -278,7 +278,6 @@ impl RendezvousMediator {
                 sleep(1.).await;
             }
         }
-        crate::hbbs_http::sync::start();
         check_zombie();
         let server = new_server();
         if config::option2bool("stop-service", &Config::get_option("stop-service")) {

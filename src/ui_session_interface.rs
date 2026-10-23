@@ -10,8 +10,7 @@ use async_trait::async_trait;
 use base::message_proto::*;
 use bytes::Bytes;
 use hbb_common::{
-    allow_err,
-    config::{Config, LocalConfig, PeerConfig},
+    config::{LocalConfig, PeerConfig},
     get_version_number, log,
     rendezvous_proto::ConnType,
     tokio::{
@@ -69,8 +68,6 @@ pub struct Session<T: InvokeUiSession> {
     // Indicate whether the session is reconnected.
     // Used to auto start file transfer after reconnection.
     pub reconnect_count: Arc<AtomicUsize>,
-    pub last_audit_note: Arc<Mutex<String>>,
-    pub audit_guid: Arc<Mutex<String>>,
     // Every cursor shape as the peer sent it, compressed, by the id the UI knows it by. The
     // peer sends a shape once, and a window asks for it whenever it has to draw it again.
     #[cfg(feature = "flutter")]
@@ -499,27 +496,6 @@ impl<T: InvokeUiSession> Session<T> {
         lc.mark_restarting_remote_device();
         let msg = lc.restart_remote_device();
         self.send(Data::Message(msg));
-    }
-
-    pub fn get_audit_server(&self, typ: String) -> String {
-        if LocalConfig::get_option("access_token").is_empty() {
-            return "".to_owned();
-        }
-        crate::get_audit_server(
-            Config::get_option("api-server"),
-            Config::get_option("custom-rendezvous-server"),
-            typ,
-        )
-    }
-
-    pub fn send_note(&self, note: String) {
-        let url = self.get_audit_server("conn".to_string());
-        let id = self.get_id();
-        let session_id = self.lc.read().unwrap().session_id;
-        *self.last_audit_note.lock().unwrap() = note.clone();
-        std::thread::spawn(move || {
-            send_note(url, id, session_id, note);
-        });
     }
 
     pub fn get_option(&self, k: String) -> String {
@@ -1572,9 +1548,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
                 current.scale,
             );
         }
-        // Clear audit_guid when connection is established successfully
-        *self.audit_guid.lock().unwrap() = String::new();
-        *self.last_audit_note.lock().unwrap() = String::new();
         // Save recent peers, then push event to flutter. So flutter can refresh peer page.
         self.lc.write().unwrap().handle_peer_info(&pi);
         self.set_peer_info(&pi);
@@ -1675,10 +1648,4 @@ pub async fn io_loop<T: InvokeUiSession>(handler: Session<T>, round: u32) {
     let mut remote = Remote::new(handler, receiver, sender);
     remote.io_loop(&key, &token, round).await;
     let _ = remote.sync_jobs_status_to_local().await;
-}
-
-#[tokio::main(flavor = "current_thread")]
-async fn send_note(url: String, id: String, sid: u64, note: String) {
-    let body = serde_json::json!({ "id": id, "session_id": sid, "note": note });
-    allow_err!(crate::post_request(url, body.to_string(), "").await);
 }

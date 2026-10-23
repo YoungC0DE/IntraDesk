@@ -4,8 +4,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../common.dart';
-import '../common/widgets/dialog.dart'
-    show desktopTryShowTabAuditDialogCloseCancelled;
 import '../common/widgets/keyboard_shortcuts/shortcut_utils.dart';
 import '../common/widgets/keyboard_shortcuts/shortcut_actions.dart';
 import '../common/widgets/toolbar.dart' show showVirtualDisplayMenu;
@@ -392,12 +390,6 @@ void registerSessionShortcutActions(
     // including the audit-log confirmation dialog so a shortcut close goes
     // through the same path as a menu close.
     ffi.shortcutModel.register(kShortcutActionCloseTab, () async {
-      if (await desktopTryShowTabAuditDialogCloseCancelled(
-        id: ffi.id,
-        tabController: tabController,
-      )) {
-        return;
-      }
       tabController.closeBy(ffi.id);
     });
   }

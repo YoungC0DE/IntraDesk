@@ -5,7 +5,6 @@ import 'package:dynamic_layouts/dynamic_layouts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
-import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
@@ -39,16 +38,12 @@ class LoadEvent {
   static const String recent = 'load_recent_peers';
   static const String favorite = 'load_fav_peers';
   static const String lan = 'load_lan_peers';
-  static const String addressBook = 'load_address_book_peers';
-  static const String group = 'load_group_peers';
 }
 
 class PeersModelName {
   static const String recent = 'recent peer';
   static const String favorite = 'fav peer';
   static const String lan = 'discovered peer';
-  static const String addressBook = 'address book peer';
-  static const String group = 'group peer';
 }
 
 /// for peer search text, global obs value
@@ -93,7 +88,6 @@ class _PeersViewState extends State<_PeersView>
     LoadEvent.recent: 'empty_recent_tip',
     LoadEvent.favorite: 'empty_favorite_tip',
     LoadEvent.lan: 'empty_lan_tip',
-    LoadEvent.addressBook: 'empty_address_book_tip',
   });
   final space = (isDesktop || isWebDesktop) ? 12.0 : 8.0;
   final _curPeers = <String>{};
@@ -435,12 +429,6 @@ abstract class BasePeersView extends StatelessWidget {
       case PeerTabIndex.lan:
         peers = gFFI.lanPeersModel;
         break;
-      case PeerTabIndex.ab:
-        peers = gFFI.abModel.peersModel;
-        break;
-      case PeerTabIndex.group:
-        peers = gFFI.groupModel.peersModel;
-        break;
     }
     return _PeersView(
         peers: peers,
@@ -508,91 +496,5 @@ class DiscoveredPeersView extends BasePeersView {
     bind.mainLoadLanPeers();
     bind.mainDiscover();
     return widget;
-  }
-}
-
-class AddressBookPeersView extends BasePeersView {
-  AddressBookPeersView(
-      {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
-      : super(
-          key: key,
-          peerTabIndex: PeerTabIndex.ab,
-          peerFilter: (Peer peer) =>
-              _hitTag(gFFI.abModel.selectedTags, peer.tags),
-          peerCardBuilder: (Peer peer) => AddressBookPeerCard(
-            peer: peer,
-            menuPadding: menuPadding,
-          ),
-        );
-
-  static bool _hitTag(List<dynamic> selectedTags, List<dynamic> idents) {
-    if (selectedTags.isEmpty) {
-      return true;
-    }
-    // The result of a no-tag union with normal tags, still allows normal tags to perform union or intersection operations.
-    final selectedNormalTags =
-        selectedTags.where((tag) => tag != kUntagged).toList();
-    if (selectedTags.contains(kUntagged)) {
-      if (idents.isEmpty) return true;
-      if (selectedNormalTags.isEmpty) return false;
-    }
-    if (gFFI.abModel.filterByIntersection.value) {
-      for (final tag in selectedNormalTags) {
-        if (!idents.contains(tag)) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      for (final tag in selectedNormalTags) {
-        if (idents.contains(tag)) {
-          return true;
-        }
-      }
-      return false;
-    }
-  }
-}
-
-class MyGroupPeerView extends BasePeersView {
-  MyGroupPeerView(
-      {Key? key, EdgeInsets? menuPadding, ScrollController? scrollController})
-      : super(
-          key: key,
-          peerTabIndex: PeerTabIndex.group,
-          peerFilter: filter,
-          peerCardBuilder: (Peer peer) => MyGroupPeerCard(
-            peer: peer,
-            menuPadding: menuPadding,
-          ),
-        );
-
-  static bool filter(Peer peer) {
-    final model = gFFI.groupModel;
-    if (model.searchAccessibleItemNameText.isNotEmpty) {
-      final text = model.searchAccessibleItemNameText.value.toLowerCase();
-      final searchPeersOfUser = model.users.any((user) =>
-          user.name == peer.loginName &&
-          (user.name.toLowerCase().contains(text) ||
-              user.displayNameOrName.toLowerCase().contains(text)));
-      final searchPeersOfDeviceGroup =
-          peer.device_group_name.toLowerCase().contains(text) &&
-              model.deviceGroups.any((g) => g.name == peer.device_group_name);
-      if (!searchPeersOfUser && !searchPeersOfDeviceGroup) {
-        return false;
-      }
-    }
-    if (model.selectedAccessibleItemName.isNotEmpty) {
-      if (model.isSelectedDeviceGroup.value) {
-        if (model.selectedAccessibleItemName.value != peer.device_group_name) {
-          return false;
-        }
-      } else {
-        if (model.selectedAccessibleItemName.value != peer.loginName) {
-          return false;
-        }
-      }
-    }
-    return true;
   }
 }

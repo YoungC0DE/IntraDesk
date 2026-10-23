@@ -23,8 +23,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(feature = "flutter")]
-use crate::hbbs_http::account;
 #[cfg(not(any(target_os = "ios")))]
 use crate::ipc;
 
@@ -58,7 +56,6 @@ lazy_static::lazy_static! {
         video_conn_count: 0,
     }));
     static ref ASYNC_JOB_STATUS : Arc<Mutex<String>> = Default::default();
-    static ref ASYNC_HTTP_STATUS : Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
@@ -85,16 +82,6 @@ pub fn get_id() -> String {
     return Config::get_id();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return ipc::get_id();
-}
-
-#[inline]
-pub fn get_license() -> String {
-    #[cfg(windows)]
-    if let Ok(lic) = crate::platform::windows::get_license_from_exe_name() {
-        #[cfg(feature = "flutter")]
-        return format!("Key: {}\nHost: {}\nAPI: {}", lic.key, lic.host, lic.api);
-    }
-    Default::default()
 }
 
 #[inline]
@@ -192,19 +179,6 @@ pub fn get_builtin_option(key: &str) -> String {
 #[inline]
 pub fn set_local_option(key: String, value: String) {
     LocalConfig::set_option(key.clone(), value);
-}
-
-/// Resolve relative avatar path (e.g. "/avatar/xxx") to absolute URL
-/// by prepending the API server address.
-pub fn resolve_avatar_url(avatar: String) -> String {
-    let avatar = avatar.trim().to_owned();
-    if avatar.starts_with('/') {
-        let api_server = get_api_server();
-        if !api_server.is_empty() {
-            return format!("{}{}", api_server.trim_end_matches('/'), avatar);
-        }
-    }
-    avatar
 }
 
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
@@ -733,34 +707,6 @@ pub fn change_id(id: String) {
 }
 
 #[inline]
-pub fn http_request(url: String, method: String, body: Option<String>, header: String) {
-    // Respond to concurrent requests for resources
-    let current_request = ASYNC_HTTP_STATUS.clone();
-    current_request
-        .lock()
-        .unwrap()
-        .insert(url.clone(), " ".to_owned());
-    std::thread::spawn(move || {
-        let res = match crate::http_request_sync(url.clone(), method, body, header) {
-            Err(err) => {
-                log::error!("{}", err);
-                err.to_string()
-            }
-            Ok(text) => text,
-        };
-        current_request.lock().unwrap().insert(url, res);
-    });
-}
-
-#[inline]
-pub fn get_async_http_status(url: String) -> Option<String> {
-    match ASYNC_HTTP_STATUS.lock().unwrap().get(&url) {
-        None => None,
-        Some(_str) => Some(_str.to_string()),
-    }
-}
-
-#[inline]
 pub fn get_async_job_status() -> String {
     ASYNC_JOB_STATUS.lock().unwrap().clone()
 }
@@ -776,110 +722,6 @@ pub fn get_langs() -> String {
         .collect();
     x.sort_by(|a, b| a.0.cmp(b.0));
     json!(x).to_string()
-}
-
-#[inline]
-pub fn get_api_server() -> String {
-    crate::get_api_server(
-        get_option("api-server"),
-        get_option("custom-rendezvous-server"),
-    )
-}
-
-pub enum DeployResult {
-    Ok,
-    NotEnabled,
-    InvalidInput,
-    IdTaken(String),
-    Error(String),
-}
-
-impl DeployResult {
-    pub fn message(&self) -> String {
-        match self {
-            Self::Ok => "".to_owned(),
-            Self::NotEnabled => "The server does not require explicit deployment.".to_owned(),
-            Self::InvalidInput => "Invalid input.".to_owned(),
-            Self::IdTaken(id) => {
-                format!(
-                    "Id `{}` is already used by another machine on the server.",
-                    id
-                )
-            }
-            Self::Error(err) => err.clone(),
-        }
-    }
-}
-
-pub fn deploy_device(token: String, new_id: Option<String>) -> DeployResult {
-    if Config::no_register_device() {
-        return DeployResult::Error("Cannot deploy an unregistrable device!".to_owned());
-    }
-    let token = token.trim();
-    if token.is_empty() {
-        return DeployResult::Error("token is required!".to_owned());
-    }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let local_id = Config::get_id();
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let local_id = ipc::get_id();
-    let id_to_deploy = new_id.clone().unwrap_or_else(|| local_id.clone());
-    let uuid = crate::encode64(hbb_common::get_uuid());
-    let pk = crate::encode64(Config::get_key_pair().1);
-    let body = serde_json::json!({
-        "id": id_to_deploy,
-        "uuid": uuid,
-        "pk": pk,
-    });
-    let header = "Authorization: Bearer ".to_owned() + token;
-    let url = get_api_server() + "/api/devices/deploy";
-    let text = match crate::post_request_sync(url, body.to_string(), &header) {
-        Ok(text) => text,
-        Err(err) => return DeployResult::Error(format!("Request failed: {}", err)),
-    };
-    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
-    match parsed["result"].as_str().unwrap_or("") {
-        "OK" => {
-            if let Some(new_id) = new_id {
-                if new_id != local_id {
-                    #[cfg(any(target_os = "android", target_os = "ios"))]
-                    {
-                        Config::set_key_confirmed(false);
-                        Config::set_id(&new_id);
-                    }
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                    if let Err(err) = ipc::set_config("id", new_id) {
-                        return DeployResult::Error(format!(
-                            "Failed to persist deployed id locally: {}",
-                            err
-                        ));
-                    }
-                }
-            }
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            if let Err(err) = ipc::notify_deployed() {
-                log::warn!("Failed to notify deployed state: {}", err);
-            }
-            #[cfg(target_os = "android")]
-            {
-                crate::rendezvous_mediator::NEEDS_DEPLOY
-                    .store(false, std::sync::atomic::Ordering::SeqCst);
-                crate::rendezvous_mediator::reset_needs_deploy_notification();
-                crate::rendezvous_mediator::RendezvousMediator::restart();
-            }
-            DeployResult::Ok
-        }
-        "NOT_ENABLED" => DeployResult::NotEnabled,
-        "INVALID_INPUT" => DeployResult::InvalidInput,
-        "ID_TAKEN" => DeployResult::IdTaken(id_to_deploy),
-        _ => {
-            if text.is_empty() {
-                DeployResult::Error("Unknown response.".to_owned())
-            } else {
-                DeployResult::Error(text)
-            }
-        }
-    }
 }
 
 #[inline]
@@ -948,21 +790,6 @@ fn check_connect_status(reconnect: bool) -> mpsc::UnboundedSender<ipc::Data> {
     let (tx, rx) = mpsc::unbounded_channel::<ipc::Data>();
     std::thread::spawn(move || check_connect_status_(reconnect, rx));
     tx
-}
-
-#[cfg(feature = "flutter")]
-pub fn account_auth(op: String, id: String, uuid: String, remember_me: bool) {
-    account::OidcSession::account_auth(get_api_server(), op, id, uuid, remember_me);
-}
-
-#[cfg(feature = "flutter")]
-pub fn account_auth_cancel() {
-    account::OidcSession::auth_cancel();
-}
-
-#[cfg(feature = "flutter")]
-pub fn account_auth_result() -> String {
-    serde_json::to_string(&account::OidcSession::get_result()).unwrap_or_default()
 }
 
 #[cfg(feature = "flutter")]
@@ -1293,20 +1120,6 @@ pub fn verify2fa(code: String) -> bool {
         refresh_options();
     }
     res
-}
-
-pub fn has_valid_bot() -> bool {
-    crate::auth_2fa::TelegramBot::get().map_or(false, |bot| bot.is_some())
-}
-
-pub fn verify_bot(token: String) -> String {
-    match crate::auth_2fa::get_chatid_telegram(&token) {
-        Err(err) => err.to_string(),
-        Ok(None) => {
-            "To activate the bot, simply send a message beginning with a forward slash (\"/\") like \"/hello\" to its chat.".to_owned()
-        }
-        _ => "".to_owned(),
-    }
 }
 
 pub fn check_hwcodec() {

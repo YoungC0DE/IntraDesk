@@ -35,7 +35,6 @@ import 'models/platform_model.dart';
 
 import 'package:flutter_hbb/native/win32.dart';
 import 'package:flutter_hbb/native/common.dart';
-import 'package:flutter_hbb/utils/http_service.dart' as http;
 
 final globalKey = GlobalKey<NavigatorState>();
 final navigationBarKey = GlobalKey();
@@ -104,9 +103,7 @@ bool isDoubleEqual(double a, double b) {
 class IconFont {
   static const _family1 = 'Tabbar';
   static const _family2 = 'PeerSearchbar';
-  static const _family3 = 'AddressBook';
-  static const _family4 = 'DeviceGroup';
-  static const _family5 = 'More';
+  static const _family3 = 'More';
 
   IconFont._();
 
@@ -118,12 +115,7 @@ class IconFont {
   static const IconData menu = IconData(0xe628, fontFamily: _family1);
   static const IconData search = IconData(0xe6a4, fontFamily: _family2);
   static const IconData roundClose = IconData(0xe6ed, fontFamily: _family2);
-  static const IconData addressBook = IconData(0xe602, fontFamily: _family3);
-  static const IconData deviceGroupOutline =
-      IconData(0xe623, fontFamily: _family4);
-  static const IconData deviceGroupFill =
-      IconData(0xe748, fontFamily: _family4);
-  static const IconData more = IconData(0xe609, fontFamily: _family5);
+  static const IconData more = IconData(0xe609, fontFamily: _family3);
 }
 
 class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
@@ -1667,10 +1659,6 @@ Future<bool> matchPeer(
   if (peer.alias.toLowerCase().contains(searchText)) {
     return true;
   }
-  if (peerTabShowNote(peerTabIndex) &&
-      peer.note.toLowerCase().contains(searchText)) {
-    return true;
-  }
   return false;
 }
 
@@ -2316,28 +2304,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     // For compatibility
     command = '--connect';
     id = uri.path.substring("/new/".length);
-  } else if (uri.authority == "config") {
-    if (isAndroid || isIOS) {
-      final allowDeepLinkServerSettings =
-          bind.mainGetBuildinOption(key: kOptionAllowDeepLinkServerSettings) ==
-              'Y';
-      if (!allowDeepLinkServerSettings) {
-        debugPrint(
-            "Ignore rustdesk://config because $kOptionAllowDeepLinkServerSettings is not enabled.");
-        // Keep the user-facing error generic; detailed rejection reason is in debug logs.
-        // Delay toast to avoid missing overlay during cold-start deeplink handling.
-        Timer(Duration(seconds: 1), () {
-          showToast(translate('Failed'));
-        });
-        return null;
-      }
-      final config = uri.path.substring("/".length);
-      // add a timer to make showToast work
-      Timer(Duration(seconds: 1), () {
-        importConfig(null, null, config);
-      });
-    }
-    return null;
   } else if (uri.authority == "password") {
     if (isAndroid || isIOS) {
       final allowDeepLinkPassword =
@@ -2489,12 +2455,6 @@ connect(BuildContext context, String id,
   if (!currentFocus.hasPrimaryFocus) {
     currentFocus.unfocus();
   }
-}
-
-Map<String, String> getHttpHeaders() {
-  return {
-    'Authorization': 'Bearer ${bind.mainGetLocalOption(key: 'access_token')}'
-  };
 }
 
 // Simple wrapper of built-in types for reference use.
@@ -2682,61 +2642,6 @@ bool get kUseCompatibleUiMode =>
     const [WindowsTarget.w7].contains(windowsBuildNumber.windowsVersion);
 
 bool get isWin10 => windowsBuildNumber.windowsVersion == WindowsTarget.w10;
-
-class ServerConfig {
-  late String idServer;
-  late String relayServer;
-  late String apiServer;
-  late String key;
-
-  ServerConfig(
-      {String? idServer, String? relayServer, String? apiServer, String? key}) {
-    this.idServer = idServer?.trim() ?? '';
-    this.relayServer = relayServer?.trim() ?? '';
-    this.apiServer = apiServer?.trim() ?? '';
-    this.key = key?.trim() ?? '';
-  }
-
-  /// decode from shared string (from user shared or rustdesk-server generated)
-  /// also see [encode]
-  /// throw when decoding failure
-  ServerConfig.decode(String msg) {
-    var json = {};
-    try {
-      // back compatible
-      json = jsonDecode(msg);
-    } catch (err) {
-      final input = msg.split('').reversed.join('');
-      final bytes = base64Decode(base64.normalize(input));
-      json = jsonDecode(utf8.decode(bytes, allowMalformed: true));
-    }
-    idServer = json['host'] ?? '';
-    relayServer = json['relay'] ?? '';
-    apiServer = json['api'] ?? '';
-    key = json['key'] ?? '';
-  }
-
-  /// encode to shared string
-  /// also see [ServerConfig.decode]
-  String encode() {
-    Map<String, String> config = {};
-    config['host'] = idServer.trim();
-    config['relay'] = relayServer.trim();
-    config['api'] = apiServer.trim();
-    config['key'] = key.trim();
-    return base64UrlEncode(Uint8List.fromList(jsonEncode(config).codeUnits))
-        .split('')
-        .reversed
-        .join();
-  }
-
-  /// from local options
-  ServerConfig.fromOptions(Map<String, dynamic> options)
-      : idServer = options['custom-rendezvous-server'] ?? "",
-        relayServer = options['relay-server'] ?? "",
-        apiServer = options['api-server'] ?? "",
-        key = options['key'] ?? "";
-}
 
 Widget dialogButton(String text,
     {required VoidCallback? onPressed,
@@ -3297,100 +3202,6 @@ class _CountDownButtonState extends State<_CountDownButton> {
   }
 }
 
-importConfig(List<TextEditingController>? controllers, List<RxString>? errMsgs,
-    String? text) {
-  text = text?.trim();
-  if (text != null && text.isNotEmpty) {
-    try {
-      final sc = ServerConfig.decode(text);
-      if (isWeb || isIOS) {
-        sc.relayServer = '';
-      }
-      if (sc.idServer.isNotEmpty) {
-        Future<bool> success = setServerConfig(controllers, errMsgs, sc);
-        success.then((value) {
-          if (value) {
-            showToast(translate('Import server configuration successfully'));
-          } else {
-            showToast(translate('Invalid server configuration'));
-          }
-        });
-      } else {
-        showToast(translate('Invalid server configuration'));
-      }
-      return sc;
-    } catch (e) {
-      showToast(translate('Invalid server configuration'));
-    }
-  } else {
-    showToast(translate('Clipboard is empty'));
-  }
-}
-
-Future<bool> setServerConfig(
-  List<TextEditingController>? controllers,
-  List<RxString>? errMsgs,
-  ServerConfig config,
-) async {
-  String removeEndSlash(String input) {
-    if (input.endsWith('/')) {
-      return input.substring(0, input.length - 1);
-    }
-    return input;
-  }
-
-  config.idServer = removeEndSlash(config.idServer.trim());
-  config.relayServer = removeEndSlash(config.relayServer.trim());
-  config.apiServer = removeEndSlash(config.apiServer.trim());
-  config.key = config.key.trim();
-  if (controllers != null) {
-    controllers[0].text = config.idServer;
-    controllers[1].text = config.relayServer;
-    controllers[2].text = config.apiServer;
-    controllers[3].text = config.key;
-  }
-  // id
-  if (config.idServer.isNotEmpty && errMsgs != null) {
-    errMsgs[0].value = translate(await bind.mainTestIfValidServer(
-        server: config.idServer, testWithProxy: true));
-    if (errMsgs[0].isNotEmpty) {
-      return false;
-    }
-  }
-  // relay
-  if (config.relayServer.isNotEmpty && errMsgs != null) {
-    errMsgs[1].value = translate(await bind.mainTestIfValidServer(
-        server: config.relayServer, testWithProxy: true));
-    if (errMsgs[1].isNotEmpty) {
-      return false;
-    }
-  }
-  // api
-  if (config.apiServer.isNotEmpty && errMsgs != null) {
-    if (!config.apiServer.startsWith('http://') &&
-        !config.apiServer.startsWith('https://')) {
-      errMsgs[2].value =
-          '${translate("API Server")}: ${translate("invalid_http")}';
-      return false;
-    }
-  }
-  final oldApiServer = await bind.mainGetApiServer();
-
-  // should set one by one
-  await bind.mainSetOption(
-      key: 'custom-rendezvous-server', value: config.idServer);
-  await bind.mainSetOption(key: 'relay-server', value: config.relayServer);
-  await bind.mainSetOption(key: 'api-server', value: config.apiServer);
-  await bind.mainSetOption(key: 'key', value: config.key);
-  final newApiServer = await bind.mainGetApiServer();
-  if (oldApiServer.isNotEmpty &&
-      oldApiServer != newApiServer &&
-      gFFI.userModel.isLogin) {
-    gFFI.userModel.logOut(apiServer: oldApiServer);
-  }
-  return true;
-}
-
 ColorFilter? svgColor(Color? color) {
   if (color == null) {
     return null;
@@ -3776,24 +3587,6 @@ disableWindowMovable(int? windowId) {
   }
 }
 
-Widget netWorkErrorWidget() {
-  return Center(
-      child: Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      if (!gFFI.userModel.networkErrorFromServer.value)
-        Text(translate("network_error_tip")),
-      ElevatedButton(
-              onPressed: gFFI.userModel.refreshCurrentUser,
-              child: Text(translate("Retry")))
-          .marginSymmetric(vertical: 16),
-      SelectableText(gFFI.userModel.networkError.value,
-          style: TextStyle(fontSize: 11, color: Colors.red)),
-    ],
-  ));
-}
-
 List<ResizeEdge>? get windowManagerEnableResizeEdges => isWindows
     ? [
         ResizeEdge.topLeft,
@@ -3925,21 +3718,6 @@ String getConnectionText(bool secure, bool direct, String streamType) {
   } else {
     return '$connectionText ($streamType)';
   }
-}
-
-String decode_http_response(http.Response resp) {
-  try {
-    // https://github.com/rustdesk/rustdesk-server-pro/discussions/758
-    return utf8.decode(resp.bodyBytes, allowMalformed: true);
-  } catch (e) {
-    debugPrint('Failed to decode response as UTF-8: $e');
-    // Fallback to bodyString which handles encoding automatically
-    return resp.body;
-  }
-}
-
-bool peerTabShowNote(PeerTabIndex peerTabIndex) {
-  return peerTabIndex == PeerTabIndex.ab || peerTabIndex == PeerTabIndex.group;
 }
 
 // TODO: We should support individual bits combinations in the future.

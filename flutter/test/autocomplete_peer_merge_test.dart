@@ -30,21 +30,21 @@ Peer _peer({
 }
 
 void main() {
-  test('merged autocomplete peers keep address book metadata and online state',
+  test('merged autocomplete peers keep discovered metadata and online state',
       () {
     final peers = mergeAutocompletePeers(
-      addressBookPeers: [
-        _peer(id: '123456789', alias: 'Office PC', username: 'ab-user'),
-      ],
       lanPeers: [
-        _peer(id: '123456789', username: 'lan-user', online: true),
+        _peer(id: '123456789', alias: 'Office PC', username: 'lan-user'),
+      ],
+      recentPeers: [
+        _peer(id: '123456789', username: 'recent-user', online: true),
       ],
     );
 
     expect(peers, hasLength(1));
     expect(peers.single.id, '123456789');
     expect(peers.single.alias, 'Office PC');
-    expect(peers.single.username, 'ab-user');
+    expect(peers.single.username, 'lan-user');
     expect(peers.single.online, isTrue);
   });
 

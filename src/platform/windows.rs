@@ -1,15 +1,10 @@
 use super::{CursorData, ResultType};
-use crate::{
-    common::PORTABLE_APPNAME_RUNTIME_ENV_KEY,
-    custom_server::*,
-    ipc,
-};
+use crate::ipc;
 use base::message_proto::{DisplayInfo, Resolution, WindowsSession};
 use hbb_common::{
     allow_err,
     anyhow::anyhow,
     bail,
-    config,
     libc::{c_int, wchar_t},
     log, sleep,
     timeout, tokio,
@@ -1391,15 +1386,6 @@ fn get_reg_of(subkey: &str, name: &str) -> String {
     "".to_owned()
 }
 
-pub fn get_license_from_exe_name() -> ResultType<CustomServer> {
-    let mut exe = std::env::current_exe()?.to_str().unwrap_or("").to_owned();
-    // if defined portable appname entry, replace original executable name with it.
-    if let Ok(portable_exe) = std::env::var(PORTABLE_APPNAME_RUNTIME_ENV_KEY) {
-        exe = portable_exe;
-    }
-    get_custom_server_from_string(&exe)
-}
-
 #[inline]
 pub fn is_win_server() -> bool {
     unsafe { is_windows_server() > 0 }
@@ -1411,10 +1397,6 @@ pub fn is_win_10_or_greater() -> bool {
 }
 
 pub fn bootstrap() -> bool {
-    if let Ok(lic) = get_license_from_exe_name() {
-        *config::EXE_RENDEZVOUS_SERVER.write().unwrap() = lic.host.clone();
-    }
-
     #[cfg(debug_assertions)]
     {
         true

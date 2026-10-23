@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
-import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/desktop/pages/file_manager_page.dart';
@@ -42,12 +41,6 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
         selectedIcon: selectedIcon,
         unselectedIcon: unselectedIcon,
         onTabCloseButton: () async {
-          if (await desktopTryShowTabAuditDialogCloseCancelled(
-            id: params['id'],
-            tabController: tabController,
-          )) {
-            return;
-          }
           tabController.closeBy(params['id']);
         },
         page: FileManagerPage(
@@ -79,12 +72,6 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
             selectedIcon: selectedIcon,
             unselectedIcon: unselectedIcon,
             onTabCloseButton: () async {
-              if (await desktopTryShowTabAuditDialogCloseCancelled(
-                id: id,
-                tabController: tabController,
-              )) {
-                return;
-              }
               tabController.closeBy(id);
             },
             page: FileManagerPage(
@@ -150,12 +137,6 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
   Future<bool> handleWindowCloseButton() async {
     final connLength = tabController.state.value.tabs.length;
     if (connLength == 1) {
-      if (await desktopTryShowTabAuditDialogCloseCancelled(
-        id: tabController.state.value.tabs[0].key,
-        tabController: tabController,
-      )) {
-        return false;
-      }
     }
     if (connLength <= 1) {
       tabController.clear();

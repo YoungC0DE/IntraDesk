@@ -4,7 +4,6 @@ use serde_json::{Map, Value};
 
 #[cfg(feature = "flutter")]
 pub mod account;
-pub mod downloader;
 mod http_client;
 pub mod sync;
 pub use http_client::{

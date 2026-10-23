@@ -1634,10 +1634,6 @@ pub fn main_get_last_remote_id() -> String {
     LocalConfig::get_remote_id()
 }
 
-pub fn main_get_software_update_url() {
-    crate::common::check_software_update();
-}
-
 pub fn main_get_home_dir() -> String {
     fs::get_home_as_string()
 }
@@ -2201,10 +2197,6 @@ pub fn main_get_default_keyboard_shortcuts() -> SyncReturn<String> {
     SyncReturn(json)
 }
 
-pub fn main_is_installed_lower_version() -> SyncReturn<bool> {
-    SyncReturn(is_installed_lower_version())
-}
-
 pub fn main_is_installed_daemon(prompt: bool) -> SyncReturn<bool> {
     SyncReturn(is_installed_daemon(prompt))
 }
@@ -2221,28 +2213,6 @@ pub fn main_is_can_input_monitoring(prompt: bool) -> SyncReturn<bool> {
     SyncReturn(is_can_input_monitoring(prompt))
 }
 
-pub fn main_is_share_rdp() -> SyncReturn<bool> {
-    SyncReturn(is_share_rdp())
-}
-
-pub fn main_set_share_rdp(enable: bool) {
-    set_share_rdp(enable)
-}
-
-pub fn main_goto_install() -> SyncReturn<bool> {
-    goto_install();
-    SyncReturn(true)
-}
-
-pub fn main_get_new_version() -> SyncReturn<String> {
-    SyncReturn(get_new_version())
-}
-
-pub fn main_update_me() -> SyncReturn<bool> {
-    update_me("".to_owned());
-    SyncReturn(true)
-}
-
 pub fn set_cur_session_id(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         set_cur_session_id_(session_id, &session.get_keyboard_mode())
@@ -2253,26 +2223,6 @@ fn set_cur_session_id_(session_id: SessionID, _keyboard_mode: &str) {
     super::flutter::set_cur_session_id(session_id);
     #[cfg(windows)]
     crate::keyboard::update_grab_get_key_name(_keyboard_mode);
-}
-
-pub fn install_show_run_without_install() -> SyncReturn<bool> {
-    SyncReturn(show_run_without_install())
-}
-
-pub fn install_run_without_install() {
-    run_without_install();
-}
-
-pub fn install_install_me(options: String, path: String) {
-    install_me(options, path, false, false);
-}
-
-pub fn install_install_path() -> SyncReturn<String> {
-    SyncReturn(install_path())
-}
-
-pub fn install_install_options() -> SyncReturn<String> {
-    SyncReturn(install_options())
 }
 
 pub fn main_account_auth(op: String, remember_me: bool) {
@@ -2374,11 +2324,6 @@ pub fn is_disable_account() -> SyncReturn<bool> {
 
 pub fn is_disable_group_panel() -> SyncReturn<bool> {
     SyncReturn(LocalConfig::get_option("disable-group-panel") == "Y")
-}
-
-// windows only
-pub fn is_disable_installation() -> SyncReturn<bool> {
-    SyncReturn(config::is_disable_installation())
 }
 
 pub fn is_preset_password() -> bool {
@@ -2527,29 +2472,7 @@ pub fn main_get_common(key: String) -> String {
     } else if key == "local-permanent-password-set" {
         return ui_interface::is_local_permanent_password_set().to_string();
     } else {
-        if key.starts_with("download-data-") {
-            let id = key.replace("download-data-", "");
-            match crate::hbbs_http::downloader::get_download_data(&id) {
-                Ok(data) => serde_json::to_string(&data).unwrap_or_default(),
-                Err(e) => {
-                    format!("error:{}", e)
-                }
-            }
-        } else if let Some(release_page_url) = key.strip_prefix("verified-download-url-") {
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
-            {
-                return match verified_update_artifact_for_release_page_url(release_page_url) {
-                    Ok(artifact) => artifact.url,
-                    Err(e) => format!("error:{}", e),
-                };
-            }
-            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-            {
-                "error:unsupported".to_owned()
-            }
-        } else {
-            "".to_owned()
-        }
+        "".to_owned()
     }
 }
 
@@ -2572,129 +2495,7 @@ pub fn main_get_common_sync(key: String) -> SyncReturn<String> {
     SyncReturn(main_get_common(key))
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-fn push_update_me_error(error: String) {
-    let data = HashMap::from([("name", "update-me".to_owned()), ("error", error)]);
-    let _res = flutter::push_global_event(
-        flutter::APP_TYPE_MAIN,
-        serde_json::ser::to_string(&data).unwrap_or("".to_owned()),
-    );
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-fn verified_update_artifact_for_release_page_url(
-    release_page_url: &str,
-) -> ResultType<crate::update_metadata::VerifiedUpdateArtifact> {
-    #[cfg(target_os = "windows")]
-    let update_msi = crate::platform::windows::is_msi_installed()? && !crate::is_custom_client();
-    #[cfg(target_os = "macos")]
-    let update_msi = false;
-    let query = crate::updater::current_update_artifact_query(update_msi);
-    crate::updater::verified_update_artifact_for_release_page_url(release_page_url, query)
-}
-
 pub fn main_set_common(_key: String, _value: String) {
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    {
-        use crate::updater::get_update_download_file_from_url;
-        if _key == "download-new-version" {
-            let download_url = _value.clone();
-            let event_key = "download-new-version".to_owned();
-            let data =
-                match crate::updater::verified_update_artifact_for_download_url(&download_url) {
-                    Ok(artifact) => {
-                        if let Some(download_file) =
-                            get_update_download_file_from_url(&artifact.url)
-                        {
-                            let options = crate::hbbs_http::downloader::DownloadOptions {
-                                expected_size: artifact.size,
-                                artifact_sha256: artifact.sha256,
-                            };
-                            match crate::hbbs_http::downloader::download_file(
-                                artifact.url,
-                                Some(download_file),
-                                options,
-                            ) {
-                                Ok(id) => HashMap::from([("name", event_key), ("id", id)]),
-                                Err(e) => {
-                                    HashMap::from([("name", event_key), ("error", e.to_string())])
-                                }
-                            }
-                        } else {
-                            HashMap::from([
-                                ("name", event_key),
-                                ("error", "Invalid download url".to_owned()),
-                            ])
-                        }
-                    }
-                    Err(e) => HashMap::from([
-                        ("name", event_key),
-                        ("error", format!("Failed to verify update metadata, {}", e)),
-                    ]),
-                };
-            let _res = flutter::push_global_event(
-                flutter::APP_TYPE_MAIN,
-                serde_json::ser::to_string(&data).unwrap_or("".to_owned()),
-            );
-        } else if _key == "update-me" {
-            let artifact = match crate::updater::verified_update_artifact_for_download_url(&_value)
-            {
-                Ok(artifact) => artifact,
-                Err(e) => {
-                    let error = format!("Failed to verify update metadata, {}", e);
-                    log::error!("{}", error);
-                    push_update_me_error(error);
-                    return;
-                }
-            };
-            let Some(new_version_file) = get_update_download_file_from_url(&artifact.url) else {
-                let error = "Failed to resolve downloaded update file path".to_owned();
-                log::error!("{}", error);
-                push_update_me_error(error);
-                return;
-            };
-            let Some(new_version_file_str) = new_version_file.to_str() else {
-                let error = "Invalid UTF-8 path for downloaded update file".to_owned();
-                log::error!("{}", error);
-                push_update_me_error(error);
-                return;
-            };
-            log::debug!(
-                "New version file is downloaded, update begin, {:?}",
-                new_version_file_str
-            );
-            #[cfg(target_os = "windows")]
-            let update_res = crate::platform::update_to_verified(
-                new_version_file_str,
-                &artifact.sha256,
-                artifact.size,
-            );
-            #[cfg(target_os = "macos")]
-            let update_res = crate::platform::macos::update_to_verified_dmg(
-                new_version_file_str,
-                &artifact.sha256,
-                Some(artifact.size),
-            );
-            if update_res.is_err() {
-                crate::updater::remove_update_file(&new_version_file);
-            }
-            match update_res {
-                Ok(_) => log::info!("Update process is launched successfully!"),
-                Err(e) => {
-                    let error = format!("Failed to update to new version, {}", e);
-                    log::error!("{}", error);
-                    push_update_me_error(error);
-                }
-            }
-        }
-    }
-
-    if _key == "remove-downloader" {
-        crate::hbbs_http::downloader::remove(&_value);
-    } else if _key == "cancel-downloader" {
-        crate::hbbs_http::downloader::cancel(&_value);
-    }
-
     #[cfg(target_os = "linux")]
     if _key == "clear-gnome-shortcuts-inhibitor-permission" {
         std::thread::spawn(move || {

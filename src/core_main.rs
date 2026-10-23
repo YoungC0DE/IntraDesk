@@ -1,5 +1,3 @@
-#[cfg(target_os = "windows")]
-use crate::client::translate;
 #[cfg(not(debug_assertions))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::platform::breakdown_callback;
@@ -8,8 +6,6 @@ use base::config::keys;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use base::platform::register_breakdown_handler;
 use hbb_common::{config, log};
-#[cfg(windows)]
-use tauri_winrt_notification::{Duration, Sound, Toast};
 
 #[macro_export]
 macro_rules! my_println{
@@ -26,14 +22,6 @@ macro_rules! my_println{
 pub enum CoreMainAction {
     StartUi(Vec<String>),
     ExitFailure(hbb_common::anyhow::Error),
-}
-
-#[cfg(target_os = "macos")]
-fn finish_macos_update(result: hbb_common::ResultType<()>) -> Option<CoreMainAction> {
-    match result {
-        Ok(()) => None,
-        Err(err) => Some(CoreMainAction::ExitFailure(err)),
-    }
 }
 
 /// shared by flutter and sciter main function
@@ -53,7 +41,7 @@ pub fn core_main() -> Option<CoreMainAction> {
         return None;
     }
     let mut args = Vec::new();
-    let mut flutter_args = Vec::new();
+    let flutter_args = Vec::new();
     let mut i = 0;
     let mut _is_elevate = false;
     let mut _is_run_as_system = false;
@@ -129,21 +117,6 @@ pub fn core_main() -> Option<CoreMainAction> {
     if _is_flutter_invoke_new_connection {
         return core_main_invoke_new_connection(std::env::args()).map(CoreMainAction::StartUi);
     }
-    let click_setup = cfg!(windows) && args.is_empty() && crate::common::is_setup(&arg_exe);
-    if click_setup && !config::is_disable_installation() {
-        args.push("--install".to_owned());
-        flutter_args.push("--install".to_string());
-    }
-    if args.contains(&"--noinstall".to_string()) {
-        args.clear();
-    }
-    // The portable wrapper injects `--install` when its name ends with `install.exe`,
-    // including `no-install.exe`. Drop the argument instead of exiting so disabled
-    // clients can continue running as portable applications.
-    if config::is_disable_installation() {
-        args.retain(|arg| arg != "--install");
-        flutter_args.retain(|arg| arg != "--install");
-    }
     if args.len() > 0 {
         if args[0] == "--version" {
             println!("{}", crate::VERSION);
@@ -159,7 +132,7 @@ pub fn core_main() -> Option<CoreMainAction> {
             && args.is_empty()
             && (is_quick_support_exe(&arg_exe)
                 || config::LocalConfig::get_option("pre-elevate-service") == "Y"
-                || (!click_setup && crate::platform::is_elevated(None).unwrap_or(false)));
+                || crate::platform::is_elevated(None).unwrap_or(false));
         crate::portable_service::client::set_quick_support(_is_quick_support);
     }
     let mut log_name = "".to_owned();
@@ -197,7 +170,7 @@ pub fn core_main() -> Option<CoreMainAction> {
     }
     #[cfg(windows)]
     if !crate::platform::is_installed() && (_is_elevate || _is_run_as_system) {
-        crate::platform::elevate_or_run_as_system(click_setup, _is_elevate, _is_run_as_system);
+        crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
         return None;
     }
     if args.is_empty() || crate::common::is_empty_uni_link(&args[0]) {
@@ -208,7 +181,6 @@ pub fn core_main() -> Option<CoreMainAction> {
 
         #[cfg(windows)]
         {
-            crate::platform::try_remove_temp_update_files();
             hbb_common::config::PeerConfig::preload_peers();
         }
         std::thread::spawn(move || crate::start_server(false, no_server));
@@ -229,80 +201,7 @@ pub fn core_main() -> Option<CoreMainAction> {
 
         #[cfg(windows)]
         {
-            use crate::platform;
-            if args[0] == "--uninstall" {
-                if let Err(err) = platform::uninstall_me(true) {
-                    log::error!("Failed to uninstall: {}", err);
-                }
-                return None;
-            } else if args[0] == "--update" {
-                // The elevated updater cannot delete its running verified copy.
-                if let Err(err) = platform::schedule_current_verified_update_file_cleanup() {
-                    log::warn!("Failed to schedule verified update file cleanup: {}", err);
-                }
-                if config::is_disable_installation() {
-                    return None;
-                }
-
-                let text = match crate::platform::prepare_custom_client_update() {
-                    Err(e) => {
-                        log::error!("Error preparing custom client update: {}", e);
-                        "Update failed!".to_string()
-                    }
-                    Ok(false) => "Update failed!".to_string(),
-                    Ok(true) => match platform::update_me(false) {
-                        Ok(_) => "Updated successfully!".to_string(),
-                        Err(err) => {
-                            log::error!("Failed with error: {err}");
-                            "Update failed!".to_string()
-                        }
-                    },
-                };
-                Toast::new(Toast::POWERSHELL_APP_ID)
-                    .title(&config::APP_NAME.read().unwrap())
-                    .text1(&translate(text))
-                    .sound(Some(Sound::Default))
-                    .duration(Duration::Short)
-                    .show()
-                    .ok();
-                return None;
-            } else if args[0] == "--after-install" {
-                if let Err(err) = platform::run_after_install() {
-                    log::error!("Failed to after-install: {}", err);
-                }
-                return None;
-            } else if args[0] == "--before-uninstall" {
-                if let Err(err) = platform::run_before_uninstall() {
-                    log::error!("Failed to before-uninstall: {}", err);
-                }
-                return None;
-            } else if args[0] == "--silent-install" {
-                if config::is_disable_installation() {
-                    return None;
-                }
-                let debug = parse_silent_install_args(&args);
-                let options = platform::get_silent_install_options();
-                let res = platform::install_me(options, "".to_owned(), true, debug);
-                let text = match res {
-                    Ok(_) => translate("Installation Successful!".to_string()),
-                    Err(err) => {
-                        println!("Failed with error: {err}");
-                        translate("Installation failed!".to_string())
-                    }
-                };
-                Toast::new(Toast::POWERSHELL_APP_ID)
-                    .title(&config::APP_NAME.read().unwrap())
-                    .text1(&text)
-                    .sound(Some(Sound::Default))
-                    .duration(Duration::Short)
-                    .show()
-                    .ok();
-                return None;
-            } else if args[0] == "--uninstall-cert" {
-                #[cfg(windows)]
-                hbb_common::allow_err!(crate::platform::windows::uninstall_cert());
-                return None;
-            } else if args[0] == "--install-idd" {
+            if args[0] == "--install-idd" {
                 #[cfg(windows)]
                 if crate::virtual_display_manager::is_virtual_display_supported() {
                     hbb_common::allow_err!(
@@ -311,11 +210,7 @@ pub fn core_main() -> Option<CoreMainAction> {
                 }
                 return None;
             } else if args[0] == "--portable-service" {
-                crate::platform::elevate_or_run_as_system(
-                    click_setup,
-                    _is_elevate,
-                    _is_run_as_system,
-                );
+                crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
                 return None;
             } else if args[0] == "--uninstall-amyuni-idd" {
                 #[cfg(windows)]
@@ -323,12 +218,6 @@ pub fn core_main() -> Option<CoreMainAction> {
                     crate::virtual_display_manager::amyuni_idd::uninstall_driver()
                 );
                 return None;
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            if args[0] == "--update" {
-                return finish_macos_update(crate::manual_update::execute_macos_update(&args));
             }
         }
         if args[0] == "--remove" {
@@ -342,14 +231,6 @@ pub fn core_main() -> Option<CoreMainAction> {
             if !crate::check_process("--tray", true) {
                 crate::tray::start_tray();
             }
-            return None;
-        } else if args[0] == "--install-service" {
-            log::info!("start --install-service");
-            crate::platform::install_service();
-            return None;
-        } else if args[0] == "--uninstall-service" {
-            log::info!("start --uninstall-service");
-            crate::platform::uninstall_service(false, true);
             return None;
         } else if args[0] == "--service" {
             log::info!("start --service");
@@ -832,11 +713,6 @@ fn is_cli_setting_change_disabled() -> bool {
     let allow_command_line_settings =
         config::option2bool(option, &crate::get_builtin_option(option));
     config::is_disable_settings() && !allow_command_line_settings
-}
-
-#[cfg(windows)]
-fn parse_silent_install_args(args: &[String]) -> bool {
-    args.iter().skip(1).any(|arg| arg == "debug")
 }
 
 /// Check if the executable is a Quick Support version.

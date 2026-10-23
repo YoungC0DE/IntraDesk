@@ -1205,10 +1205,6 @@ class RustdeskImpl {
     return Future(() => mainGetLocalOption(key: 'last_remote_id'));
   }
 
-  Future<void> mainGetSoftwareUpdateUrl({dynamic hint}) {
-    throw UnimplementedError("mainGetSoftwareUpdateUrl");
-  }
-
   Future<String> mainGetHomeDir({dynamic hint}) {
     return Future.value('');
   }
@@ -1552,10 +1548,6 @@ class RustdeskImpl {
     throw UnimplementedError("mainIsInstalled");
   }
 
-  bool mainIsInstalledLowerVersion({dynamic hint}) {
-    throw UnimplementedError("mainIsInstalledLowerVersion");
-  }
-
   bool mainIsInstalledDaemon({required bool prompt, dynamic hint}) {
     throw UnimplementedError("mainIsInstalledDaemon");
   }
@@ -1572,45 +1564,8 @@ class RustdeskImpl {
     throw UnimplementedError("mainIsCanInputMonitoring");
   }
 
-  bool mainIsShareRdp({dynamic hint}) {
-    throw UnimplementedError("mainIsShareRdp");
-  }
-
-  Future<void> mainSetShareRdp({required bool enable, dynamic hint}) {
-    throw UnimplementedError("mainSetShareRdp");
-  }
-
-  bool mainGotoInstall({dynamic hint}) {
-    throw UnimplementedError("mainGotoInstall");
-  }
-
-  String mainGetNewVersion({dynamic hint}) {
-    throw UnimplementedError("mainGetNewVersion");
-  }
-
-  bool mainUpdateMe({dynamic hint}) {
-    throw UnimplementedError("mainUpdateMe");
-  }
-
   Future<void> setCurSessionId({required UuidValue sessionId, dynamic hint}) {
     throw UnimplementedError("setCurSessionId");
-  }
-
-  bool installShowRunWithoutInstall({dynamic hint}) {
-    throw UnimplementedError("installShowRunWithoutInstall");
-  }
-
-  Future<void> installRunWithoutInstall({dynamic hint}) {
-    throw UnimplementedError("installRunWithoutInstall");
-  }
-
-  Future<void> installInstallMe(
-      {required String options, required String path, dynamic hint}) {
-    throw UnimplementedError("installInstallMe");
-  }
-
-  String installInstallPath({dynamic hint}) {
-    throw UnimplementedError("installInstallPath");
   }
 
   Future<void> mainAccountAuth(
@@ -1707,10 +1662,6 @@ class RustdeskImpl {
   bool isDisableAccount({dynamic hint}) {
     // Checks HARD_SETTINGS["disable-account"] == "Y"
     return mainGetHardOption(key: "disable-account", hint: hint) == "Y";
-  }
-
-  bool isDisableInstallation({dynamic hint}) {
-    return false;
   }
 
   Future<bool> isPresetPassword({dynamic hint}) {
@@ -1823,10 +1774,6 @@ class RustdeskImpl {
 
   String mainGetBuildinOption({required String key, dynamic hint}) {
     return mainGetLocalOption(key: key, hint: hint);
-  }
-
-  String installInstallOptions({dynamic hint}) {
-    throw UnimplementedError("installInstallOptions");
   }
 
   int mainMaxEncryptLen({dynamic hint}) {

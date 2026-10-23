@@ -23,7 +23,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::common::SOFTWARE_UPDATE_URL;
 #[cfg(feature = "flutter")]
 use crate::hbbs_http::account;
 #[cfg(not(any(target_os = "ios")))]
@@ -86,45 +85,6 @@ pub fn get_id() -> String {
     return Config::get_id();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return ipc::get_id();
-}
-
-#[inline]
-pub fn goto_install() {
-    allow_err!(crate::run_me(vec!["--install"]));
-    std::process::exit(0);
-}
-
-#[inline]
-pub fn install_me(_options: String, _path: String, _silent: bool, _debug: bool) {
-    #[cfg(windows)]
-    std::thread::spawn(move || {
-        allow_err!(crate::platform::windows::install_me(
-            &_options, _path, _silent, _debug
-        ));
-        std::process::exit(0);
-    });
-}
-
-#[inline]
-pub fn update_me(_path: String) {
-    goto_install();
-}
-
-#[inline]
-pub fn run_without_install() {
-    crate::run_me(vec!["--noinstall"]).ok();
-    std::process::exit(0);
-}
-
-#[inline]
-pub fn show_run_without_install() -> bool {
-    let mut it = std::env::args();
-    if let Some(tmp) = it.next() {
-        if crate::is_setup(&tmp) {
-            return it.next() == None;
-        }
-    }
-    false
 }
 
 #[inline]
@@ -414,21 +374,6 @@ pub fn set_option(key: String, value: String) {
                 return;
             }
         }
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
-        {
-            if crate::platform::is_installed() {
-                if value == "Y" {
-                    if crate::platform::uninstall_service(true, false) {
-                        return;
-                    }
-                } else {
-                    if crate::platform::install_service() {
-                        return;
-                    }
-                }
-                return;
-            }
-        }
     } else if &key == "audio-input" {
         #[cfg(not(target_os = "ios"))]
         crate::audio_service::restart();
@@ -448,22 +393,6 @@ pub fn set_option(key: String, value: String) {
         let _nat = crate::CheckTestNatType::new();
         Config::set_option(key, value);
     }
-}
-
-#[inline]
-pub fn install_path() -> String {
-    #[cfg(windows)]
-    return crate::platform::windows::get_install_info().1;
-    #[cfg(not(windows))]
-    return "".to_owned();
-}
-
-#[inline]
-pub fn install_options() -> String {
-    #[cfg(windows)]
-    return crate::platform::windows::get_install_options();
-    #[cfg(not(windows))]
-    return "{}".to_owned();
 }
 
 #[inline]
@@ -530,31 +459,6 @@ pub fn is_installed() -> bool {
 #[inline]
 pub fn is_installed() -> bool {
     false
-}
-
-#[inline]
-pub fn is_share_rdp() -> bool {
-    #[cfg(windows)]
-    return crate::platform::windows::is_share_rdp();
-    #[cfg(not(windows))]
-    return false;
-}
-
-#[inline]
-pub fn set_share_rdp(_enable: bool) {
-    #[cfg(windows)]
-    crate::platform::windows::set_share_rdp(_enable);
-}
-
-#[inline]
-pub fn is_installed_lower_version() -> bool {
-    #[cfg(not(windows))]
-    return false;
-    #[cfg(windows)]
-    {
-        let b = crate::platform::windows::get_reg("BuildDate");
-        return crate::BUILD_DATE.cmp(&b).is_gt();
-    }
 }
 
 #[inline]
@@ -729,18 +633,6 @@ pub fn current_is_wayland() -> bool {
     return crate::platform::linux::current_is_wayland();
     #[cfg(not(target_os = "linux"))]
     return false;
-}
-
-#[inline]
-pub fn get_new_version() -> String {
-    SOFTWARE_UPDATE_URL
-        .lock()
-        .unwrap()
-        .trim_end_matches('/')
-        .rsplit('/')
-        .next()
-        .unwrap_or("")
-        .to_owned()
 }
 
 #[inline]

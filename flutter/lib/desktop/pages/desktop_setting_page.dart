@@ -507,8 +507,6 @@ class _GeneralState extends State<_General> {
   Widget other() {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
-    final showAutoUpdate = (isWindows && bind.mainIsInstalled()) ||
-    (isMacOS && bind.mainIsInstalled() && bind.mainIsInstalledDaemon(prompt: false) && !bind.isCustomClient());
     final children = <Widget>[
       if (!isWeb && !incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
@@ -567,20 +565,6 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
-      if (!isWeb && !bind.isCustomClient())
-        _OptionCheckBox(
-          context,
-          'Check for software update on startup',
-          kOptionEnableCheckUpdate,
-          isServer: false,
-        ),
-      if (showAutoUpdate)
-        _OptionCheckBox(
-          context,
-          'Auto update',
-          kOptionAllowAutoUpdate,
-          isServer: true,
-        ),
       if (isWindows && !outgoingOnly)
         _OptionCheckBox(
           context,
@@ -1288,7 +1272,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   Widget more(BuildContext context) {
     bool enabled = !locked;
     return _Card(title: 'Security', children: [
-      shareRdp(context, enabled),
       _OptionCheckBox(context, 'Deny LAN discovery', 'enable-lan-discovery',
           reverse: true, enabled: enabled),
       ...directIp(context),
@@ -1304,33 +1287,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             reverse: false, enabled: enabled),
       if (bind.mainIsInstalled() && !isUnlockPinDisabled()) unlockPin()
     ]);
-  }
-
-  shareRdp(BuildContext context, bool enabled) {
-    onChanged(bool b) async {
-      await bind.mainSetShareRdp(enable: b);
-      setState(() {});
-    }
-
-    bool value = bind.mainIsShareRdp();
-    return Offstage(
-      offstage: !(isWindows && bind.mainIsInstalled()),
-      child: GestureDetector(
-          child: Row(
-            children: [
-              Checkbox(
-                      value: value,
-                      onChanged: enabled ? (_) => onChanged(!value) : null)
-                  .marginOnly(right: 5),
-              Expanded(
-                child: Text(translate('Enable RDP session sharing'),
-                    style:
-                        TextStyle(color: disabledTextColor(context, enabled))),
-              )
-            ],
-          ).marginOnly(left: _kCheckBoxLeftMargin),
-          onTap: enabled ? () => onChanged(!value) : null),
-    );
   }
 
   List<Widget> directIp(BuildContext context) {

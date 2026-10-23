@@ -2761,7 +2761,6 @@ pub fn uninstall_service(show_new_window: bool, _: bool) -> bool {
 }
 
 pub fn install_service() -> bool {
-    let _installing = crate::platform::InstallingService::new();
     if !has_cmd("systemctl") {
         return false;
     }

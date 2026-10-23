@@ -19,8 +19,6 @@ const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
 const META_LINE_PREFIX_FILE: &str = "file = ";
 const APP_PREFIX: &str = "rustdesk";
-#[cfg(windows)]
-const VERIFIED_UPDATE_FILE_PREFIX: &str = "rustdesk-verified-";
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 #[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
@@ -157,7 +155,6 @@ fn remove_dropped_package_files(dir: &Path, current: &[String]) -> Vec<String> {
 fn setup(
     reader: BinaryReader,
     dir: Option<PathBuf>,
-    clear: bool,
     _args: &Vec<String>,
     _ui: &mut bool,
 ) -> Option<PathBuf> {
@@ -174,7 +171,7 @@ fn setup(
     };
 
     let mut ts = 0;
-    if clear || !is_timestamp_matches(&dir, &mut ts) {
+    if !is_timestamp_matches(&dir, &mut ts) {
         #[cfg(windows)]
         if _args.is_empty() {
             *_ui = true;
@@ -281,31 +278,15 @@ fn main() -> Result<(), String> {
         }
         i += 1;
     }
-    let click_setup = args.is_empty() && arg_exe.to_lowercase().ends_with("install.exe");
     #[cfg(windows)]
     let quick_support = args.is_empty() && win::is_quick_support_exe(&arg_exe);
     #[cfg(not(windows))]
     let quick_support = false;
 
-    #[cfg(windows)]
-    if args.first().is_some_and(|arg| arg == "--update") {
-        if let Err(err) = win::schedule_verified_update_cleanup() {
-            eprintln!("Failed to schedule verified update file cleanup: {}", err);
-        }
-    }
-
     let mut ui = false;
     let reader = BinaryReader::new()?;
-    if let Some(exe) = setup(
-        reader,
-        None,
-        click_setup || args.contains(&"--silent-install".to_owned()),
-        &args,
-        &mut ui,
-    ) {
-        if click_setup {
-            args = vec!["--install".to_owned()];
-        } else if quick_support {
+    if let Some(exe) = setup(reader, None, &args, &mut ui) {
+        if quick_support {
             args = vec!["--quick_support".to_owned()];
         }
         execute(exe, args, ui);
@@ -315,33 +296,6 @@ fn main() -> Result<(), String> {
 
 #[cfg(windows)]
 mod win {
-    pub(super) fn schedule_verified_update_cleanup() -> std::io::Result<()> {
-        use windows::{
-            core::{HSTRING, PCWSTR},
-            Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_DELAY_UNTIL_REBOOT},
-        };
-
-        let current_exe = std::env::current_exe()?;
-        let is_verified_update = current_exe
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| {
-                name.starts_with(super::VERIFIED_UPDATE_FILE_PREFIX) && name.ends_with(".exe")
-            });
-        if !is_verified_update {
-            return Ok(());
-        }
-
-        unsafe {
-            MoveFileExW(
-                &HSTRING::from(current_exe.as_path()),
-                PCWSTR::null(),
-                MOVEFILE_DELAY_UNTIL_REBOOT,
-            )
-        }
-        .map_err(std::io::Error::other)
-    }
-
     /// Check if the executable is a Quick Support version.
     /// Note: This function must be kept in sync with `src/core_main.rs`.
     #[inline]

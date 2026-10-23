@@ -279,10 +279,6 @@ impl RendezvousMediator {
             }
         }
         crate::hbbs_http::sync::start();
-        #[cfg(target_os = "windows")]
-        if crate::platform::is_installed() && crate::is_server() {
-            crate::updater::start_auto_update();
-        }
         check_zombie();
         let server = new_server();
         if config::option2bool("stop-service", &Config::get_option("stop-service")) {
@@ -307,9 +303,7 @@ impl RendezvousMediator {
             let timeout = Arc::new(RwLock::new(CONNECT_TIMEOUT));
             let conn_start_time = Instant::now();
             *SOLVING_PK_MISMATCH.lock().await = "".to_owned();
-            if !config::option2bool("stop-service", &Config::get_option("stop-service"))
-                && !crate::platform::installing_service()
-            {
+            if !config::option2bool("stop-service", &Config::get_option("stop-service")) {
                 let mut futs = Vec::new();
                 let servers = Config::get_rendezvous_servers();
                 SHOULD_EXIT.store(false, Ordering::SeqCst);

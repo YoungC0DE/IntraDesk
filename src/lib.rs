@@ -23,10 +23,6 @@ pub use self::rendezvous_mediator::*;
 pub mod common;
 #[cfg(not(any(target_os = "ios")))]
 pub mod ipc;
-pub(crate) mod update_metadata;
-pub(crate) mod update_hash;
-#[cfg(target_os = "macos")]
-mod manual_update;
 mod version;
 pub use version::*;
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
@@ -46,9 +42,6 @@ mod lang;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod tray;
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-mod updater;
 
 mod ui_cm_interface;
 mod ui_interface;

@@ -167,12 +167,6 @@ pub extern "C" fn rustdesk_core_main_args(args_len: *mut c_int) -> *mut *mut c_c
     return std::ptr::null_mut() as _;
 }
 
-#[cfg(windows)]
-#[no_mangle]
-pub extern "C" fn rustdesk_is_disable_installation() -> c_int {
-    hbb_common::config::is_disable_installation() as c_int
-}
-
 // https://gist.github.com/iskakaushik/1c5b8aa75c77479c33c4320913eebef6
 #[cfg(windows)]
 fn rust_args_to_c_args(args: Vec<String>, outlen: *mut c_int) -> *mut *mut c_char {
@@ -1958,10 +1952,7 @@ pub mod sessions {
                 None => {}
             }
         }
-        let s = SESSIONS.write().unwrap().remove(&remove_peer_key?);
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        update_session_count_to_server();
-        s
+        SESSIONS.write().unwrap().remove(&remove_peer_key?)
     }
 
     /// Close every client session, returning how many peer sessions were closed.
@@ -2122,14 +2113,6 @@ pub mod sessions {
             .write()
             .unwrap()
             .insert(session_id, Default::default());
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        update_session_count_to_server();
-    }
-
-    #[inline]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn update_session_count_to_server() {
-        crate::ipc::update_controlling_session_count(SESSIONS.read().unwrap().len()).ok();
     }
 
     #[inline]

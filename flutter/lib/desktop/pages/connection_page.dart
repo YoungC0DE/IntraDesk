@@ -36,7 +36,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
   final _localIps = <String>[].obs;
   final _firewallBlocked = false.obs;
-  final _firewallNotPrivate = false.obs;
   Timer? _updateTimer;
 
   double get em => 14.0;
@@ -98,10 +97,7 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
         );
 
     firewallWidget() {
-      var msg = translate("Windows Firewall is blocking connections");
-      if (_firewallNotPrivate.value) {
-        msg += '. ${translate("Set this network as private in Windows")}.';
-      }
+      final msg = translate("Windows Firewall is blocking connections");
       return Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -165,7 +161,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
       _firewallBlocked.value = firewallBlocked;
       widget.onSvcStatusChanged?.call();
     }
-    _firewallNotPrivate.value = status['firewall_not_private'] == true;
     try {
       stateGlobal.videoConnCount.value = status['video_conn_count'] as int;
     } catch (_) {}

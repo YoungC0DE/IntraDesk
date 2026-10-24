@@ -2732,10 +2732,7 @@ fn firewall_rules_verdict(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FirewallInbound {
     Allowed,
-    /// `private_network`: a private network is active, so rules for private networks help.
-    Blocked {
-        private_network: bool,
-    },
+    Blocked,
 }
 
 /// Whether Windows Firewall lets the current executable receive inbound TCP traffic on
@@ -2855,9 +2852,7 @@ pub fn firewall_inbound_state(tcp_port: u16, udp_port: u16) -> ResultType<Firewa
                     return Ok(FirewallInbound::Allowed);
                 }
             }
-            Ok(FirewallInbound::Blocked {
-                private_network: active & NET_FW_PROFILE2_PRIVATE.0 != 0,
-            })
+            Ok(FirewallInbound::Blocked)
         })();
         if com_initialized {
             CoUninitialize();
@@ -2868,8 +2863,10 @@ pub fn firewall_inbound_state(tcp_port: u16, udp_port: u16) -> ResultType<Firewa
 
 /// Arguments for `cmd.exe` that (1) delete the inbound rules for `exe` (Windows creates block
 /// rules when its own "allow access" prompt is cancelled, and a block rule beats any allow rule)
-/// and (2) recreate inbound allow rules for both ports on private networks. Port rules instead
-/// of program rules, because the portable build runs from an extraction folder.
+/// and (2) recreate inbound allow rules for both ports. The rules cover every network profile,
+/// as office networks are often left as public or domain, but only peers on the local subnet,
+/// as the app serves the LAN only. Port rules instead of program rules, because the portable
+/// build runs from an extraction folder.
 fn firewall_allow_inbound_cmd_args(
     netsh: &str,
     app_name: &str,
@@ -2888,7 +2885,7 @@ fn firewall_allow_inbound_cmd_args(
         ));
         commands.push(format!(
             "{netsh} advfirewall firewall add rule name=\"{name}\" dir=in action=allow \
-             protocol={protocol} localport={port} profile=private"
+             protocol={protocol} localport={port} profile=any remoteip=localsubnet"
         ));
     }
     format!("/d /c {}", commands.join(" & "))
@@ -3023,7 +3020,7 @@ ProcessId=10136
         assert_eq!(pids.len(), 0);
     }
     #[test]
-    fn firewall_args_quote_paths_and_limit_rules_to_private_networks() {
+    fn firewall_args_quote_paths_and_limit_rules_to_the_local_subnet() {
         let args = firewall_allow_inbound_cmd_args(
             "C:\\Windows\\System32\\netsh.exe",
             "IntraDesk",
@@ -3035,9 +3032,9 @@ ProcessId=10136
         let expected = [
             format!("{fw} delete rule name=all dir=in program=\"C:\\Users\\Jo Silva\\AppData\\Local\\intradesk\\IntraDesk.exe\""),
             format!("{fw} delete rule name=\"IntraDesk (TCP 21118)\""),
-            format!("{fw} add rule name=\"IntraDesk (TCP 21118)\" dir=in action=allow protocol=TCP localport=21118 profile=private"),
+            format!("{fw} add rule name=\"IntraDesk (TCP 21118)\" dir=in action=allow protocol=TCP localport=21118 profile=any remoteip=localsubnet"),
             format!("{fw} delete rule name=\"IntraDesk (UDP 21119)\""),
-            format!("{fw} add rule name=\"IntraDesk (UDP 21119)\" dir=in action=allow protocol=UDP localport=21119 profile=private"),
+            format!("{fw} add rule name=\"IntraDesk (UDP 21119)\" dir=in action=allow protocol=UDP localport=21119 profile=any remoteip=localsubnet"),
         ];
         assert_eq!(args, format!("/d /c {}", expected.join(" & ")));
     }

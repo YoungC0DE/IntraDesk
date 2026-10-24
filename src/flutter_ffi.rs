@@ -922,7 +922,7 @@ pub fn main_check_connect_status() {
     start_option_status_sync(); // avoid multi calls
 }
 
-/// Asks for elevation and allows the IntraDesk ports in Windows Firewall (private networks).
+/// Asks for elevation and allows the IntraDesk ports in Windows Firewall (local subnet).
 pub fn main_allow_in_firewall() -> bool {
     allow_in_firewall()
 }

@@ -26,9 +26,6 @@ pub struct UiStatus {
     pub local_ips: Vec<String>,
     /// Filled when read: Windows Firewall blocks the inbound ports (false when unknown).
     pub firewall_blocked: bool,
-    /// Filled when read, with `firewall_blocked`: no private network is active, so the rules
-    /// that "allow in firewall" creates (private networks only) do not help yet.
-    pub firewall_not_private: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -44,7 +41,6 @@ lazy_static::lazy_static! {
         video_conn_count: 0,
         local_ips: Vec::new(),
         firewall_blocked: false,
-        firewall_not_private: false,
     }));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
@@ -301,14 +297,7 @@ pub fn check_mouse_time() {
 pub fn get_connect_status() -> UiStatus {
     let mut status = UI_STATUS.lock().unwrap().clone();
     status.local_ips = crate::lan::local_ipv4s();
-    let firewall = firewall_state();
-    status.firewall_blocked = firewall != FirewallInbound::Allowed;
-    status.firewall_not_private = matches!(
-        firewall,
-        FirewallInbound::Blocked {
-            private_network: false
-        }
-    );
+    status.firewall_blocked = firewall_state() == FirewallInbound::Blocked;
     status
 }
 

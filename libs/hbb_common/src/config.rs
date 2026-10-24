@@ -1793,13 +1793,14 @@ pub struct DiscoveryPeer {
     pub platform: String,
     #[serde(default, deserialize_with = "deserialize_bool")]
     pub online: bool,
-    #[serde(default, deserialize_with = "deserialize_hashmap_string_string")]
-    pub ip_mac: HashMap<String, String>,
     /// Unix time (seconds) of the last discovery response from this peer.
     #[serde(default, deserialize_with = "deserialize_u64")]
     pub last_seen: u64,
     #[serde(default, deserialize_with = "deserialize_string")]
     pub version: String,
+    // TOML writes tables after plain values: keep this map the last field.
+    #[serde(default, deserialize_with = "deserialize_hashmap_string_string")]
+    pub ip_mac: HashMap<String, String>,
 }
 
 impl DiscoveryPeer {
@@ -2796,6 +2797,27 @@ mod tests {
                 ..Default::default()
             })
         );
+    }
+
+    #[test]
+    fn test_lan_peers_survive_a_toml_round_trip() {
+        let lan = LanPeers {
+            peers: vec![DiscoveryPeer {
+                id: "123456789".to_owned(),
+                hostname: "PC-01".to_owned(),
+                online: true,
+                last_seen: 1_793_000_000,
+                version: "1.5.1".to_owned(),
+                ip_mac: HashMap::from([("192.168.0.10".to_owned(), "aa:bb".to_owned())]),
+                ..Default::default()
+            }],
+        };
+        let text = toml::to_string(&lan).unwrap();
+        let back: LanPeers = toml::from_str(&text).unwrap();
+        assert_eq!(back.peers.len(), 1);
+        assert_eq!(back.peers[0].last_seen, 1_793_000_000);
+        assert_eq!(back.peers[0].version, "1.5.1");
+        assert_eq!(back.peers[0].ip_mac["192.168.0.10"], "aa:bb");
     }
 
     #[test]

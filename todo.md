@@ -42,7 +42,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **D9** Onde salvar a configuração → **`%APPDATA%\IntraDesk`** (decidido em 22/10/2026).
 - [ ] **D10** "Trocar de lado" (o controlado passa a controlar quem o acessou, sem senha, via uuid de uma sessão autenticada no sentido contrário) → manter ou remover? Não está na lista "Mantém". Se remover: servidor, cliente, IPC `SwitchSides*`, botão no CM e na barra.
 - [ ] **D11** 2FA local por TOTP (app autenticador) e dispositivos confiáveis → manter ou remover? O escopo remove o "2FA ligado a conta"; este é local e só vale depois da senha.
-- [ ] **D12** Firewall em rede de domínio (comum em PCs de empresa): o botão "Liberar no firewall" cria regras só para redes privadas (`profile=private`, T2.8). Incluir `domain` também?
+- [x] **D12** Firewall em redes de domínio/públicas → as regras do botão valem para **todos os perfis, restritas à sub-rede local** (T2.11; decorre do teste do usuário em 24/10/2026, que precisou liberar em rede pública).
 
 ---
 
@@ -185,6 +185,12 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Ficou: `secure_connection`/`identity_handshake`/`RS_PUB_KEY`/`key_confirmed` (T3.1); `RENDEZVOUS_PORT`/`RELAY_PORT` (base das portas); `id_whitelist_allows` ainda aceita `id@servidor` (arquivo quente, segurança; revisar na T3.x junto com `ConnectionMeta`); `Peer.sameServer`; chaves de `keys.rs` sem uso que não são de servidor (Android, `preset-address-book-*`).
   Checagem: `cargo check --workspace --lib --tests` ok; `flutter analyze` sem erros/avisos; `cargo test --lib client::` 20 ok; `cargo test -p hbb_common --lib` 90 ok; `flutter test test/autocomplete_peer_merge_test.dart` 2 ok.
   dep: T2.3 · Área: `src/client.rs` (`LoginConfigHandler`), `src/flutter_ffi.rs`, `src/flutter.rs`, `flutter/lib/common.dart`, `flutter/lib/models/model.dart`, páginas de sessão · @dono: claude
+
+- [x] **T2.11** Correções do teste manual em 2 PCs (24/10/2026, relatado pelo usuário):
+  1. **PCs da rede não apareciam e conectar pelo ID dava "Computador não encontrado na rede".** A descoberta recebia as respostas, mas não conseguia gravar a lista (`Failed to store lan peers: Failed to serialize configuration data into TOML`): na T2.4/T2.5 os campos `last_seen`/`version` ficaram depois do mapa `ip_mac`, e o TOML exige valores simples antes de tabelas. `ip_mac` voltou a ser o último campo de `DiscoveryPeer` (com comentário). Teste novo `config::tests::test_lan_peers_survive_a_toml_round_trip`.
+  2. **"Liberar no firewall" não resolvia** (as redes dos 2 PCs estão como públicas; o usuário teve de marcar público+privado à mão nas regras). As regras agora valem para todos os perfis (`profile=any`), mas só para a sub-rede local (`remoteip=localsubnet`). Com isso saiu a dica "Defina esta rede como privada no Windows" (`firewall_not_private`, `Blocked { private_network }`). Resolve também a D12.
+  Checagem: `cargo test --package hbb_common --lib config::` 44 ok; `cargo test --lib firewall` 3 ok (+1 ignorado); `flutter analyze` sem erros/avisos. Pendente: novo teste manual em 2 PCs.
+  Área: `libs/hbb_common/src/config.rs`, `src/platform/windows.rs`, `src/ui_interface.rs`, `connection_page.dart` · @dono: claude
 
 **Fim da Fase 2 (24/10/2026):** ver o registro do fim da Fase 3 (testes rodados juntos).
 

@@ -24,7 +24,7 @@ use uuid::Uuid;
 use crate::{
     check_port,
     common::input::{MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP},
-    create_symmetric_key_msg, decode_id_pk, decode_id_pk_dtls, dtls_fingerprint_bound, get_rs_pk,
+    create_symmetric_key_msg, decode_id_pk, decode_id_pk_kx, get_rs_pk,
     is_keyboard_mode_supported,
     ui_interface::{get_builtin_option, use_texture_render},
     ui_session_interface::{InvokeUiSession, Session},
@@ -35,7 +35,7 @@ use hbb_common::{
     anyhow::{anyhow, Context},
     bail,
     config::{
-        self, use_ws, Config, PeerConfig, PeerInfoSerde, Resolution, CONNECT_TIMEOUT,
+        self, Config, PeerConfig, PeerInfoSerde, Resolution, CONNECT_TIMEOUT,
         READ_TIMEOUT, RELAY_PORT,
     },
     get_version_number, log,
@@ -164,15 +164,6 @@ impl Client {
         } else {
             key
         });
-        // A WebRTC channel is peer-authenticated only once its DTLS fingerprint is bound to the
-        // verified peer identity below. Once a trusted identity IS established, every binding
-        // failure fails closed: any peer able to answer WebRTC also signs its fingerprint, so a
-        // mismatch is concrete evidence of a rendezvous/relay MITM (not a legacy peer), and
-        // callers fall back to a fresh relay connection rather than proceeding on that channel.
-        // Without a trusted identity (absent, or unverifiable under our configured root) no
-        // binding is possible at all; WebRTC then proceeds like TCP's non-secure fallback —
-        // DTLS-encrypted but reported unsecured. TCP/UDP/relay keep their existing behavior.
-        let is_webrtc = conn.is_webrtc();
         let mut sign_pk = None;
         let mut option_pk = None;
         if !signed_id_pk.is_empty() {
@@ -192,9 +183,7 @@ impl Client {
             Some(v) => v,
             None => {
                 // No trusted peer identity (key-less deployment, or a blob that does not verify
-                // under our root), so no fingerprint binding is possible. Fall through like TCP's
-                // non-secure path with is_secured() false: bailing would only move the session to
-                // a relay that fails the same check and then runs in plaintext.
+                // under our root): fall through on the non-secure path with is_secured() false.
                 // send an empty message out in case server is setting up secure and waiting for first message
                 conn.send(&Message::new()).await?;
                 return Ok(option_pk);
@@ -205,31 +194,13 @@ impl Client {
                 let bytes = res?;
                 if let Ok(msg_in) = Message::parse_from_bytes(&bytes) {
                     if let Some(message::Union::SignedId(si)) = msg_in.union {
-                        if let Ok((id, their_pk_b, signed_fp, kx_version)) =
-                            decode_id_pk_dtls(&si.id, &sign_pk)
+                        if let Ok((id, their_pk_b, kx_version)) =
+                            decode_id_pk_kx(&si.id, &sign_pk)
                         {
                             if id == peer_id {
-                                // WebRTC only: bind the DTLS channel to the verified peer identity.
-                                // webrtc-rs already bound the certificate to the remote SDP, so
-                                // requiring the peer to have SIGNED that fingerprint defeats a
-                                // rendezvous/relay MITM that swaps SDPs. Fail closed.
-                                if is_webrtc {
-                                    let actual_fp = conn.dtls_fingerprint(false).await.ok_or_else(
-                                        || anyhow!("WebRTC DTLS fingerprint unavailable"),
-                                    )?;
-                                    if !dtls_fingerprint_bound(&signed_fp, &actual_fp) {
-                                        bail!("WebRTC DTLS fingerprint not bound to peer identity (possible MITM)");
-                                    }
-                                }
                                 let (asymmetric_value, symmetric_value, key) =
                                     create_symmetric_key_msg(their_pk_b);
-                                // A WebRTC stream is encrypted by DTLS and takes no stream
-                                // key of its own, split or not, so the pick says what runs: 0.
-                                let picked = if is_webrtc {
-                                    0
-                                } else {
-                                    hbb_common::tcp::kx_version_for(kx_version)
-                                };
+                                let picked = hbb_common::tcp::kx_version_for(kx_version);
                                 let mut msg_out = Message::new();
                                 msg_out.set_public_key(PublicKey {
                                     asymmetric_value: asymmetric_value.clone(),
@@ -249,16 +220,10 @@ impl Client {
                                     },
                                 )?;
                             } else {
-                                if is_webrtc {
-                                    bail!("WebRTC handshake id mismatch (possible MITM)");
-                                }
                                 log::error!("Handshake failed: sign failure");
                                 conn.send(&Message::new()).await?;
                             }
                         } else {
-                            if is_webrtc {
-                                bail!("WebRTC peer identity could not be verified (refusing unbound channel)");
-                            }
                             // fall back to non-secure connection in case pk mismatch
                             log::info!("pk mismatch, fall back to non-secure");
                             let mut msg_out = Message::new();
@@ -266,16 +231,10 @@ impl Client {
                             conn.send(&msg_out).await?;
                         }
                     } else {
-                        if is_webrtc {
-                            bail!("WebRTC handshake received an unexpected message type");
-                        }
                         log::error!("Handshake failed: invalid message type");
                         conn.send(&Message::new()).await?;
                     }
                 } else {
-                    if is_webrtc {
-                        bail!("WebRTC handshake received a malformed message");
-                    }
                     log::error!("Handshake failed: invalid message format");
                     conn.send(&Message::new()).await?;
                 }
@@ -976,10 +935,6 @@ pub struct LoginConfigHandler {
     // reconnect before the real reboot disconnect.
     restart_remote_device_at: Option<Instant>,
     pub force_relay: bool,
-    // force_relay minus the WebSocket transport. ws forces relay for classic punching but says
-    // nothing about ICE, so every WebRTC decision keys off this: policy means Relay-only ICE,
-    // transport may still go direct.
-    pub policy_relay: bool,
     // The peer-scoped part of it, and the only part that may be written back to the peer.
     pub peer_relay: bool,
     pub direct: Option<bool>,
@@ -1084,14 +1039,10 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.clear_restarting_remote_device();
-        // Three scopes: what was decided about this PEER, what this CLIENT is set up as (proxy),
-        // and what its TRANSPORT forces (ws). Only the first may be written back to the peer's
-        // config — persisting the others would make a local setup a permanent peer property.
         self.peer_relay =
             config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
                 || force_relay;
-        self.policy_relay = self.peer_relay || Config::is_proxy();
-        self.force_relay = self.policy_relay || use_ws();
+        self.force_relay = self.peer_relay;
         if let Some((real_id, server, key)) = &self.other_server {
             let other_server_key = self.get_option("other-server-key");
             if !other_server_key.is_empty() && key.is_empty() {
@@ -1729,8 +1680,6 @@ impl LoginConfigHandler {
                     .insert("other-server-key".to_owned(), c.clone());
             }
         }
-        // peer_relay only — see `initialize`: neither the proxy nor the WebSocket transport is a
-        // fact about this peer, and writing one here makes it permanent.
         if self.peer_relay {
             config
                 .options
@@ -2732,10 +2681,6 @@ pub trait Interface: Send + Clone + 'static + Sized {
         self.get_lch().read().unwrap().force_relay
     }
 
-    fn is_policy_relay(&self) -> bool {
-        self.get_lch().read().unwrap().policy_relay
-    }
-
     fn get_switch_code(&self) -> String {
         match self.get_lch().read().unwrap().switch_uuid.clone() {
             Some(u) if !u.is_empty() => {
@@ -2990,11 +2935,7 @@ pub fn check_if_retry(msgtype: &str, title: &str, text: &str, retry_for_relay: b
         && ((text.contains("10054") || text.contains("104")) && retry_for_relay
             || (!text.to_lowercase().contains("offline")
                 && !text.to_lowercase().contains("not exist")
-                && (!text.to_lowercase().contains("handshake")
-                    // https://github.com/snapview/tungstenite-rs/blob/e7e060a89a72cb08e31c25a6c7284dc1bd982e23/src/error.rs#L248
-                    || text
-                        .to_lowercase()
-                        .contains("connection reset without closing handshake") && use_ws())
+                && !text.to_lowercase().contains("handshake")
                 && !text.to_lowercase().contains("failed")
                 && !text.to_lowercase().contains("resolve")
                 && !text.to_lowercase().contains("mismatch")

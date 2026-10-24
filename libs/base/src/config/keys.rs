@@ -81,7 +81,6 @@ pub const OPTION_AV1_TEST: &str = "av1-test";
 /// - If set to 0, a safe built-in default is used (see DEFAULT_MAX_VALIDATED_FILES).
 /// - If unset, negative, or non-integer, no explicit limit is enforced for backward compatibility.
 pub const OPTION_FILE_TRANSFER_MAX_FILES: &str = "file-transfer-max-files";
-pub const OPTION_DISABLE_UDP: &str = "disable-udp";
 pub const OPTION_SHOW_VIRTUAL_MOUSE: &str = "show-virtual-mouse";
 // joystick is the virtual mouse.
 // So `OPTION_SHOW_VIRTUAL_MOUSE` should also be set if `OPTION_SHOW_VIRTUAL_JOYSTICK` is set.
@@ -97,10 +96,7 @@ pub const OPTION_PRESET_STRATEGY_NAME: &str = "preset-strategy-name";
 pub const OPTION_REMOVE_PRESET_PASSWORD_WARNING: &str = "remove-preset-password-warning";
 pub const OPTION_HIDE_GENERAL_SETTINGS: &str = "hide-general-settings";
 pub const OPTION_HIDE_SECURITY_SETTINGS: &str = "hide-security-settings";
-pub const OPTION_HIDE_NETWORK_SETTINGS: &str = "hide-network-settings";
 pub const OPTION_HIDE_SERVER_SETTINGS: &str = "hide-server-settings";
-pub const OPTION_HIDE_PROXY_SETTINGS: &str = "hide-proxy-settings";
-pub const OPTION_HIDE_WEBSOCKET_SETTINGS: &str = "hide-websocket-settings";
 pub const OPTION_HIDE_STOP_SERVICE: &str = "hide-stop-service";
 pub const OPTION_ALLOW_COMMAND_LINE_SETTINGS_WHEN_SETTINGS_DISABLED: &str =
     "allow-command-line-settings-when-settings-disabled";
@@ -109,8 +105,6 @@ pub const OPTION_ALLOW_COMMAND_LINE_SETTINGS_WHEN_SETTINGS_DISABLED: &str =
 pub const OPTION_ENABLE_TCP_PUNCH: &str = "enable-tcp-punch";
 pub const OPTION_ENABLE_UDP_PUNCH: &str = "enable-udp-punch";
 pub const OPTION_ENABLE_IPV6_PUNCH: &str = "enable-ipv6-punch";
-pub const OPTION_ENABLE_WEBRTC: &str = "enable-webrtc";
-pub const OPTION_RELAY_FALLBACK_DELAY: &str = "relay-fallback-delay";
 pub const OPTION_ALLOW_KCP_CC: &str = "allow-kcp-congestion-control";
 pub const OPTION_HIDE_USERNAME_ON_CARD: &str = "hide-username-on-card";
 pub const OPTION_HIDE_HELP_CARDS: &str = "hide-help-cards";
@@ -222,8 +216,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_ENABLE_TCP_PUNCH,
     OPTION_ENABLE_UDP_PUNCH,
     OPTION_ENABLE_IPV6_PUNCH,
-    OPTION_ENABLE_WEBRTC,
-    OPTION_RELAY_FALLBACK_DELAY,
     OPTION_TOUCH_MODE,
     OPTION_SHOW_VIRTUAL_MOUSE,
     OPTION_SHOW_VIRTUAL_JOYSTICK,
@@ -254,13 +246,9 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_APPROVE_MODE,
     OPTION_VERIFICATION_METHOD,
     OPTION_TEMPORARY_PASSWORD_LENGTH,
-    OPTION_PROXY_URL,
-    OPTION_PROXY_USERNAME,
-    OPTION_PROXY_PASSWORD,
     OPTION_CUSTOM_RENDEZVOUS_SERVER,
     OPTION_API_SERVER,
     OPTION_KEY,
-    OPTION_ALLOW_WEBSOCKET,
     OPTION_PRESET_ADDRESS_BOOK_NAME,
     OPTION_PRESET_ADDRESS_BOOK_TAG,
     OPTION_PRESET_ADDRESS_BOOK_ALIAS,
@@ -273,12 +261,8 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE,
     OPTION_ENABLE_TRUSTED_DEVICES,
     OPTION_RELAY_SERVER,
-    OPTION_ICE_SERVERS,
-    OPTION_DISABLE_UDP,
-    OPTION_ALLOW_INSECURE_TLS_FALLBACK,
     OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
     OPTION_ALLOW_KCP_CC,
-    OPTION_ALLOW_WEBRTC_CC,
 ];
 
 // BUILDIN_SETTINGS
@@ -291,10 +275,7 @@ pub const KEYS_BUILDIN_SETTINGS: &[&str] = &[
     OPTION_REMOVE_PRESET_PASSWORD_WARNING,
     OPTION_HIDE_GENERAL_SETTINGS,
     OPTION_HIDE_SECURITY_SETTINGS,
-    OPTION_HIDE_NETWORK_SETTINGS,
     OPTION_HIDE_SERVER_SETTINGS,
-    OPTION_HIDE_PROXY_SETTINGS,
-    OPTION_HIDE_WEBSOCKET_SETTINGS,
     OPTION_HIDE_STOP_SERVICE,
     OPTION_HIDE_USERNAME_ON_CARD,
     OPTION_HIDE_HELP_CARDS,

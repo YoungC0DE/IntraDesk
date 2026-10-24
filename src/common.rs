@@ -863,33 +863,24 @@ pub fn get_rs_pk(str_base64: &str) -> Option<sign::PublicKey> {
 }
 
 pub fn decode_id_pk(signed: &[u8], key: &sign::PublicKey) -> ResultType<(String, [u8; 32])> {
-    let (id, pk, _, _) = decode_id_pk_dtls(signed, key)?;
+    let (id, pk, _) = decode_id_pk_kx(signed, key)?;
     Ok((id, pk))
 }
 
-/// Like [`decode_id_pk`] but also returns the signed DTLS certificate fingerprint (empty string
-/// for non-WebRTC peers), used to bind a WebRTC DTLS channel to the verified peer identity, and
-/// the newest key exchange version the peer speaks (0, the original scheme, for a peer from
-/// before versions).
-pub fn decode_id_pk_dtls(
+/// Like [`decode_id_pk`] but also returns the newest key exchange version the peer speaks (0,
+/// the original scheme, for a peer from before versions).
+pub fn decode_id_pk_kx(
     signed: &[u8],
     key: &sign::PublicKey,
-) -> ResultType<(String, [u8; 32], String, u32)> {
+) -> ResultType<(String, [u8; 32], u32)> {
     let res = IdPk::parse_from_bytes(
         &sign::verify(signed, key).map_err(|_| anyhow!("Signature mismatch"))?,
     )?;
     if let Some(pk) = get_pk(&res.pk) {
-        Ok((res.id, pk, res.dtls_fingerprint, res.kx_version))
+        Ok((res.id, pk, res.kx_version))
     } else {
         bail!("Wrong their public length");
     }
-}
-
-/// Whether the DTLS fingerprint a WebRTC peer signed into its identity is the one of the channel
-/// actually negotiated. An empty signed value binds nothing: on a WebRTC channel it is either a
-/// peer that could not sign one or a rendezvous/relay that stripped it, and both fail closed.
-pub fn dtls_fingerprint_bound(signed_fp: &str, actual_fp: &str) -> bool {
-    !signed_fp.is_empty() && signed_fp == actual_fp
 }
 
 pub fn create_symmetric_key_msg(their_pk_b: [u8; 32]) -> (Bytes, Bytes, secretbox::Key) {
@@ -1313,14 +1304,13 @@ mod tests {
     }
 
     #[test]
-    fn test_dtls_fingerprint_travels_signed_and_binds() {
+    fn test_signed_id_pk_decodes_and_rejects_tampering() {
         let (pk, sk) = sign::gen_keypair();
-        let fp = "sha-256 0A:1B:2C";
         let signed = sign::sign(
             &IdPk {
                 id: "123456789".to_owned(),
                 pk: Bytes::from(vec![7u8; 32]),
-                dtls_fingerprint: fp.to_owned(),
+                kx_version: 1,
                 ..Default::default()
             }
             .write_to_bytes()
@@ -1328,25 +1318,20 @@ mod tests {
             &sk,
         );
 
-        let (id, their_pk, signed_fp, _) = decode_id_pk_dtls(&signed, &pk).unwrap();
+        let (id, their_pk, kx_version) = decode_id_pk_kx(&signed, &pk).unwrap();
         assert_eq!(id, "123456789");
         assert_eq!(their_pk, [7u8; 32]);
-        assert_eq!(signed_fp, fp);
-        assert!(dtls_fingerprint_bound(&signed_fp, fp));
-        assert!(!dtls_fingerprint_bound(&signed_fp, "sha-256 0A:1B:2D"));
-        assert!(!dtls_fingerprint_bound("", ""));
+        assert_eq!(kx_version, 1);
 
-        // The fingerprint is under the signature: a blob verified with another key yields
-        // nothing, and one whose payload was edited in transit fails verification.
+        // A blob verified with another key yields nothing, and one whose payload was edited in
+        // transit fails verification.
         let (other_pk, _) = sign::gen_keypair();
-        assert!(decode_id_pk_dtls(&signed, &other_pk).is_err());
+        assert!(decode_id_pk_kx(&signed, &other_pk).is_err());
         let mut tampered = signed.clone();
         let last = tampered.len() - 1;
         tampered[last] ^= 1;
-        assert!(decode_id_pk_dtls(&tampered, &pk).is_err());
+        assert!(decode_id_pk_kx(&tampered, &pk).is_err());
 
-        // `decode_id_pk` is the same blob minus the fingerprint, so the field is invisible to
-        // non-WebRTC handshakes.
         assert_eq!(decode_id_pk(&signed, &pk).unwrap(), (id, their_pk));
     }
 }

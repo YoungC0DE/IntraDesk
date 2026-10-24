@@ -1,4 +1,4 @@
-use crate::{bail, bytes_codec::BytesCodec, ResultType, config::Socks5Server, proxy::Proxy};
+use crate::{bail, bytes_codec::BytesCodec, ResultType};
 use anyhow::Context as AnyhowCtx;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{SinkExt, StreamExt};
@@ -18,7 +18,6 @@ use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{lookup_host, TcpListener, TcpSocket, ToSocketAddrs},
 };
-use tokio_socks::IntoTargetAddr;
 use tokio_util::codec::Framed;
 
 pub trait TcpStreamTrait: AsyncRead + AsyncWrite + Unpin {}
@@ -141,19 +140,6 @@ impl FramedStream {
             }
         }
         bail!(format!("Failed to connect to {remote_addr}"));
-    }
-
-    pub async fn connect<'t, T>(
-        target: T,
-        local_addr: Option<SocketAddr>,
-        proxy_conf: &Socks5Server,
-        ms_timeout: u64,
-    ) -> ResultType<Self>
-    where
-        T: IntoTargetAddr<'t>,
-    {
-        let proxy = Proxy::from_conf(proxy_conf, Some(ms_timeout))?;
-        proxy.connect::<T>(target, local_addr).await
     }
 
     pub fn local_addr(&self) -> SocketAddr {

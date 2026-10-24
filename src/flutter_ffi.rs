@@ -863,9 +863,6 @@ pub fn main_get_error() -> String {
 }
 
 pub fn main_set_option(key: String, value: String) {
-    if key.eq(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK) {
-        hbb_common::tls::reset_tls_cache();
-    }
     set_option(key, value);
 }
 
@@ -882,22 +879,6 @@ pub fn main_set_options(json: String) {
     if !map.is_empty() {
         set_options(map)
     }
-}
-
-pub fn main_test_if_valid_server(server: String, test_with_proxy: bool) -> String {
-    test_if_valid_server(server, test_with_proxy)
-}
-
-pub fn main_set_socks(proxy: String, username: String, password: String) {
-    set_socks(proxy, username, password)
-}
-
-pub fn main_get_proxy_status() -> bool {
-    get_proxy_status()
-}
-
-pub fn main_get_socks() -> Vec<String> {
-    get_socks()
 }
 
 pub fn main_get_app_name() -> String {

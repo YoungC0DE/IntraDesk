@@ -218,11 +218,6 @@ pub fn get_options() -> String {
 }
 
 #[inline]
-pub fn test_if_valid_server(host: String, test_with_proxy: bool) -> String {
-    hbb_common::socket_client::test_if_valid_server(&host, test_with_proxy)
-}
-
-#[inline]
 pub fn get_sound_inputs() -> Vec<String> {
     let mut a = Vec::new();
     {
@@ -280,38 +275,6 @@ pub fn set_option(key: String, value: String) {
         }
         ipc::set_options(options.clone()).ok();
     }
-}
-
-#[inline]
-pub fn get_socks() -> Vec<String> {
-    let s = ipc::get_socks();
-    match s {
-        None => Vec::new(),
-        Some(s) => {
-            let mut v = Vec::new();
-            v.push(s.proxy);
-            v.push(s.username);
-            v.push(s.password);
-            v
-        }
-    }
-}
-
-#[inline]
-pub fn set_socks(proxy: String, username: String, password: String) {
-    let socks = config::Socks5Server {
-        proxy,
-        username,
-        password,
-    };
-    ipc::set_socks(socks).ok();
-}
-
-#[inline]
-pub fn get_proxy_status() -> bool {
-    return ipc::get_proxy_status();
-
-    // Currently, only the desktop version has proxy settings.
 }
 
 #[inline]

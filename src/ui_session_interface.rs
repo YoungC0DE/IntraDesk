@@ -1044,10 +1044,8 @@ impl<T: InvokeUiSession> Session<T> {
         if true == force_relay {
             let mut lc = self.lc.write().unwrap();
             lc.force_relay = true;
-            // An explicit retry-via-relay is a decision about this peer, not transport
-            // necessity: Relay-only ICE for this round like any force-always-relay session,
-            // and it is the one kind of relay that belongs in the peer's saved config.
-            lc.policy_relay = true;
+            // An explicit retry-via-relay is a decision about this peer: it belongs in the
+            // peer's saved config.
             lc.peer_relay = true;
         }
         self.lc.write().unwrap().peer_info = None;

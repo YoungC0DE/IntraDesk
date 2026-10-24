@@ -6,7 +6,7 @@ pub use clipboard::ClipboardFile;
 use hbb_common::{
     allow_err, bail, bytes,
     bytes_codec::BytesCodec,
-    config::{self, Config, Config2},
+    config::{Config, Config2},
     futures::StreamExt as _,
     futures_util::sink::SinkExt,
     log, password_security as password, timeout,
@@ -17,7 +17,7 @@ use hbb_common::{
     tokio_util::codec::Framed,
     ResultType,
 };
-use base::config::keys::{self, OPTION_ALLOW_WEBSOCKET};
+use base::config::keys;
 pub(crate) use ipc_auth::authorize_windows_portable_service_ipc_connection;
 use ipc_auth::{
     authorize_windows_main_ipc_connection, portable_service_listener_security_attributes,
@@ -259,7 +259,6 @@ pub enum Data {
     Options(Option<HashMap<String, String>>),
     ConfirmedKey(Option<(Vec<u8>, Vec<u8>)>),
     RawMessage(Vec<u8>),
-    Socks(Option<config::Socks5Server>),
     FS(FS),
     Test,
     SyncConfig(Option<Box<(Config, Config2)>>),
@@ -356,7 +355,6 @@ pub enum Data {
     HwCodecConfig(Option<String>),
     RemoveTrustedDevices(Vec<Bytes>),
     ClearTrustedDevices,
-    SocksWs(Option<Box<(Option<config::Socks5Server>, String)>>),
     ControlPermissionsRemoteModify(Option<bool>),
     FileTransferEnabledState(Option<bool>),
     // --- DRM/KMS capture (opt-in `drm` feature) over the `_drm` service-scoped channel ---
@@ -476,26 +474,17 @@ pub async fn new_listener(postfix: &str) -> ResultType<Incoming> {
 
 pub struct CheckIfRestart {
     audio_input: String,
-    allow_insecure_tls_fallback: String,
 }
 
 impl CheckIfRestart {
     pub fn new() -> CheckIfRestart {
         CheckIfRestart {
             audio_input: Config::get_option("audio-input"),
-            allow_insecure_tls_fallback: Config::get_option(
-                keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK,
-            ),
         }
     }
 }
 impl Drop for CheckIfRestart {
     fn drop(&mut self) {
-        if self.allow_insecure_tls_fallback
-            != Config::get_option(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK)
-        {
-            hbb_common::tls::reset_tls_cache();
-        }
         if self.audio_input != Config::get_option("audio-input") {
             crate::audio_service::restart();
         }
@@ -536,32 +525,6 @@ async fn handle(data: Data, stream: &mut Connection) {
             };
             allow_err!(stream.send(&Data::ConfirmedKey(out)).await);
         }
-        Data::Socks(s) => match s {
-            None => {
-                allow_err!(stream.send(&Data::Socks(Config::get_socks())).await);
-            }
-            Some(data) => {
-                if data.proxy.is_empty() {
-                    Config::set_socks(None);
-                } else {
-                    Config::set_socks(Some(data));
-                }
-                log::info!("socks updated");
-            }
-        },
-        Data::SocksWs(s) => match s {
-            None => {
-                allow_err!(
-                    stream
-                        .send(&Data::SocksWs(Some(Box::new((
-                            Config::get_socks(),
-                            Config::get_option(OPTION_ALLOW_WEBSOCKET)
-                        )))))
-                        .await
-                );
-            }
-            _ => {}
-        },
         Data::VideoConnCount(None) => {
             let n = crate::server::AUTHED_CONNS
                 .lock()
@@ -1233,67 +1196,6 @@ pub async fn set_options(value: HashMap<String, String>) -> ResultType<()> {
     Ok(())
 }
 
-#[inline]
-async fn get_socks_(ms_timeout: u64) -> ResultType<Option<config::Socks5Server>> {
-    let mut c = connect(ms_timeout, "").await?;
-    c.send(&Data::Socks(None)).await?;
-    if let Some(Data::Socks(value)) = c.next_timeout(ms_timeout).await? {
-        Config::set_socks(value.clone());
-        Ok(value)
-    } else {
-        Ok(Config::get_socks())
-    }
-}
-
-pub async fn get_socks_async(ms_timeout: u64) -> Option<config::Socks5Server> {
-    get_socks_(ms_timeout).await.unwrap_or(Config::get_socks())
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn get_socks() -> Option<config::Socks5Server> {
-    get_socks_async(1_000).await
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn set_socks(value: config::Socks5Server) -> ResultType<()> {
-    Config::set_socks(if value.proxy.is_empty() {
-        None
-    } else {
-        Some(value.clone())
-    });
-    connect(1_000, "")
-        .await?
-        .send(&Data::Socks(Some(value)))
-        .await?;
-    Ok(())
-}
-
-async fn get_socks_ws_(ms_timeout: u64) -> ResultType<(Option<config::Socks5Server>, String)> {
-    let mut c = connect(ms_timeout, "").await?;
-    c.send(&Data::SocksWs(None)).await?;
-    if let Some(Data::SocksWs(Some(value))) = c.next_timeout(ms_timeout).await? {
-        Config::set_socks(value.0.clone());
-        Config::set_option(OPTION_ALLOW_WEBSOCKET.to_string(), value.1.clone());
-        Ok(*value)
-    } else {
-        Ok((
-            Config::get_socks(),
-            Config::get_option(OPTION_ALLOW_WEBSOCKET),
-        ))
-    }
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn get_socks_ws() -> (Option<config::Socks5Server>, String) {
-    get_socks_ws_(1_000).await.unwrap_or((
-        Config::get_socks(),
-        Config::get_option(OPTION_ALLOW_WEBSOCKET),
-    ))
-}
-
-pub fn get_proxy_status() -> bool {
-    Config::get_socks().is_some()
-}
 #[tokio::main(flavor = "current_thread")]
 pub async fn send_url_scheme(url: String) -> ResultType<()> {
     connect(1_000, "_url")

@@ -1469,8 +1469,7 @@ String bool2option(String option, bool b) {
   String res;
   if (option.startsWith('enable-') &&
       option != kOptionEnableUdpPunch &&
-      option != kOptionEnableIpv6Punch &&
-      option != kOptionEnableWebrtc) {
+      option != kOptionEnableIpv6Punch) {
     res = b ? defaultOptionYes : 'N';
   } else if (option.startsWith('allow-') ||
       option == kOptionStopService ||

@@ -134,8 +134,6 @@ const String kOptionEnableUdpPunch = "enable-udp-punch";
 const String kOptionEnableIpv6Punch = "enable-ipv6-punch";
 const String kOptionAllowSyncClipboardBetweenSessions =
     "allow-sync-clipboard-between-sessions";
-const String kOptionEnableWebrtc = "enable-webrtc";
-const String kOptionRelayFallbackDelay = "relay-fallback-delay";
 const String kOptionEnableTrustedDevices = "enable-trusted-devices";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
 const String kOptionVirtualMouseScale = "virtual-mouse-scale";
@@ -144,17 +142,11 @@ const String kOptionAllowMonitorSwitchMainToolbar = "allow-monitor-switch-main-t
 const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-toolbar";
 
 // network options
-const String kOptionAllowWebSocket = "allow-websocket";
-const String kOptionAllowInsecureTLSFallback = "allow-insecure-tls-fallback";
-const String kOptionDisableUdp = "disable-udp";
 
 // builtin options
-const String kOptionHideProxySetting = "hide-proxy-settings";
-const String kOptionHideWebSocketSetting = "hide-websocket-settings";
 const String kOptionHideStopService = "hide-stop-service";
 const String kOptionHideGeneralSetting = "hide-general-settings";
 const String kOptionHideSecuritySetting = "hide-security-settings";
-const String kOptionHideNetworkSetting = "hide-network-settings";
 const String kOptionRemovePresetPasswordWarning =
     "remove-preset-password-warning";
 const String kOptionDisableChangePermanentPassword =

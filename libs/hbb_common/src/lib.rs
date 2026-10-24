@@ -14,10 +14,8 @@ use std::{
 };
 pub use tokio;
 pub use tokio_util;
-pub mod proxy;
 pub mod socket_client;
 pub mod tcp;
-pub mod udp;
 pub use env_logger;
 pub use log;
 pub mod bytes_codec;
@@ -30,9 +28,6 @@ pub use mac_address;
 pub use rand;
 pub use regex;
 pub use sodiumoxide;
-pub use tokio_socks;
-pub use tokio_socks::IntoTargetAddr;
-pub use tokio_socks::TargetAddr;
 pub mod password_security;
 pub use chrono;
 pub use directories_next;
@@ -52,14 +47,8 @@ pub use flexi_logger;
 pub mod log_throttle;
 pub mod rx_probe;
 pub mod stream;
-pub mod websocket;
-#[cfg(feature = "webrtc")]
-pub mod webrtc;
 pub use stream::Stream;
 pub use whoami;
-pub mod tls;
-pub mod verifier;
-pub use async_recursion;
 pub use libloading;
 
 pub type SessionID = uuid::Uuid;
@@ -388,15 +377,10 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
     #[allow(unused_mut)]
     let mut logger_holder: Option<flexi_logger::LoggerHandle> = None;
     INIT.call_once(|| {
-        // webrtc-rs reports the racing design's normal outcome at warn: cancelling the transport
-        // that lost closes every gathered candidate one line at a time, and trickle means the
-        // agent always checks before it holds a pair. Both read as faults beside a connection
-        // that succeeded. agent_gather keeps its warn level - a STUN server it could not reach
-        // is the one upstream signal that explains a session which never connected.
         #[cfg(debug_assertions)]
         {
             use env_logger::*;
-            init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info,reqwest=warn,hyper_util=warn,rustls=warn,webrtc-sctp=warn,webrtc=warn,webrtc_ice::agent::agent_internal=error,webrtc::peer_connection=error"));
+            init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
         }
         #[cfg(not(debug_assertions))]
         {
@@ -407,7 +391,7 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
                 path.push(_name);
             }
             use flexi_logger::*;
-            if let Ok(x) = Logger::try_with_env_or_str("debug,reqwest=warn,hyper_util=warn,rustls=warn,webrtc-sctp=warn,webrtc=warn,webrtc_ice::agent::agent_internal=error,webrtc::peer_connection=error") {
+            if let Ok(x) = Logger::try_with_env_or_str("debug") {
                 logger_holder = x
                     .log_to_file(FileSpec::default().directory(path))
                     .write_mode(if _is_async {

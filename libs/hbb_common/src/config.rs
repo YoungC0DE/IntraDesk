@@ -170,12 +170,6 @@ macro_rules! serde_field_bool {
     };
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum NetworkType {
-    Direct,
-    ProxySocks,
-}
-
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config {
     #[serde(
@@ -198,16 +192,6 @@ pub struct Config {
     keys_confirmed: HashMap<String, bool>,
 }
 
-#[derive(Debug, Default, PartialEq, Serialize, Deserialize, Clone)]
-pub struct Socks5Server {
-    #[serde(default, deserialize_with = "deserialize_string")]
-    pub proxy: String,
-    #[serde(default, deserialize_with = "deserialize_string")]
-    pub username: String,
-    #[serde(default, deserialize_with = "deserialize_string")]
-    pub password: String,
-}
-
 // more variable configs
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config2 {
@@ -219,9 +203,6 @@ pub struct Config2 {
     unlock_pin: String,
     #[serde(default, deserialize_with = "deserialize_string")]
     trusted_devices: String,
-
-    #[serde(default)]
-    socks: Option<Socks5Server>,
 
     // the other scalar value must before this
     #[serde(default, deserialize_with = "deserialize_hashmap_string_string")]
@@ -428,18 +409,9 @@ fn patch(path: PathBuf) -> PathBuf {
 impl Config2 {
     fn load() -> Config2 {
         let mut config = Config::load_::<Config2>("2");
-        let mut store = false;
-        if let Some(mut socks) = config.socks {
-            let (password, _, store2) =
-                decrypt_str_or_original(&socks.password, PASSWORD_ENC_VERSION);
-            socks.password = password;
-            config.socks = Some(socks);
-            store |= store2;
-        }
-        let (unlock_pin, _, store2) =
+        let (unlock_pin, _, store) =
             decrypt_str_or_original(&config.unlock_pin, PASSWORD_ENC_VERSION);
         config.unlock_pin = unlock_pin;
-        store |= store2;
         if store {
             config.store();
         }
@@ -453,16 +425,6 @@ impl Config2 {
     fn store(&self) {
         let mut config = self.clone();
         let stored = Config::load_::<Config2>("2");
-        if let Some(mut socks) = config.socks {
-            let stored_password = stored
-                .socks
-                .as_ref()
-                .map(|socks| socks.password.as_str())
-                .unwrap_or_default();
-            socks.password =
-                keep_encrypted_storage_if_plaintext_unchanged(&socks.password, stored_password);
-            config.socks = Some(socks);
-        }
         config.unlock_pin =
             keep_encrypted_storage_if_plaintext_unchanged(&config.unlock_pin, &stored.unlock_pin);
         Config::store_(&config, "2");
@@ -1258,106 +1220,6 @@ impl Config {
             Config::set_salt(&salt);
         }
         salt
-    }
-
-    pub fn set_socks(socks: Option<Socks5Server>) {
-        if OVERWRITE_SETTINGS
-            .read()
-            .unwrap()
-            .contains_key(keys::OPTION_PROXY_URL)
-        {
-            return;
-        }
-
-        let mut config = CONFIG2.write().unwrap();
-        if config.socks == socks {
-            return;
-        }
-        if config.socks.is_none() {
-            let equal_to_default = |key: &str, value: &str| {
-                DEFAULT_SETTINGS
-                    .read()
-                    .unwrap()
-                    .get(key)
-                    .map_or(false, |x| *x == value)
-            };
-            let contains_url = DEFAULT_SETTINGS
-                .read()
-                .unwrap()
-                .get(keys::OPTION_PROXY_URL)
-                .is_some();
-            let url = equal_to_default(
-                keys::OPTION_PROXY_URL,
-                &socks.clone().unwrap_or_default().proxy,
-            );
-            let username = equal_to_default(
-                keys::OPTION_PROXY_USERNAME,
-                &socks.clone().unwrap_or_default().username,
-            );
-            let password = equal_to_default(
-                keys::OPTION_PROXY_PASSWORD,
-                &socks.clone().unwrap_or_default().password,
-            );
-            if contains_url && url && username && password {
-                return;
-            }
-        }
-        config.socks = socks;
-        config.store();
-    }
-
-    #[inline]
-    fn get_socks_from_custom_client_advanced_settings(
-        settings: &HashMap<String, String>,
-    ) -> Option<Socks5Server> {
-        let url = settings.get(keys::OPTION_PROXY_URL)?;
-        Some(Socks5Server {
-            proxy: url.to_owned(),
-            username: settings
-                .get(keys::OPTION_PROXY_USERNAME)
-                .map(|x| x.to_string())
-                .unwrap_or_default(),
-            password: settings
-                .get(keys::OPTION_PROXY_PASSWORD)
-                .map(|x| x.to_string())
-                .unwrap_or_default(),
-        })
-    }
-
-    pub fn get_socks() -> Option<Socks5Server> {
-        Self::get_socks_from_custom_client_advanced_settings(&OVERWRITE_SETTINGS.read().unwrap())
-            .or(CONFIG2.read().unwrap().socks.clone())
-            .or(Self::get_socks_from_custom_client_advanced_settings(
-                &DEFAULT_SETTINGS.read().unwrap(),
-            ))
-    }
-
-    #[inline]
-    pub fn is_proxy() -> bool {
-        Self::get_network_type() != NetworkType::Direct
-    }
-
-    pub fn get_network_type() -> NetworkType {
-        if OVERWRITE_SETTINGS
-            .read()
-            .unwrap()
-            .get(keys::OPTION_PROXY_URL)
-            .is_some()
-        {
-            return NetworkType::ProxySocks;
-        }
-        if CONFIG2.read().unwrap().socks.is_some() {
-            return NetworkType::ProxySocks;
-        }
-        if DEFAULT_SETTINGS
-            .read()
-            .unwrap()
-            .get(keys::OPTION_PROXY_URL)
-            .is_some()
-        {
-            return NetworkType::ProxySocks;
-        }
-        NetworkType::Direct
     }
 
     pub fn get_unlock_pin() -> String {
@@ -2328,16 +2190,6 @@ pub fn option2bool(option: &str, value: &str) -> bool {
     }
 }
 
-pub fn use_ws() -> bool {
-    let option = keys::OPTION_ALLOW_WEBSOCKET;
-    option2bool(option, &Config::get_option(option))
-}
-
-pub fn allow_insecure_tls_fallback() -> bool {
-    let option = keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK;
-    option2bool(option, &Config::get_option(option))
-}
-
 pub mod keys {
     // Only the keys hbb_common itself references.
     pub const OPTION_COLLAPSE_TOOLBAR: &str = "collapse_toolbar";
@@ -2358,23 +2210,12 @@ pub mod keys {
     pub const OPTION_CODEC_PREFERENCE: &str = "codec-preference";
     pub const OPTION_LANGUAGE: &str = "lang";
     pub const OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD: &str = "allow-numeric-one-time-password";
-    pub const OPTION_ALLOW_WEBSOCKET: &str = "allow-websocket";
     pub const OPTION_TRACKPAD_SPEED: &str = "trackpad-speed";
     pub const OPTION_REGISTER_DEVICE: &str = "register-device";
     pub const OPTION_RELAY_SERVER: &str = "relay-server";
-    pub const OPTION_ICE_SERVERS: &str = "ice-servers";
-    pub const OPTION_ALLOW_INSECURE_TLS_FALLBACK: &str = "allow-insecure-tls-fallback";
-    pub const OPTION_ALLOW_WEBRTC_CC: &str = "allow-webrtc-congestion-control";
     pub const OPTION_ALLOW_HOSTNAME_AS_ID: &str = "allow-hostname-as-id";
     pub const OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD: &str = "disable-change-permanent-password";
     pub const OPTION_DISABLE_UNLOCK_PIN: &str = "disable-unlock-pin";
-
-    // proxy settings
-    // The following options are not real keys, they are just used for custom client advanced settings.
-    // The real keys are in Config2::socks.
-    pub const OPTION_PROXY_URL: &str = "proxy-url";
-    pub const OPTION_PROXY_USERNAME: &str = "proxy-username";
-    pub const OPTION_PROXY_PASSWORD: &str = "proxy-password";
 }
 
 pub fn common_load<

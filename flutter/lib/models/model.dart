@@ -3322,13 +3322,6 @@ class QualityMonitorModel with ChangeNotifier {
   bool get show => _show;
   QualityMonitorData get data => _data;
 
-  // Only a WebRTC session on the web names its transport here: web has no
-  // session tab to show it on (the desktop tab's tooltip already does), and
-  // WebRTC is the one path that can be direct or TURN.
-  String? get webrtcTransport {
-    return null;
-  }
-
   checkShowQualityMonitor(SessionID sessionId) async {
     final show = await bind.sessionGetToggleOption(
             sessionId: sessionId, arg: 'show-quality-monitor') ==

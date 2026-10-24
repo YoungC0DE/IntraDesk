@@ -48,7 +48,6 @@ class _TabInfo {
 enum SettingsTabKey {
   general,
   safety,
-  network,
   display,
   about,
 }
@@ -60,9 +59,6 @@ class DesktopSettingPage extends StatefulWidget {
       SettingsTabKey.general,
     if (!bind.isOutgoingOnly() && !bind.isDisableSettings() && bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       SettingsTabKey.safety,
-    if (!bind.isDisableSettings() &&
-        bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) != 'Y')
-      SettingsTabKey.network,
     if (!bind.isIncomingOnly()) SettingsTabKey.display,
     SettingsTabKey.about,
   ];
@@ -179,10 +175,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(_TabInfo(tab, 'Security',
               Icons.enhanced_encryption_outlined, Icons.enhanced_encryption));
           break;
-        case SettingsTabKey.network:
-          settingTabs
-              .add(_TabInfo(tab, 'Network', Icons.link_outlined, Icons.link));
-          break;
         case SettingsTabKey.display:
           settingTabs.add(_TabInfo(tab, 'Display',
               Icons.desktop_windows_outlined, Icons.desktop_windows));
@@ -205,9 +197,6 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           break;
         case SettingsTabKey.safety:
           children.add(const _Safety());
-          break;
-        case SettingsTabKey.network:
-          children.add(const _Network());
           break;
         case SettingsTabKey.display:
           children.add(const _Display());
@@ -548,7 +537,6 @@ class _GeneralState extends State<_General> {
           isServer: false,
         ),
       ],
-      if (!incomingOnly) ...webrtcOptions(context),
       if (!incomingOnly)
         Tooltip(
           message: translate('sync-clipboard-between-sessions-tip'),
@@ -726,84 +714,6 @@ class _GeneralState extends State<_General> {
     });
   }
 
-  // How long an already-connected relay is held back to give the direct WebRTC
-  // attempt a chance to win. It only means anything while WebRTC is on, so it
-  // follows the checkbox as an indented sub-option and is hidden outright when
-  // the box is clear — the shape `directIp` uses for its port.
-  List<Widget> webrtcOptions(BuildContext context) {
-    final stored = bind.mainGetLocalOption(key: kOptionRelayFallbackDelay);
-    final controller = TextEditingController(text: stored);
-    // What the field holds against what is saved. Apply is offered only while
-    // the two differ, so an untouched field shows no button at all, and neither
-    // does one typed back to its saved value or cleared when nothing was saved
-    // — the state an "edited" flag alone would still call dirty.
-    final typed = RxString(stored);
-    final saved = RxString(stored);
-    return [
-      _OptionCheckBox(
-        context,
-        'Enable WebRTC P2P connection',
-        kOptionEnableWebrtc,
-        isServer: false,
-        update: (_) => setState(() {}),
-      ),
-      () {
-        final enabled = mainGetLocalBoolOptionSync(kOptionEnableWebrtc);
-        final isOptFixed = isOptionFixed(kOptionRelayFallbackDelay);
-        return Offstage(
-          offstage: !enabled,
-          child: Tooltip(
-            message: translate('relay-fallback-delay-tip'),
-            child: _SubLabeledWidget(
-              context,
-              'Relay fallback delay in seconds',
-              Row(children: [
-                SizedBox(
-                  width: 95,
-                  child: TextField(
-                    controller: controller,
-                    enabled: enabled && !isOptFixed,
-                    onChanged: (v) => typed.value = v,
-                    inputFormatters: [
-                      // Seconds, at most one decimal. Clearing the field is
-                      // allowed and restores the built-in default.
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^([0-9]|[1-9][0-9])(\.[0-9]?)?$')),
-                    ],
-                    decoration: const InputDecoration(
-                      hintText: '2.5',
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    ),
-                  ).workaroundFreezeLinuxMint().marginOnly(right: 15),
-                ),
-                Obx(() => Offstage(
-                      offstage: typed.value.trim() == saved.value.trim(),
-                      child: ElevatedButton(
-                        onPressed: enabled &&
-                                !isOptFixed &&
-                                !typed.value.trim().endsWith('.') &&
-                                double.tryParse(typed.value.trim()) != 0
-                            ? () async {
-                                final v = controller.text.trim();
-                                await bind.mainSetLocalOption(
-                                    key: kOptionRelayFallbackDelay, value: v);
-                                if (controller.text != v) controller.text = v;
-                                typed.value = v;
-                                saved.value = v;
-                              }
-                            : null,
-                        child: Text(translate('Apply')),
-                      ),
-                    ))
-              ]),
-              enabled: enabled && !isOptFixed,
-            ),
-          ),
-        );
-      }(),
-    ];
-  }
 }
 
 enum _AccessMode {
@@ -1449,149 +1359,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
             }
           : null,
     ).marginOnly(left: _kCheckBoxLeftMargin);
-  }
-}
-
-class _Network extends StatefulWidget {
-  const _Network({Key? key}) : super(key: key);
-
-  @override
-  State<_Network> createState() => _NetworkState();
-}
-
-class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-  bool locked = false;
-
-  final scrollController = ScrollController();
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return ListView(controller: scrollController, children: [
-      _lock(locked, 'Unlock Network Settings', () {
-        locked = false;
-        setState(() => {});
-      }),
-      preventMouseKeyBuilder(
-        block: locked,
-        child: Column(children: [
-          network(context),
-        ]),
-      ),
-    ]).marginOnly(bottom: _kListViewBottomMargin);
-  }
-
-  Widget network(BuildContext context) {
-    final hideProxy =
-        bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
-    final hideWebSocket = bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y';
-
-    if (hideProxy && hideWebSocket) {
-      return Offstage();
-    }
-
-    // Helper function to create network setting ListTiles
-    Widget listTile({
-      required IconData icon,
-      required String title,
-      VoidCallback? onTap,
-      Widget? trailing,
-      bool showTooltip = false,
-      String tooltipMessage = '',
-    }) {
-      final titleWidget = showTooltip
-          ? Row(
-              children: [
-                Tooltip(
-                  waitDuration: Duration(milliseconds: 1000),
-                  message: translate(tooltipMessage),
-                  child: Row(
-                    children: [
-                      Text(
-                        translate(title),
-                        style: TextStyle(fontSize: _kContentFontSize),
-                      ),
-                      SizedBox(width: 5),
-                      Icon(
-                        Icons.help_outline,
-                        size: 14,
-                        color: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.color
-                            ?.withOpacity(0.7),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            )
-          : Text(
-              translate(title),
-              style: TextStyle(fontSize: _kContentFontSize),
-            );
-
-      return ListTile(
-        leading: Icon(icon, color: _accentColor),
-        title: titleWidget,
-        enabled: !locked,
-        onTap: onTap,
-        trailing: trailing,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 16),
-        minLeadingWidth: 0,
-        horizontalTitleGap: 10,
-      );
-    }
-
-    Widget switchWidget(IconData icon, String title, String tooltipMessage,
-            String optionKey) =>
-        listTile(
-          icon: icon,
-          title: title,
-          showTooltip: true,
-          tooltipMessage: tooltipMessage,
-          trailing: Switch(
-            value: mainGetBoolOptionSync(optionKey),
-            onChanged: locked || isOptionFixed(optionKey)
-                ? null
-                : (value) {
-                    mainSetBoolOption(optionKey, value);
-                    setState(() {});
-                  },
-          ),
-        );
-
-    final divider = const Divider(height: 1, indent: 16, endIndent: 16);
-    return _Card(
-      title: 'Network',
-      children: [
-        Container(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!hideProxy)
-                listTile(
-                  icon: Icons.network_ping_outlined,
-                  title: 'Socks5/Http(s) Proxy',
-                  onTap: changeSocks5Proxy,
-                ),
-              if (!hideWebSocket && !hideProxy) divider,
-              if (!hideWebSocket)
-                switchWidget(
-                    Icons.web_asset_outlined,
-                    'Use WebSocket',
-                    '${translate('websocket_tip')}\n\n${translate('server-oss-not-support-tip')}',
-                    kOptionAllowWebSocket),
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -2539,173 +2306,5 @@ class _ShortcutsConfigureRow extends StatelessWidget {
 //#endregion
 
 //#region dialogs
-
-void changeSocks5Proxy() async {
-  var socks = await bind.mainGetSocks();
-
-  String proxy = '';
-  String proxyMsg = '';
-  String username = '';
-  String password = '';
-  if (socks.length == 3) {
-    proxy = socks[0];
-    username = socks[1];
-    password = socks[2];
-  }
-  var proxyController = TextEditingController(text: proxy);
-  var userController = TextEditingController(text: username);
-  var pwdController = TextEditingController(text: password);
-  RxBool obscure = true.obs;
-
-  // proxy settings
-  // The following option is a not real key, it is just used for custom client advanced settings.
-  const String optionProxyUrl = "proxy-url";
-  final isOptFixed = isOptionFixed(optionProxyUrl);
-
-  var isInProgress = false;
-  gFFI.dialogManager.show((setState, close, context) {
-    submit() async {
-      setState(() {
-        proxyMsg = '';
-        isInProgress = true;
-      });
-      cancel() {
-        setState(() {
-          isInProgress = false;
-        });
-      }
-
-      proxy = proxyController.text.trim();
-      username = userController.text.trim();
-      password = pwdController.text.trim();
-
-      if (proxy.isNotEmpty) {
-        String domainPort = proxy;
-        if (domainPort.contains('://')) {
-          domainPort = domainPort.split('://')[1];
-        }
-        proxyMsg = translate(await bind.mainTestIfValidServer(
-            server: domainPort, testWithProxy: false));
-        if (proxyMsg.isEmpty) {
-          // ignore
-        } else {
-          cancel();
-          return;
-        }
-      }
-      await bind.mainSetSocks(
-          proxy: proxy, username: username, password: password);
-      close();
-    }
-
-    return CustomAlertDialog(
-      title: Text(translate('Socks5/Http(s) Proxy')),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 500),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 140),
-                    child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Row(
-                          children: [
-                            Text(
-                              translate('Server'),
-                            ).marginOnly(right: 4),
-                            Tooltip(
-                              waitDuration: Duration(milliseconds: 0),
-                              message: translate("default_proxy_tip"),
-                              child: Icon(
-                                Icons.help_outline_outlined,
-                                size: 16,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .titleLarge
-                                    ?.color
-                                    ?.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        )).marginOnly(right: 10),
-                  ),
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      errorText: proxyMsg.isNotEmpty ? proxyMsg : null,
-                      labelText: null,
-                      helperText:
-                          null,
-                      helperMaxLines: null,
-                    ),
-                    controller: proxyController,
-                    autofocus: true,
-                    enabled: !isOptFixed,
-                  ).workaroundFreezeLinuxMint(),
-                ),
-              ],
-            ).marginOnly(bottom: 8),
-            Row(
-              children: [
-                ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 140),
-                      child: Text(
-                        '${translate("Username")}:',
-                        textAlign: TextAlign.right,
-                      ).marginOnly(right: 10)),
-                Expanded(
-                  child: TextField(
-                    controller: userController,
-                    decoration: InputDecoration(
-                      labelText: null,
-                    ),
-                    enabled: !isOptFixed,
-                  ).workaroundFreezeLinuxMint(),
-                ),
-              ],
-            ).marginOnly(bottom: 8),
-            Row(
-              children: [
-                ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 140),
-                      child: Text(
-                        '${translate("Password")}:',
-                        textAlign: TextAlign.right,
-                      ).marginOnly(right: 10)),
-                Expanded(
-                  child: Obx(() => TextField(
-                        obscureText: obscure.value,
-                        decoration: InputDecoration(
-                            labelText: null,
-                            suffixIcon: IconButton(
-                                onPressed: () => obscure.value = !obscure.value,
-                                icon: Icon(obscure.value
-                                    ? Icons.visibility_off
-                                    : Icons.visibility))),
-                        controller: pwdController,
-                        enabled: !isOptFixed,
-                        maxLength: bind.mainMaxEncryptLen(),
-                      ).workaroundFreezeLinuxMint()),
-                ),
-              ],
-            ),
-            // NOT use Offstage to wrap LinearProgressIndicator
-            if (isInProgress)
-              const LinearProgressIndicator().marginOnly(top: 8),
-          ],
-        ),
-      ),
-      actions: [
-        dialogButton('Cancel', onPressed: close, isOutline: true),
-        if (!isOptFixed) dialogButton('OK', onPressed: submit),
-      ],
-      onSubmit: submit,
-      onCancel: close,
-    );
-  });
-}
 
 //#endregion

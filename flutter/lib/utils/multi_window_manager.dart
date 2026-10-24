@@ -200,7 +200,6 @@ class RustDeskMultiWindowManager {
     String? password,
     bool? forceRelay,
     String? switchUuid,
-    bool? isSharedPassword,
     String? connToken,
   }) async {
     var params = {
@@ -211,9 +210,6 @@ class RustDeskMultiWindowManager {
     };
     if (switchUuid != null) {
       params['switch_uuid'] = switchUuid;
-    }
-    if (isSharedPassword != null) {
-      params['isSharedPassword'] = isSharedPassword;
     }
     if (connToken != null) {
       params['connToken'] = connToken;
@@ -239,7 +235,6 @@ class RustDeskMultiWindowManager {
   Future<MultiWindowCallResult> newRemoteDesktop(
     String remoteId, {
     String? password,
-    bool? isSharedPassword,
     String? switchUuid,
     bool? forceRelay,
   }) async {
@@ -251,14 +246,12 @@ class RustDeskMultiWindowManager {
       password: password,
       forceRelay: forceRelay,
       switchUuid: switchUuid,
-      isSharedPassword: isSharedPassword,
     );
   }
 
   Future<MultiWindowCallResult> newFileTransfer(
     String remoteId, {
     String? password,
-    bool? isSharedPassword,
     bool? forceRelay,
     String? connToken,
   }) async {
@@ -269,7 +262,6 @@ class RustDeskMultiWindowManager {
       _fileTransferWindows,
       password: password,
       forceRelay: forceRelay,
-      isSharedPassword: isSharedPassword,
       connToken: connToken,
     );
   }

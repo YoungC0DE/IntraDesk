@@ -1048,7 +1048,6 @@ void msgBox(SessionID sessionId, String type, String title, String text,
     {bool? hasCancel,
     ReconnectHandle? reconnect,
     int? reconnectTimeout,
-    VoidCallback? onSubmit,
     int? submitTimeout}) {
   dialogManager.dismissAll();
   if (type.contains('insecure-connection')) {
@@ -1097,13 +1096,9 @@ void msgBox(SessionID sessionId, String type, String title, String text,
   bool hasOk = false;
   submit() {
     dialogManager.dismissAll();
-    if (onSubmit != null) {
-      onSubmit.call();
-    } else {
-      // https://github.com/rustdesk/rustdesk/blob/5e9a31340b899822090a3731769ae79c6bf5f3e5/src/ui/common.tis#L263
-      if (!type.contains("custom")) {
-        closeConnection();
-      }
+    // https://github.com/rustdesk/rustdesk/blob/5e9a31340b899822090a3731769ae79c6bf5f3e5/src/ui/common.tis#L263
+    if (!type.contains("custom")) {
+      closeConnection();
     }
   }
 
@@ -2200,18 +2195,15 @@ connectMainDesktop(String id,
     {required bool isFileTransfer,
     bool? forceRelay,
     String? password,
-    String? connToken,
-    bool? isSharedPassword}) async {
+    String? connToken}) async {
   if (isFileTransfer) {
     await rustDeskWinManager.newFileTransfer(id,
         password: password,
-        isSharedPassword: isSharedPassword,
         connToken: connToken,
         forceRelay: forceRelay);
   } else {
     await rustDeskWinManager.newRemoteDesktop(id,
         password: password,
-        isSharedPassword: isSharedPassword,
         forceRelay: forceRelay);
   }
 }
@@ -2222,8 +2214,7 @@ connect(BuildContext context, String id,
     {bool isFileTransfer = false,
     bool forceRelay = false,
     String? password,
-    String? connToken,
-    bool? isSharedPassword}) async {
+    String? connToken}) async {
   if (id == '') return;
   if (desktopType == DesktopType.main) {
     try {
@@ -2247,7 +2238,6 @@ connect(BuildContext context, String id,
       id,
       isFileTransfer: isFileTransfer,
       password: password,
-      isSharedPassword: isSharedPassword,
       forceRelay: forceRelay,
     );
   } else {
@@ -2255,7 +2245,6 @@ connect(BuildContext context, String id,
       'id': id,
       'isFileTransfer': isFileTransfer,
       'password': password,
-      'isSharedPassword': isSharedPassword,
       'forceRelay': forceRelay,
       'connToken': connToken,
     });

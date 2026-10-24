@@ -110,7 +110,6 @@ pub fn session_add_sync(
     switch_uuid: String,
     force_relay: bool,
     password: String,
-    is_shared_password: bool,
     conn_token: Option<String>,
 ) -> SyncReturn<String> {
     let add_res = session_add(
@@ -120,7 +119,6 @@ pub fn session_add_sync(
         &switch_uuid,
         force_relay,
         password,
-        is_shared_password,
         conn_token,
     );
     if let Err(e) = add_res {

@@ -148,7 +148,6 @@ const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-too
 const String kOptionAllowWebSocket = "allow-websocket";
 const String kOptionAllowInsecureTLSFallback = "allow-insecure-tls-fallback";
 const String kOptionDisableUdp = "disable-udp";
-const String kOptionEnableFlutterHttpOnRust = "enable-flutter-http-on-rust";
 
 // builtin options
 const String kOptionHideProxySetting = "hide-proxy-settings";

@@ -2534,7 +2534,6 @@ pub struct LoginConfigHandler {
     pub selected_windows_session_id: Option<u32>,
     pub peer_info: Option<PeerInfo>,
     password_source: PasswordSource, // where the sent password comes from
-    shared_password: Option<String>, // Store the shared password
     pub enable_trusted_devices: bool,
 }
 
@@ -2560,7 +2559,6 @@ impl LoginConfigHandler {
         switch_uuid: Option<String>,
         mut force_relay: bool,
         adapter_luid: Option<i64>,
-        shared_password: Option<String>,
         conn_token: Option<String>,
     ) {
         let mut id = id;
@@ -2648,7 +2646,6 @@ impl LoginConfigHandler {
         self.switch_uuid = switch_uuid;
         self.adapter_luid = adapter_luid;
         self.selected_windows_session_id = None;
-        self.shared_password = shared_password;
     }
 
     pub fn allow_switch_back_once(&mut self) {
@@ -4125,19 +4122,6 @@ pub async fn handle_hash(
             let res = hasher.finalize();
             password = res[..].into();
             lc.write().unwrap().password_source = Default::default();
-        }
-    }
-    // shared password
-    // Currently it's used only when click shared ab peer card
-    let shared_password = lc.write().unwrap().shared_password.take();
-    if let Some(shared_password) = shared_password {
-        if !shared_password.is_empty() {
-            let mut hasher = Sha256::new();
-            hasher.update(shared_password.clone());
-            hasher.update(&hash.salt);
-            let res = hasher.finalize();
-            password = res[..].into();
-            lc.write().unwrap().password_source = PasswordSource::SharedAb(shared_password);
         }
     }
     // peer config password

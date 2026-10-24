@@ -40,7 +40,6 @@ pub const OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW: &str = "enable-perm-change
 pub const OPTION_HIDE_ELEVATE_BUTTON_IN_ACCEPT_WINDOW: &str =
     "hide-elevate-button-in-accept-window";
 pub const OPTION_ALLOW_SCOPE_VIOLATION_CLOSE: &str = "allow-scope-violation-close";
-pub const OPTION_ALLOW_SCOPE_VIOLATION_ALARM: &str = "allow-scope-violation-alarm";
 pub const OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION: &str = "allow-remote-config-modification";
 pub const OPTION_ENABLE_LAN_DISCOVERY: &str = "enable-lan-discovery";
 pub const OPTION_DIRECT_ACCESS_PORT: &str = "direct-access-port";
@@ -87,7 +86,6 @@ pub const OPTION_SHOW_VIRTUAL_MOUSE: &str = "show-virtual-mouse";
 // joystick is the virtual mouse.
 // So `OPTION_SHOW_VIRTUAL_MOUSE` should also be set if `OPTION_SHOW_VIRTUAL_JOYSTICK` is set.
 pub const OPTION_SHOW_VIRTUAL_JOYSTICK: &str = "show-virtual-joystick";
-pub const OPTION_ENABLE_FLUTTER_HTTP_ON_RUST: &str = "enable-flutter-http-on-rust";
 pub const OPTION_ALLOW_ASK_FOR_NOTE: &str = "allow-ask-for-note";
 
 // built-in options
@@ -123,7 +121,6 @@ pub const OPTION_ALLOW_LOGON_SCREEN_PASSWORD: &str = "allow-logon-screen-passwor
 pub const OPTION_ALLOW_DEEP_LINK_PASSWORD: &str = "allow-deep-link-password";
 pub const OPTION_ALLOW_DEEP_LINK_SERVER_SETTINGS: &str = "allow-deep-link-server-settings";
 pub const OPTION_ONE_WAY_FILE_TRANSFER: &str = "one-way-file-transfer";
-pub const OPTION_ALLOW_HTTPS_21114: &str = "allow-https-21114";
 pub const OPTION_USE_RAW_TCP_FOR_API: &str = "use-raw-tcp-for-api";
 pub const OPTION_HIDE_POWERED_BY_ME: &str = "hide-powered-by-me";
 pub const OPTION_MAIN_WINDOW_ALWAYS_ON_TOP: &str = "main-window-always-on-top";
@@ -156,7 +153,6 @@ pub const OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS: &str = "keep-awake-during-
 // Client-side: keep client system awake during outgoing sessions (General setting)
 pub const OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS: &str = "keep-awake-during-outgoing-sessions";
 
-pub const OPTION_DISABLE_GROUP_PANEL: &str = "disable-group-panel";
 pub const OPTION_DISABLE_DISCOVERY_PANEL: &str = "disable-discovery-panel";
 pub const OPTION_PRE_ELEVATE_SERVICE: &str = "pre-elevate-service";
 
@@ -219,7 +215,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_KEEP_SCREEN_ON,
     // Client-side: keep client system awake during outgoing sessions (General setting)
     OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS,
-    OPTION_DISABLE_GROUP_PANEL,
     OPTION_DISABLE_DISCOVERY_PANEL,
     OPTION_PRE_ELEVATE_SERVICE,
     OPTION_ALLOW_REMOTE_CM_MODIFICATION,
@@ -232,7 +227,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_TOUCH_MODE,
     OPTION_SHOW_VIRTUAL_MOUSE,
     OPTION_SHOW_VIRTUAL_JOYSTICK,
-    OPTION_ENABLE_FLUTTER_HTTP_ON_RUST,
     OPTION_ALLOW_ASK_FOR_NOTE,
 ];
 // DEFAULT_SETTINGS, OVERWRITE_SETTINGS
@@ -244,7 +238,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_AUDIO,
     OPTION_ENABLE_REMOTE_RESTART,
     OPTION_ALLOW_SCOPE_VIOLATION_CLOSE,
-    OPTION_ALLOW_SCOPE_VIOLATION_ALARM,
     OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION,
     OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD,
     OPTION_ENABLE_LAN_DISCOVERY,
@@ -313,7 +306,6 @@ pub const KEYS_BUILDIN_SETTINGS: &[&str] = &[
     OPTION_ALLOW_DEEP_LINK_PASSWORD,
     OPTION_ALLOW_DEEP_LINK_SERVER_SETTINGS,
     OPTION_ONE_WAY_FILE_TRANSFER,
-    OPTION_ALLOW_HTTPS_21114,
     OPTION_ALLOW_HOSTNAME_AS_ID,
     OPTION_REGISTER_DEVICE,
     OPTION_HIDE_POWERED_BY_ME,

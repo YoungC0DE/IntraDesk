@@ -1067,7 +1067,6 @@ pub fn session_add(
     switch_uuid: &str,
     force_relay: bool,
     password: String,
-    is_shared_password: bool,
     conn_token: Option<String>,
 ) -> ResultType<FlutterSession> {
     let conn_type = if is_file_transfer {
@@ -1087,17 +1086,8 @@ pub fn session_add(
 
     LocalConfig::set_remote_id(&id);
 
-    let mut preset_password = password.clone();
-    let shared_password = if is_shared_password {
-        // To achieve a flexible password application order, we don't treat shared password as a preset password.
-        preset_password = Default::default();
-        Some(password)
-    } else {
-        None
-    };
-
     let session: Session<FlutterHandler> = Session {
-        password: preset_password,
+        password,
         server_keyboard_enabled: Arc::new(RwLock::new(true)),
         server_file_transfer_enabled: Arc::new(RwLock::new(true)),
         server_clipboard_enabled: Arc::new(RwLock::new(true)),
@@ -1117,7 +1107,6 @@ pub fn session_add(
         switch_uuid,
         force_relay,
         get_adapter_luid(),
-        shared_password,
         conn_token,
     );
 

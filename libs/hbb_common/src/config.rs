@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{Read, Write},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
@@ -33,11 +32,10 @@ use permanent_password::{
 };
 
 use crate::{
-    compress::{compress, decompress},
     log,
     password_security::{
         decrypt_str_or_original, decrypt_vec_or_original, encrypt_str_or_original,
-        encrypt_vec_or_original, symmetric_crypt,
+        encrypt_vec_or_original,
     },
 };
 
@@ -64,7 +62,6 @@ lazy_static::lazy_static! {
     static ref TRUSTED_DEVICES: RwLock<(Vec<TrustedDevice>, bool)> = Default::default();
     static ref ONLINE: Mutex<HashMap<String, i64>> = Default::default();
     pub static ref PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned());
-    pub static ref EXE_RENDEZVOUS_SERVER: RwLock<String> = Default::default();
     pub static ref APP_NAME: RwLock<String> = RwLock::new("IntraDesk".to_owned());
     static ref KEY_PAIR: Mutex<Option<KeyPair>> = Default::default();
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
@@ -778,10 +775,7 @@ impl Config {
     }
 
     pub fn get_rendezvous_server() -> String {
-        let mut rendezvous_server = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_option("custom-rendezvous-server");
-        }
+        let mut rendezvous_server = Self::get_option("custom-rendezvous-server");
         if rendezvous_server.is_empty() {
             rendezvous_server = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
         }
@@ -801,10 +795,6 @@ impl Config {
     }
 
     pub fn get_rendezvous_servers() -> Vec<String> {
-        let s = EXE_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
         let s = Self::get_option("custom-rendezvous-server");
         if !s.is_empty() {
             return vec![s];
@@ -2269,264 +2259,6 @@ impl UserDefaultConfig {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct AbPeer {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub id: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub hash: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub username: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub hostname: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub platform: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub alias: String,
-    #[serde(default, deserialize_with = "deserialize_vec_string")]
-    pub tags: Vec<String>,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct AbEntry {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub guid: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub name: String,
-    #[serde(default, deserialize_with = "deserialize_vec_abpeer")]
-    pub peers: Vec<AbPeer>,
-    #[serde(default, deserialize_with = "deserialize_vec_string")]
-    pub tags: Vec<String>,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub tag_colors: String,
-}
-
-impl AbEntry {
-    pub fn personal(&self) -> bool {
-        self.name == "My address book" || self.name == "Legacy address book"
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct Ab {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub access_token: String,
-    #[serde(default, deserialize_with = "deserialize_vec_abentry")]
-    pub ab_entries: Vec<AbEntry>,
-}
-
-impl Ab {
-    fn path() -> PathBuf {
-        let filename = format!("{}_ab", APP_NAME.read().unwrap().clone());
-        Config::path(filename)
-    }
-
-    pub fn store(json: String) {
-        if let Ok(mut file) = std::fs::File::create(Self::path()) {
-            let data = compress(json.as_bytes());
-            let max_len = 64 * 1024 * 1024;
-            if data.len() > max_len {
-                // maxlen of function decompress
-                log::error!("ab data too large, {} > {}", data.len(), max_len);
-                return;
-            }
-            if let Ok(data) = symmetric_crypt(&data, true) {
-                file.write_all(&data).ok();
-            }
-        };
-    }
-
-    pub fn load() -> Ab {
-        if let Ok(mut file) = std::fs::File::open(Self::path()) {
-            let mut data = vec![];
-            if file.read_to_end(&mut data).is_ok() {
-                if let Ok(data) = symmetric_crypt(&data, false) {
-                    let data = decompress(&data);
-                    if let Ok(ab) = serde_json::from_str::<Ab>(&String::from_utf8_lossy(&data)) {
-                        return ab;
-                    }
-                }
-            }
-        };
-        Self::remove();
-        Ab::default()
-    }
-
-    pub fn remove() {
-        std::fs::remove_file(Self::path()).ok();
-    }
-}
-
-// use default value when field type is wrong
-macro_rules! deserialize_default {
-    ($func_name:ident, $return_type:ty) => {
-        fn $func_name<'de, D>(deserializer: D) -> Result<$return_type, D::Error>
-        where
-            D: de::Deserializer<'de>,
-        {
-            Ok(de::Deserialize::deserialize(deserializer).unwrap_or_default())
-        }
-    };
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct GroupPeer {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub id: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub username: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub hostname: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub platform: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub login_name: String,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct GroupUser {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub name: String,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub display_name: String,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct DeviceGroup {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub name: String,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct Group {
-    #[serde(
-        default,
-        deserialize_with = "deserialize_string",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub access_token: String,
-    #[serde(default, deserialize_with = "deserialize_vec_groupuser")]
-    pub users: Vec<GroupUser>,
-    #[serde(default, deserialize_with = "deserialize_vec_grouppeer")]
-    pub peers: Vec<GroupPeer>,
-    #[serde(default, deserialize_with = "deserialize_vec_devicegroup")]
-    pub device_groups: Vec<DeviceGroup>,
-}
-
-impl Group {
-    fn path() -> PathBuf {
-        let filename = format!("{}_group", APP_NAME.read().unwrap().clone());
-        Config::path(filename)
-    }
-
-    pub fn store(json: String) {
-        if let Ok(mut file) = std::fs::File::create(Self::path()) {
-            let data = compress(json.as_bytes());
-            let max_len = 64 * 1024 * 1024;
-            if data.len() > max_len {
-                // maxlen of function decompress
-                return;
-            }
-            if let Ok(data) = symmetric_crypt(&data, true) {
-                file.write_all(&data).ok();
-            }
-        };
-    }
-
-    pub fn load() -> Self {
-        if let Ok(mut file) = std::fs::File::open(Self::path()) {
-            let mut data = vec![];
-            if file.read_to_end(&mut data).is_ok() {
-                if let Ok(data) = symmetric_crypt(&data, false) {
-                    let data = decompress(&data);
-                    if let Ok(group) = serde_json::from_str::<Self>(&String::from_utf8_lossy(&data))
-                    {
-                        return group;
-                    }
-                }
-            }
-        };
-        Self::remove();
-        Self::default()
-    }
-
-    pub fn remove() {
-        std::fs::remove_file(Self::path()).ok();
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct TrustedDevice {
     pub hwid: Bytes,
     pub time: i64,
@@ -2542,17 +2274,23 @@ impl TrustedDevice {
     }
 }
 
+macro_rules! deserialize_default {
+    ($func_name:ident, $return_type:ty) => {
+        fn $func_name<'de, D>(deserializer: D) -> Result<$return_type, D::Error>
+        where
+            D: de::Deserializer<'de>,
+        {
+            Ok(de::Deserialize::deserialize(deserializer).unwrap_or_default())
+        }
+    };
+}
+
 deserialize_default!(deserialize_string, String);
 deserialize_default!(deserialize_bool, bool);
 deserialize_default!(deserialize_i32, i32);
 deserialize_default!(deserialize_vec_u8, Vec<u8>);
 deserialize_default!(deserialize_vec_string, Vec<String>);
 deserialize_default!(deserialize_vec_discoverypeer, Vec<DiscoveryPeer>);
-deserialize_default!(deserialize_vec_abpeer, Vec<AbPeer>);
-deserialize_default!(deserialize_vec_abentry, Vec<AbEntry>);
-deserialize_default!(deserialize_vec_groupuser, Vec<GroupUser>);
-deserialize_default!(deserialize_vec_grouppeer, Vec<GroupPeer>);
-deserialize_default!(deserialize_vec_devicegroup, Vec<DeviceGroup>);
 deserialize_default!(deserialize_keypair, KeyPair);
 deserialize_default!(deserialize_size, Size);
 deserialize_default!(deserialize_hashmap_string_string, HashMap<String, String>);
@@ -2624,16 +2362,6 @@ pub fn is_disable_tcp_listen() -> bool {
 #[inline]
 pub fn is_disable_settings() -> bool {
     is_some_hard_opton("disable-settings")
-}
-
-#[inline]
-pub fn is_disable_ab() -> bool {
-    is_some_hard_opton("disable-ab")
-}
-
-#[inline]
-pub fn is_disable_account() -> bool {
-    is_some_hard_opton("disable-account")
 }
 
 // This function must be kept the same as option2bool() in flutter/lib/common.dart.

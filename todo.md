@@ -146,8 +146,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Aceite com Wireshark: fica para a T7.4 (depende também da T2.3).
   Checagem: `cargo check --workspace --lib --tests`, `flutter analyze` ok.
   dep: T0.5, T0.6 · Área: `src/rendezvous_mediator.rs`, `src/server.rs`, `libs/hbb_common/src/config.rs` · @dono: claude
-- [ ] **T2.2** Acesso direto por IP sempre ligado (porta TCP 21118), sem opção para desligar.
-  dep: T2.1, T0.6 · Área: `libs/hbb_common/src/config.rs`, `src/server.rs` · @dono:
+- [x] **T2.2** Acesso direto por IP sempre ligado (porta TCP 21118, configurável em `direct-access-port`), sem opção para desligar: saiu a opção `direct-server` (Rust, `option2bool`/`bool2option`, chave de tradução "Enable direct IP access"); nas configurações fica só o campo da porta. Só "parar serviço" (`stop-service`) fecha a escuta. Saiu também o diálogo `changeDirectAccessPort` (sem uso desde a T1.1).
+  Checagem: `cargo check --workspace --lib --tests`, `flutter analyze` ok.
+  dep: T2.1, T0.6 · Área: `libs/hbb_common/src/config.rs`, `src/server.rs` · @dono: claude
 - [ ] **T2.3** Conexão de saída sempre direta: conectar por IP (digitado ou vindo da descoberta), sem consultar servidor nem tentar hole punching/relay. Timeout curto e mensagem clara ("Computador não encontrado na rede").
   dep: T2.1 · Área: `src/client.rs` (`connect`, `_start`) · @dono:
 - [ ] **T2.4** Descoberta automática: o listener de `src/lan.rs` sempre ativo; busca automática ao abrir e a cada N segundos (sem precisar clicar em atualizar); computadores que não respondem somem da lista (ou ficam "offline") após um tempo.

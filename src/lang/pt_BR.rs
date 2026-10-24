@@ -132,7 +132,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Enter your password", "Informe sua senha"),
         ("Logging in...", "Fazendo Login..."),
         ("Auto Login", "Login Automático (Somente válido se você habilitou \"Bloquear após o fim da sessão\")"),
-        ("Enable direct IP access", "Habilitar Acesso IP Direto"),
         ("Rename", "Renomear"),
         ("Space", "Espaço"),
         ("Create desktop shortcut", "Criar Atalho na Área de Trabalho"),

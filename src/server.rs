@@ -22,7 +22,7 @@ use hbb_common::{
     timeout, tokio,
     ResultType, Stream,
 };
-use base::{config::keys::OPTION_DIRECT_SERVER, message_proto::*};
+use base::{config::keys::OPTION_DIRECT_ACCESS_PORT, message_proto::*};
 use service::ServiceTmpl;
 use service::{EmptyExtraFieldService, GenericService, Service, Subscriber};
 use video_service::VideoSource;
@@ -501,7 +501,7 @@ fn is_service_stopped() -> bool {
 }
 
 fn get_direct_port() -> i32 {
-    let port = Config::get_option("direct-access-port")
+    let port = Config::get_option(OPTION_DIRECT_ACCESS_PORT)
         .parse::<i32>()
         .unwrap_or(0);
     if port <= 0 {
@@ -515,10 +515,7 @@ async fn direct_server(server: ServerPtr) {
     let mut listener = None;
     let mut port = 0;
     loop {
-        let disabled = !config::option2bool(
-            OPTION_DIRECT_SERVER,
-            &Config::get_option(OPTION_DIRECT_SERVER),
-        ) || is_service_stopped();
+        let disabled = is_service_stopped();
         if !disabled && listener.is_none() {
             port = get_direct_port();
             match tcp::listen_any(port as _).await {

@@ -2360,7 +2360,6 @@ pub fn option2bool(option: &str, value: &str) -> bool {
         value != "N"
     } else if option.starts_with("allow-")
         || option == "stop-service"
-        || option == keys::OPTION_DIRECT_SERVER
         || option == "force-always-relay"
     {
         value == "Y"
@@ -2399,7 +2398,6 @@ pub mod keys {
     pub const OPTION_CODEC_PREFERENCE: &str = "codec-preference";
     pub const OPTION_LANGUAGE: &str = "lang";
     pub const OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD: &str = "allow-numeric-one-time-password";
-    pub const OPTION_DIRECT_SERVER: &str = "direct-server";
     pub const OPTION_ALLOW_WEBSOCKET: &str = "allow-websocket";
     pub const OPTION_TRACKPAD_SPEED: &str = "trackpad-speed";
     pub const OPTION_REGISTER_DEVICE: &str = "register-device";

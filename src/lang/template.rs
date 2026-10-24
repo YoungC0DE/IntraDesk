@@ -132,7 +132,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Enter your password", ""),
         ("Logging in...", ""),
         ("Auto Login", ""),
-        ("Enable direct IP access", ""),
         ("Rename", ""),
         ("Space", ""),
         ("Create desktop shortcut", ""),

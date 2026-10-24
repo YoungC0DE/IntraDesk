@@ -35,10 +35,14 @@ class OnlineStatusWidget extends StatefulWidget {
 class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
   final _localIps = <String>[].obs;
+  final _firewallBlocked = false.obs;
+  final _firewallNotPrivate = false.obs;
   Timer? _updateTimer;
 
   double get em => 14.0;
-  double? get height => bind.isIncomingOnly() ? null : em * 3;
+  bool get _showFirewallWarning => _firewallBlocked.value && !_svcStopped.value;
+  double? get height =>
+      bind.isIncomingOnly() || _showFirewallWarning ? null : em * 3;
 
   @override
   void initState() {
@@ -93,20 +97,47 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
           ],
         );
 
-    return Container(
-      height: height,
-      child: Obx(() => isIncomingOnly
-          ? Column(
-              children: [
-                basicWidget(),
+    firewallWidget() {
+      var msg = translate("Windows Firewall is blocking connections");
+      if (_firewallNotPrivate.value) {
+        msg += '. ${translate("Set this network as private in Windows")}.';
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: em + 2, color: kColorWarn)
+              .marginSymmetric(horizontal: em * 0.5),
+          Flexible(child: Text(msg, style: TextStyle(fontSize: em))),
+          InkWell(
+                  onTap: () => bind.mainAllowInFirewall(),
+                  child: Text(translate("Allow in firewall"),
+                      style: TextStyle(
+                          decoration: TextDecoration.underline, fontSize: em)))
+              .marginOnly(left: em),
+        ],
+      );
+    }
+
+    return Obx(() => Container(
+          height: height,
+          padding: _showFirewallWarning
+              ? EdgeInsets.symmetric(vertical: em * 0.5)
+              : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              basicWidget(),
+              if (isIncomingOnly)
                 Align(
                         child: startServiceWidget(),
                         alignment: Alignment.centerLeft)
                     .marginOnly(top: 2.0, left: 22.0),
-              ],
-            )
-          : basicWidget()),
-    ).paddingOnly(right: isIncomingOnly ? 8 : 0);
+              if (_showFirewallWarning)
+                firewallWidget().marginOnly(top: em * 0.5),
+            ],
+          ),
+        ).paddingOnly(right: isIncomingOnly ? 8 : 0));
   }
 
   _buildConnStatusMsg() {
@@ -129,6 +160,12 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
     if (!listEquals(ips, _localIps)) {
       _localIps.value = ips;
     }
+    final firewallBlocked = status['firewall_blocked'] == true;
+    if (firewallBlocked != _firewallBlocked.value) {
+      _firewallBlocked.value = firewallBlocked;
+      widget.onSvcStatusChanged?.call();
+    }
+    _firewallNotPrivate.value = status['firewall_not_private'] == true;
     try {
       stateGlobal.videoConnCount.value = status['video_conn_count'] as int;
     } catch (_) {}

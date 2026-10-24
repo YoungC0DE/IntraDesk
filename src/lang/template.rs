@@ -484,5 +484,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Not connected to a network", ""),
         ("Computer key changed", ""),
         ("host-key-changed-tip", ""),
+        ("Windows Firewall is blocking connections", ""),
+        ("Set this network as private in Windows", ""),
+        ("Allow in firewall", ""),
     ].iter().cloned().collect();
 }

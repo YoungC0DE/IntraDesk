@@ -465,9 +465,12 @@ fn is_service_stopped() -> bool {
 }
 
 fn get_direct_port() -> i32 {
-    let port = Config::get_option(OPTION_DIRECT_ACCESS_PORT)
-        .parse::<i32>()
-        .unwrap_or(0);
+    direct_port_from_option(&Config::get_option(OPTION_DIRECT_ACCESS_PORT))
+}
+
+/// The direct-access port for a value of the `direct-access-port` option.
+pub(crate) fn direct_port_from_option(value: &str) -> i32 {
+    let port = value.parse::<i32>().unwrap_or(0);
     if port <= 0 {
         RENDEZVOUS_PORT + 2
     } else {

@@ -16,7 +16,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::ipc;
+use crate::{ipc, platform::windows::FirewallInbound};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct UiStatus {
@@ -24,6 +24,11 @@ pub struct UiStatus {
     pub video_conn_count: usize,
     /// Filled when read, see `get_connect_status`.
     pub local_ips: Vec<String>,
+    /// Filled when read: Windows Firewall blocks the inbound ports (false when unknown).
+    pub firewall_blocked: bool,
+    /// Filled when read, with `firewall_blocked`: no private network is active, so the rules
+    /// that "allow in firewall" creates (private networks only) do not help yet.
+    pub firewall_not_private: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +43,8 @@ lazy_static::lazy_static! {
         mouse_time: 0,
         video_conn_count: 0,
         local_ips: Vec::new(),
+        firewall_blocked: false,
+        firewall_not_private: false,
     }));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
@@ -294,7 +301,100 @@ pub fn check_mouse_time() {
 pub fn get_connect_status() -> UiStatus {
     let mut status = UI_STATUS.lock().unwrap().clone();
     status.local_ips = crate::lan::local_ipv4s();
+    let firewall = firewall_state();
+    status.firewall_blocked = firewall != FirewallInbound::Allowed;
+    status.firewall_not_private = matches!(
+        firewall,
+        FirewallInbound::Blocked {
+            private_network: false
+        }
+    );
     status
+}
+
+struct FirewallCheck {
+    state: FirewallInbound,
+    checked_at: Option<std::time::Instant>,
+    running: bool,
+    error_logged: bool,
+    fix_requested_at: Option<std::time::Instant>,
+}
+
+lazy_static::lazy_static! {
+    static ref FIREWALL_CHECK: Mutex<FirewallCheck> = Mutex::new(FirewallCheck {
+        state: FirewallInbound::Allowed,
+        checked_at: None,
+        running: false,
+        error_logged: false,
+        fix_requested_at: None,
+    });
+}
+
+fn firewall_ports() -> (u16, u16) {
+    let tcp = crate::server::direct_port_from_option(&get_option(keys::OPTION_DIRECT_ACCESS_PORT));
+    (
+        u16::try_from(tcp).unwrap_or_default(),
+        crate::lan::get_broadcast_port(),
+    )
+}
+
+/// Last known firewall state (`Allowed` when unknown); refreshed in the background at most every
+/// 30 s (every 3 s for a minute after the fix was requested, so the warning goes away soon after
+/// the rules exist).
+fn firewall_state() -> FirewallInbound {
+    use std::time::Duration;
+    let mut check = FIREWALL_CHECK.lock().unwrap();
+    let fixing = check
+        .fix_requested_at
+        .map_or(false, |t| t.elapsed() < Duration::from_secs(60));
+    let interval = Duration::from_secs(if fixing { 3 } else { 30 });
+    if !check.running && check.checked_at.map_or(true, |t| t.elapsed() >= interval) {
+        check.running = true;
+        std::thread::spawn(|| {
+            let (tcp, udp) = firewall_ports();
+            let result = crate::platform::windows::firewall_inbound_state(tcp, udp);
+            let mut check = FIREWALL_CHECK.lock().unwrap();
+            let first = check.checked_at.is_none();
+            check.running = false;
+            check.checked_at = Some(std::time::Instant::now());
+            match result {
+                Ok(state) => {
+                    if first || check.state != state {
+                        log::info!("Firewall for TCP {} and UDP {}: {:?}", tcp, udp, state);
+                    }
+                    check.state = state;
+                    check.error_logged = false;
+                }
+                Err(e) => {
+                    if !check.error_logged {
+                        log::warn!("Failed to read the firewall state: {}", e);
+                        check.error_logged = true;
+                    }
+                    check.state = FirewallInbound::Allowed;
+                }
+            }
+        });
+    }
+    check.state
+}
+
+/// Asks for elevation and creates the inbound firewall rules for the IntraDesk ports.
+pub fn allow_in_firewall() -> bool {
+    let (tcp, udp) = firewall_ports();
+    match crate::platform::windows::allow_inbound_in_firewall(tcp, udp) {
+        Ok(started) => {
+            if started {
+                let mut check = FIREWALL_CHECK.lock().unwrap();
+                check.fix_requested_at = Some(std::time::Instant::now());
+                check.checked_at = None;
+            }
+            started
+        }
+        Err(e) => {
+            log::error!("Failed to allow the ports in the firewall: {}", e);
+            false
+        }
+    }
 }
 
 #[inline]

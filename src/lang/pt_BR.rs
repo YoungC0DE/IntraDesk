@@ -484,5 +484,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Not connected to a network", "Sem conexão de rede"),
         ("Computer key changed", "A chave do computador mudou"),
         ("host-key-changed-tip", "A chave de identidade deste computador é diferente da salva na primeira conexão.\nIsso acontece se as configurações do IntraDesk dele foram apagadas, mas também pode ser outro computador se passando por ele.\nSó continue se souber por que a chave mudou."),
+        ("Windows Firewall is blocking connections", "Firewall do Windows bloqueando conexões"),
+        ("Set this network as private in Windows", "Defina esta rede como privada no Windows"),
+        ("Allow in firewall", "Liberar no firewall"),
     ].iter().cloned().collect();
 }

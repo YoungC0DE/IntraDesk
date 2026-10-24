@@ -191,7 +191,7 @@ pub fn send_wol(id: String) {
 }
 
 #[inline]
-fn get_broadcast_port() -> u16 {
+pub(crate) fn get_broadcast_port() -> u16 {
     (RENDEZVOUS_PORT + 3) as _
 }
 

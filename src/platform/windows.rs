@@ -2639,6 +2639,287 @@ pub(super) fn get_pids_with_first_arg_by_wmic<S1: AsRef<str>, S2: AsRef<str>>(
         .unwrap_or_default()
 }
 
+/// An inbound-relevant view of a Windows Firewall rule.
+#[derive(Debug, Default, Clone)]
+struct FirewallRule {
+    enabled: bool,
+    inbound: bool,
+    allow: bool,
+    /// `NET_FW_PROFILE_TYPE2` bit mask.
+    profiles: i32,
+    /// IANA protocol number; 256 = any.
+    protocol: i32,
+    local_ports: String,
+    application: String,
+    service: String,
+    /// Limited to Store apps (app containers): has a package or an owner user.
+    app_container: bool,
+}
+
+const FW_PROTOCOL_ANY: i32 = 256;
+
+/// Whether a firewall port list ("*", "80,443", "5000-5010", keywords like "RPC") has `port`.
+fn firewall_ports_contain(list: &str, port: u16) -> bool {
+    let list = list.trim();
+    if list.is_empty() || list == "*" {
+        return true;
+    }
+    list.split(',').any(|item| {
+        let item = item.trim();
+        match item.split_once('-') {
+            Some((lo, hi)) => match (lo.trim().parse::<u16>(), hi.trim().parse::<u16>()) {
+                (Ok(lo), Ok(hi)) => lo <= port && port <= hi,
+                _ => false,
+            },
+            None => item.parse::<u16>() == Ok(port),
+        }
+    })
+}
+
+/// Expands `%NAME%` variables, as rules may store program paths like
+/// `%LOCALAPPDATA%\app\app.exe`.
+fn expand_env_vars(path: &str) -> String {
+    let mut out = String::new();
+    let mut rest = path;
+    while let Some(start) = rest.find('%') {
+        let Some(len) = rest[start + 1..].find('%') else {
+            break;
+        };
+        out.push_str(&rest[..start]);
+        let name = &rest[start + 1..start + 1 + len];
+        match std::env::var(name) {
+            Ok(value) => out.push_str(&value),
+            Err(_) => out.push_str(&rest[start..start + len + 2]),
+        }
+        rest = &rest[start + len + 2..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// What the rules say about inbound traffic to `exe` on `port` in `profile`: `Some(false)` when
+/// a block rule applies (block wins), `Some(true)` when only allow rules apply, `None` when no
+/// rule applies and the profile's default action decides.
+fn firewall_rules_verdict(
+    rules: &[FirewallRule],
+    profile: i32,
+    exe: &str,
+    protocol: i32,
+    port: u16,
+) -> Option<bool> {
+    let mut verdict = None;
+    for rule in rules {
+        let applies = rule.enabled
+            && rule.inbound
+            && rule.profiles & profile != 0
+            && (rule.protocol == FW_PROTOCOL_ANY || rule.protocol == protocol)
+            && firewall_ports_contain(&rule.local_ports, port)
+            // Rules bound to services or Store apps do not apply to a regular process.
+            && rule.service.is_empty()
+            && !rule.app_container
+            && (rule.application.is_empty()
+                || expand_env_vars(&rule.application).eq_ignore_ascii_case(exe));
+        if applies {
+            if !rule.allow {
+                return Some(false);
+            }
+            verdict = Some(true);
+        }
+    }
+    verdict
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FirewallInbound {
+    Allowed,
+    /// `private_network`: a private network is active, so rules for private networks help.
+    Blocked {
+        private_network: bool,
+    },
+}
+
+/// Whether Windows Firewall lets the current executable receive inbound TCP traffic on
+/// `tcp_port` and UDP traffic on `udp_port`, in at least one active network profile. A firewall
+/// turned off for the active profiles counts as allowing. Reads the policy and its rules through
+/// the firewall COM API, so the answer does not depend on the language of the system (the older
+/// `INetFwMgr::IsPortAllowed` answers "allowed" for anything on current Windows). Blocks while
+/// it reads the rules; call it off the UI thread.
+pub fn firewall_inbound_state(tcp_port: u16, udp_port: u16) -> ResultType<FirewallInbound> {
+    use windows::{
+        core::Interface,
+        Win32::{
+            NetworkManagement::WindowsFirewall::{
+                INetFwPolicy2, INetFwRule, INetFwRule3, NetFwPolicy2, NET_FW_ACTION_ALLOW,
+                NET_FW_PROFILE2_DOMAIN, NET_FW_PROFILE2_PRIVATE, NET_FW_PROFILE2_PUBLIC,
+                NET_FW_PROFILE_TYPE2, NET_FW_RULE_DIR_IN,
+            },
+            System::{
+                Com::{
+                    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+                    COINIT_MULTITHREADED,
+                },
+                Ole::IEnumVARIANT,
+                Variant::{VariantClear, VARIANT, VT_DISPATCH},
+            },
+        },
+    };
+
+    unsafe fn read_rules(policy: &INetFwPolicy2) -> ResultType<Vec<FirewallRule>> {
+        let rules: IEnumVARIANT = policy.Rules()?._NewEnum()?.cast()?;
+        let mut out = Vec::new();
+        loop {
+            let mut items = [VARIANT::default()];
+            let mut fetched = 0u32;
+            rules.Next(&mut items, &mut fetched).ok()?;
+            if fetched == 0 {
+                break;
+            }
+            let item = &mut items[0];
+            let rule = if item.Anonymous.Anonymous.vt == VT_DISPATCH {
+                item.Anonymous
+                    .Anonymous
+                    .Anonymous
+                    .pdispVal
+                    .as_ref()
+                    .and_then(|d| d.cast::<INetFwRule>().ok())
+            } else {
+                None
+            };
+            VariantClear(item)?;
+            let Some(rule) = rule else {
+                continue;
+            };
+            out.push(FirewallRule {
+                enabled: rule.Enabled()?.as_bool(),
+                inbound: rule.Direction()? == NET_FW_RULE_DIR_IN,
+                allow: rule.Action()? == NET_FW_ACTION_ALLOW,
+                profiles: rule.Profiles()?,
+                protocol: rule.Protocol()?,
+                local_ports: rule.LocalPorts().map(|s| s.to_string()).unwrap_or_default(),
+                application: rule.ApplicationName()?.to_string(),
+                service: rule.ServiceName()?.to_string(),
+                app_container: rule.cast::<INetFwRule3>().map_or(false, |r| {
+                    r.LocalAppPackageId().map_or(false, |s| !s.is_empty())
+                        || r.LocalUserOwner().map_or(false, |s| !s.is_empty())
+                }),
+            });
+        }
+        Ok(out)
+    }
+
+    unsafe fn profile_allows(
+        policy: &INetFwPolicy2,
+        rules: &[FirewallRule],
+        profile: NET_FW_PROFILE_TYPE2,
+        exe: &str,
+        ports: &[(i32, u16)],
+    ) -> ResultType<bool> {
+        if policy.get_BlockAllInboundTraffic(profile)?.as_bool() {
+            return Ok(false);
+        }
+        let default_allows = policy.get_DefaultInboundAction(profile)? == NET_FW_ACTION_ALLOW;
+        Ok(ports.iter().all(|&(protocol, port)| {
+            firewall_rules_verdict(rules, profile.0, exe, protocol, port).unwrap_or(default_allows)
+        }))
+    }
+
+    let exe = std::env::current_exe()?.to_string_lossy().to_string();
+    let ports = [(6, tcp_port), (17, udp_port)];
+    unsafe {
+        let com_initialized = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        let result = (|| -> ResultType<FirewallInbound> {
+            let policy: INetFwPolicy2 =
+                CoCreateInstance(&NetFwPolicy2, None, CLSCTX_INPROC_SERVER)?;
+            let active = policy.CurrentProfileTypes()?;
+            let mut guarded = Vec::new();
+            for profile in [
+                NET_FW_PROFILE2_DOMAIN,
+                NET_FW_PROFILE2_PRIVATE,
+                NET_FW_PROFILE2_PUBLIC,
+            ] {
+                if active & profile.0 == 0 {
+                    continue;
+                }
+                if !policy.get_FirewallEnabled(profile)?.as_bool() {
+                    // The firewall is off for one of the active networks.
+                    return Ok(FirewallInbound::Allowed);
+                }
+                guarded.push(profile);
+            }
+            if guarded.is_empty() {
+                return Ok(FirewallInbound::Allowed);
+            }
+            let rules = read_rules(&policy)?;
+            for profile in guarded {
+                if profile_allows(&policy, &rules, profile, &exe, &ports)? {
+                    return Ok(FirewallInbound::Allowed);
+                }
+            }
+            Ok(FirewallInbound::Blocked {
+                private_network: active & NET_FW_PROFILE2_PRIVATE.0 != 0,
+            })
+        })();
+        if com_initialized {
+            CoUninitialize();
+        }
+        result
+    }
+}
+
+/// Arguments for `cmd.exe` that (1) delete the inbound rules for `exe` (Windows creates block
+/// rules when its own "allow access" prompt is cancelled, and a block rule beats any allow rule)
+/// and (2) recreate inbound allow rules for both ports on private networks. Port rules instead
+/// of program rules, because the portable build runs from an extraction folder.
+fn firewall_allow_inbound_cmd_args(
+    netsh: &str,
+    app_name: &str,
+    exe: &str,
+    tcp_port: u16,
+    udp_port: u16,
+) -> String {
+    // `cmd /c` keeps the quotes as long as the line does not start with one.
+    let mut commands = vec![format!(
+        "{netsh} advfirewall firewall delete rule name=all dir=in program=\"{exe}\""
+    )];
+    for (protocol, port) in [("TCP", tcp_port), ("UDP", udp_port)] {
+        let name = format!("{app_name} ({protocol} {port})");
+        commands.push(format!(
+            "{netsh} advfirewall firewall delete rule name=\"{name}\""
+        ));
+        commands.push(format!(
+            "{netsh} advfirewall firewall add rule name=\"{name}\" dir=in action=allow \
+             protocol={protocol} localport={port} profile=private"
+        ));
+    }
+    format!("/d /c {}", commands.join(" & "))
+}
+
+/// Asks for elevation (UAC) and creates the inbound firewall rules for both ports on private
+/// networks. Returns once the elevated command started (or the prompt was refused), without
+/// waiting for it to finish.
+pub fn allow_inbound_in_firewall(tcp_port: u16, udp_port: u16) -> ResultType<bool> {
+    let system32 =
+        PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_owned()))
+            .join("System32");
+    let netsh = system32.join("netsh.exe").to_string_lossy().to_string();
+    // An unquoted path with spaces would break the command line; fall back to the search path.
+    let netsh = if netsh.contains(' ') {
+        "netsh.exe".to_owned()
+    } else {
+        netsh
+    };
+    let cmd = system32.join("cmd.exe").to_string_lossy().to_string();
+    let exe = std::env::current_exe()?.to_string_lossy().to_string();
+    let args =
+        firewall_allow_inbound_cmd_args(&netsh, &crate::get_app_name(), &exe, tcp_port, udp_port);
+    log::info!(
+        "Asking for elevation to allow TCP {} and UDP {} in the firewall",
+        tcp_port,
+        udp_port
+    );
+    run_uac(&cmd, &args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2740,5 +3021,100 @@ ProcessId=10136
             arg,
         );
         assert_eq!(pids.len(), 0);
+    }
+    #[test]
+    fn firewall_args_quote_paths_and_limit_rules_to_private_networks() {
+        let args = firewall_allow_inbound_cmd_args(
+            "C:\\Windows\\System32\\netsh.exe",
+            "IntraDesk",
+            "C:\\Users\\Jo Silva\\AppData\\Local\\intradesk\\IntraDesk.exe",
+            21118,
+            21119,
+        );
+        let fw = "C:\\Windows\\System32\\netsh.exe advfirewall firewall";
+        let expected = [
+            format!("{fw} delete rule name=all dir=in program=\"C:\\Users\\Jo Silva\\AppData\\Local\\intradesk\\IntraDesk.exe\""),
+            format!("{fw} delete rule name=\"IntraDesk (TCP 21118)\""),
+            format!("{fw} add rule name=\"IntraDesk (TCP 21118)\" dir=in action=allow protocol=TCP localport=21118 profile=private"),
+            format!("{fw} delete rule name=\"IntraDesk (UDP 21119)\""),
+            format!("{fw} add rule name=\"IntraDesk (UDP 21119)\" dir=in action=allow protocol=UDP localport=21119 profile=private"),
+        ];
+        assert_eq!(args, format!("/d /c {}", expected.join(" & ")));
+    }
+
+    #[test]
+    fn firewall_port_lists() {
+        assert!(firewall_ports_contain("", 21118));
+        assert!(firewall_ports_contain("*", 21118));
+        assert!(firewall_ports_contain("80, 21118", 21118));
+        assert!(firewall_ports_contain("21000-21200", 21119));
+        assert!(!firewall_ports_contain("21000-21100", 21118));
+        assert!(!firewall_ports_contain("RPC,445", 21118));
+    }
+
+    #[test]
+    fn firewall_block_rule_beats_allow_rule() {
+        let exe = "C:\\Users\\Jo Silva\\AppData\\Local\\intradesk\\IntraDesk.exe";
+        let port_rule = FirewallRule {
+            enabled: true,
+            inbound: true,
+            allow: true,
+            profiles: 2,
+            protocol: 6,
+            local_ports: "21118".to_owned(),
+            ..Default::default()
+        };
+        let rules = [port_rule.clone()];
+        assert_eq!(firewall_rules_verdict(&rules, 2, exe, 6, 21118), Some(true));
+        // Other profile, protocol or port: no rule applies.
+        assert_eq!(firewall_rules_verdict(&rules, 4, exe, 6, 21118), None);
+        assert_eq!(firewall_rules_verdict(&rules, 2, exe, 17, 21118), None);
+        assert_eq!(firewall_rules_verdict(&rules, 2, exe, 6, 21119), None);
+
+        // What Windows creates when its "allow access" prompt is cancelled.
+        let block_program = FirewallRule {
+            enabled: true,
+            inbound: true,
+            allow: false,
+            profiles: 0x7FFF_FFFF,
+            protocol: 6,
+            application: exe.to_uppercase(),
+            ..Default::default()
+        };
+        let rules = [port_rule.clone(), block_program.clone()];
+        assert_eq!(
+            firewall_rules_verdict(&rules, 2, exe, 6, 21118),
+            Some(false)
+        );
+        let other_program = FirewallRule {
+            application: "C:\\other.exe".to_owned(),
+            ..block_program.clone()
+        };
+        let disabled = FirewallRule {
+            enabled: false,
+            ..block_program
+        };
+        let rules = [port_rule, other_program, disabled];
+        assert_eq!(firewall_rules_verdict(&rules, 2, exe, 6, 21118), Some(true));
+
+        let store_app = FirewallRule {
+            enabled: true,
+            inbound: true,
+            allow: true,
+            profiles: 0x7FFF_FFFF,
+            protocol: FW_PROTOCOL_ANY,
+            app_container: true,
+            ..Default::default()
+        };
+        assert_eq!(firewall_rules_verdict(&[store_app], 4, exe, 6, 21118), None);
+    }
+
+    #[test]
+    #[ignore = "reads the firewall state of this machine"]
+    fn print_firewall_inbound_state() {
+        println!(
+            "firewall inbound state: {:?}",
+            firewall_inbound_state(21118, 21119)
+        );
     }
 }

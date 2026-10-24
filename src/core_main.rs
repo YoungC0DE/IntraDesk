@@ -228,9 +228,6 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
                     param_array.push(format!("password={password}"));
                 }
             }
-            "--relay" => {
-                param_array.push(format!("relay=true"));
-            }
             // inner
             "--switch_uuid" => {
                 if let Some(switch_uuid) = args.next() {

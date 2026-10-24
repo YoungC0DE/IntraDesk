@@ -48,7 +48,6 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
           id: params['id'],
           password: params['password'],
           tabController: tabController,
-          forceRelay: params['forceRelay'],
           connToken: params['connToken'],
         )));
   }
@@ -78,7 +77,6 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
               id: id,
               password: args['password'],
               tabController: tabController,
-              forceRelay: args['forceRelay'],
               connToken: args['connToken'],
             )));
       } else if (call.method == "onDestroy") {

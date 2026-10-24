@@ -118,8 +118,6 @@ lazy_static::lazy_static! {
     static ref CLIPBOARD_STATE: Arc<Mutex<ClipboardState>> = Arc::new(Mutex::new(ClipboardState::new()));
 }
 
-const PUBLIC_SERVER: &str = "public";
-
 pub fn get_key_state(key: enigo::Key) -> bool {
     use enigo::KeyboardControllable;
     ENIGO.lock().unwrap().get_key_state(key)
@@ -136,8 +134,6 @@ impl Client {
         interface: impl Interface,
     ) -> ResultType<Stream> {
         debug_assert!(peer == interface.get_id());
-        interface.update_direct(None);
-        interface.update_received(false);
         if config::is_incoming_only() && !is_switch_sides_back(conn_type, &interface).await {
             bail!("Incoming only mode");
         }
@@ -934,15 +930,9 @@ pub struct LoginConfigHandler {
     // Start time of the restart grace window. On Windows the peer may briefly
     // reconnect before the real reboot disconnect.
     restart_remote_device_at: Option<Instant>,
-    pub force_relay: bool,
-    // The peer-scoped part of it, and the only part that may be written back to the peer.
-    pub peer_relay: bool,
-    pub direct: Option<bool>,
-    pub received: bool,
     switch_uuid: Option<String>,
     switch_back_allowed: bool,
     pub save_ab_password_to_recent: bool, // true: connected with ab password
-    pub other_server: Option<(String, String, String)>,
     pub custom_fps: Arc<Mutex<Option<usize>>>,
     pub last_auto_fps: Option<usize>,
     pub adapter_luid: Option<i64>,
@@ -973,47 +963,9 @@ impl LoginConfigHandler {
         id: String,
         conn_type: ConnType,
         switch_uuid: Option<String>,
-        mut force_relay: bool,
         adapter_luid: Option<i64>,
         conn_token: Option<String>,
     ) {
-        let mut id = id;
-        if id.contains("@") {
-            let mut v = id.split("@");
-            let raw_id: &str = v.next().unwrap_or_default();
-            let mut server_key = v.next().unwrap_or_default().split('?');
-            let server = server_key.next().unwrap_or_default();
-            let args = server_key.next().unwrap_or_default();
-            let key = if server == PUBLIC_SERVER {
-                config::RS_PUB_KEY.to_owned()
-            } else {
-                let mut args_map: HashMap<String, &str> = HashMap::new();
-                for arg in args.split('&') {
-                    if let Some(kv) = arg.find('=') {
-                        let k = arg[0..kv].to_lowercase();
-                        let v = &arg[kv + 1..];
-                        args_map.insert(k, v);
-                    }
-                }
-                let key = args_map.remove("key").unwrap_or_default();
-                key.to_owned()
-            };
-
-            // here we can check <id>/r@server
-            let real_id = crate::ui_interface::handle_relay_id(raw_id).to_string();
-            if real_id != raw_id {
-                force_relay = true;
-            }
-            self.other_server = Some((real_id.clone(), server.to_owned(), key));
-            id = format!("{real_id}@{server}");
-        } else {
-            let real_id = crate::ui_interface::handle_relay_id(&id);
-            if real_id != id {
-                force_relay = true;
-                id = real_id.to_owned();
-            }
-        }
-
         self.id = id;
         self.conn_type = conn_type;
         let config = self.load_config();
@@ -1039,19 +991,6 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.clear_restarting_remote_device();
-        self.peer_relay =
-            config::option2bool("force-always-relay", &self.get_option("force-always-relay"))
-                || force_relay;
-        self.force_relay = self.peer_relay;
-        if let Some((real_id, server, key)) = &self.other_server {
-            let other_server_key = self.get_option("other-server-key");
-            if !other_server_key.is_empty() && key.is_empty() {
-                self.other_server = Some((real_id.to_owned(), server.to_owned(), other_server_key));
-            }
-        }
-
-        self.direct = None;
-        self.received = false;
         {
             self.switch_back_allowed = false;
         }
@@ -1209,12 +1148,6 @@ impl LoginConfigHandler {
         } else {
             config.ui_flutter.insert(k, v);
         }
-        self.save_config(config);
-    }
-
-    pub fn set_direct_failure(&mut self, value: i32) {
-        let mut config = self.load_config();
-        config.direct_failures = value;
         self.save_config(config);
     }
 
@@ -1673,18 +1606,6 @@ impl LoginConfigHandler {
             config.password = Default::default();
             log::debug!("remove password of {}", self.id);
         }
-        if let Some((_, b, c)) = self.other_server.as_ref() {
-            if b != PUBLIC_SERVER {
-                config
-                    .options
-                    .insert("other-server-key".to_owned(), c.clone());
-            }
-        }
-        if self.peer_relay {
-            config
-                .options
-                .insert("force-always-relay".to_owned(), "Y".to_owned());
-        }
         if config.keyboard_mode.is_empty() {
             if is_keyboard_mode_supported(
                 &KeyboardMode::Map,
@@ -1730,13 +1651,6 @@ impl LoginConfigHandler {
 
     /// Create a [`Message`] for login.
     fn create_login_msg(&self, password: Vec<u8>) -> Message {
-        let my_id = Config::get_id();
-        let (my_id, pure_id) = if let Some((id, _, _)) = self.other_server.as_ref() {
-            let server = Config::get_rendezvous_server();
-            (format!("{my_id}@{server}"), id.clone())
-        } else {
-            (my_id, self.id.clone())
-        };
         let avatar = get_builtin_option(keys::OPTION_AVATAR);
         let mut display_name = get_builtin_option(keys::OPTION_DISPLAY_NAME);
         if display_name.is_empty() {
@@ -1765,9 +1679,9 @@ impl LoginConfigHandler {
             Bytes::new()
         };
         let mut lr = LoginRequest {
-            username: pure_id,
+            username: self.id.clone(),
             password: password.into(),
-            my_id,
+            my_id: Config::get_id(),
             my_name: display_name,
             my_platform,
             option: self.get_option_message(true).into(),
@@ -2677,10 +2591,6 @@ pub trait Interface: Send + Clone + 'static + Sized {
         self.get_lch().read().unwrap().id.clone()
     }
 
-    fn is_force_relay(&self) -> bool {
-        self.get_lch().read().unwrap().force_relay
-    }
-
     fn get_switch_code(&self) -> String {
         match self.get_lch().read().unwrap().switch_uuid.clone() {
             Some(u) if !u.is_empty() => {
@@ -2693,22 +2603,11 @@ pub trait Interface: Send + Clone + 'static + Sized {
 
     fn swap_modifier_mouse(&self, _msg: &mut base::protos::message::MouseEvent) {}
 
-    fn update_direct(&self, direct: Option<bool>) {
-        self.get_lch().write().unwrap().direct = direct;
-    }
-
-    fn update_received(&self, received: bool) {
-        self.get_lch().write().unwrap().received = received;
-    }
-
     fn on_establish_connection_error(&self, err: String) {
         let title = "Connection Error";
         let text = err.to_string();
         let lch = self.get_lch();
-        let (is_restarting, direct, received) = {
-            let lc = lch.read().unwrap();
-            (lc.is_restarting_remote_device(), lc.direct, lc.received)
-        };
+        let is_restarting = lch.read().unwrap().is_restarting_remote_device();
         if is_restarting {
             log::info!("Restart remote device, suppress connection error: {err}");
             // Flutter treats this as a reconnect control event. The text is kept
@@ -2717,29 +2616,8 @@ pub trait Interface: Send + Clone + 'static + Sized {
             return;
         }
 
-        let mut relay_hint = false;
-        let mut relay_hint_type = "relay-hint";
-        // force relay
-        let errno = errno::errno().0;
-        log::error!("Connection closed: {err}({errno})");
-        if direct == Some(true)
-            && ((cfg!(windows) && (errno == 10054 || err.contains("10054")))
-                || (!cfg!(windows) && (errno == 104 || err.contains("104")))
-                || (!err.contains("Failed") && err.contains("deadline")))
-        // deadline: https://github.com/rustdesk/rustdesk-server-pro/discussions/325, most likely comes from secure tcp timeout
-        {
-            relay_hint = true;
-            if !received {
-                relay_hint_type = "relay-hint2"
-            }
-        }
-
-        // relay-hint
-        if cfg!(feature = "flutter") && relay_hint {
-            self.msgbox(relay_hint_type, title, &text, "");
-        } else {
-            self.msgbox("error", title, &text, "");
-        }
+        log::error!("Connection closed: {err}({})", errno::errno().0);
+        self.msgbox("error", title, &text, "");
     }
 }
 
@@ -2929,20 +2807,19 @@ lazy_static::lazy_static! {
 /// * `title` - The title of the message.
 /// * `text` - The text of the message.
 #[inline]
-pub fn check_if_retry(msgtype: &str, title: &str, text: &str, retry_for_relay: bool) -> bool {
+pub fn check_if_retry(msgtype: &str, title: &str, text: &str) -> bool {
     msgtype == "error"
         && title == "Connection Error"
-        && ((text.contains("10054") || text.contains("104")) && retry_for_relay
-            || (!text.to_lowercase().contains("offline")
-                && !text.to_lowercase().contains("not exist")
-                && !text.to_lowercase().contains("handshake")
-                && !text.to_lowercase().contains("failed")
-                && !text.to_lowercase().contains("resolve")
-                && !text.to_lowercase().contains("mismatch")
-                && !text.to_lowercase().contains("manually")
-                && !text.to_lowercase().contains("restricted")
-                && !text.to_lowercase().contains("incoming only")
-                && !text.to_lowercase().contains("not allowed")))
+        && !text.to_lowercase().contains("offline")
+        && !text.to_lowercase().contains("not exist")
+        && !text.to_lowercase().contains("handshake")
+        && !text.to_lowercase().contains("failed")
+        && !text.to_lowercase().contains("resolve")
+        && !text.to_lowercase().contains("mismatch")
+        && !text.to_lowercase().contains("manually")
+        && !text.to_lowercase().contains("restricted")
+        && !text.to_lowercase().contains("incoming only")
+        && !text.to_lowercase().contains("not allowed")
 }
 
 #[cfg(test)]
@@ -2971,7 +2848,6 @@ mod retry_tests {
             "error",
             "Connection Error",
             "Incoming only mode",
-            false,
         ));
     }
 }

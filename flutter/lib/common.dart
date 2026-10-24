@@ -1153,7 +1153,7 @@ void msgBox(SessionID sessionId, String type, String title, String text,
               ? () {
                   // Disable the button
                   enabled.value = false;
-                  reconnect(dialogManager, sessionId, false);
+                  reconnect(dialogManager, sessionId);
                 }
               : null,
         ));
@@ -1454,9 +1454,7 @@ bool option2bool(String option, String value) {
   bool res;
   if (option.startsWith("enable-")) {
     res = value != "N";
-  } else if (option.startsWith("allow-") ||
-      option == kOptionStopService ||
-      option == kOptionForceAlwaysRelay) {
+  } else if (option.startsWith("allow-") || option == kOptionStopService) {
     res = value == "Y";
   } else {
     // "" is true
@@ -1467,13 +1465,9 @@ bool option2bool(String option, String value) {
 
 String bool2option(String option, bool b) {
   String res;
-  if (option.startsWith('enable-') &&
-      option != kOptionEnableUdpPunch &&
-      option != kOptionEnableIpv6Punch) {
+  if (option.startsWith('enable-')) {
     res = b ? defaultOptionYes : 'N';
-  } else if (option.startsWith('allow-') ||
-      option == kOptionStopService ||
-      option == kOptionForceAlwaysRelay) {
+  } else if (option.startsWith('allow-') || option == kOptionStopService) {
     res = b ? 'Y' : defaultOptionNo;
   } else {
     res = b ? 'Y' : 'N';
@@ -2074,7 +2068,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
   String? id;
   String? password;
   String? switchUuid;
-  bool? forceRelay;
   for (int i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--connect':
@@ -2096,9 +2089,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
         switchUuid = args[i + 1];
         i++;
         break;
-      case '--relay':
-        forceRelay = true;
-        break;
       default:
         break;
     }
@@ -2108,15 +2098,12 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
       case UriLinkType.remoteDesktop:
         Future.delayed(Duration.zero, () {
           rustDeskWinManager.newRemoteDesktop(id!,
-              password: password,
-              switchUuid: switchUuid,
-              forceRelay: forceRelay);
+              password: password, switchUuid: switchUuid);
         });
         break;
       case UriLinkType.fileTransfer:
         Future.delayed(Duration.zero, () {
-          rustDeskWinManager.newFileTransfer(id!,
-              password: password, forceRelay: forceRelay);
+          rustDeskWinManager.newFileTransfer(id!, password: password);
         });
         break;
     }
@@ -2148,29 +2135,14 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     if (uri.path.length > 1) {
       id = uri.path.substring(1);
     }
-  } else if (uri.authority.length > 2 &&
-      (uri.path.length <= 1 ||
-          (uri.path == '/r' || uri.path.startsWith('/r@')))) {
+  } else if (uri.authority.length > 2 && uri.path.length <= 1) {
     // rustdesk://<connect-id>
-    // rustdesk://<connect-id>/r
-    // rustdesk://<connect-id>/r@<server>
     command = '--connect';
     id = uri.authority;
-    if (uri.path.length > 1) {
-      id = id + uri.path;
-    }
   }
 
   var queryParameters =
       uri.queryParameters.map((k, v) => MapEntry(k.toLowerCase(), v));
-
-  var key = queryParameters["key"];
-  if (id != null) {
-    if (key != null) {
-      id = "$id?key=$key";
-    }
-  }
-
 
   List<String> args = List.empty(growable: true);
   if (command != null && id != null) {
@@ -2181,7 +2153,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     if (password != null) args.addAll(['--password', password]);
     String? switch_uuid = param["switch_uuid"];
     if (switch_uuid != null) args.addAll(['--switch_uuid', switch_uuid]);
-    if (param["relay"] != null) args.add("--relay");
     return args;
   }
 
@@ -2190,18 +2161,13 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
 
 connectMainDesktop(String id,
     {required bool isFileTransfer,
-    bool? forceRelay,
     String? password,
     String? connToken}) async {
   if (isFileTransfer) {
     await rustDeskWinManager.newFileTransfer(id,
-        password: password,
-        connToken: connToken,
-        forceRelay: forceRelay);
+        password: password, connToken: connToken);
   } else {
-    await rustDeskWinManager.newRemoteDesktop(id,
-        password: password,
-        forceRelay: forceRelay);
+    await rustDeskWinManager.newRemoteDesktop(id, password: password);
   }
 }
 
@@ -2209,7 +2175,6 @@ connectMainDesktop(String id,
 /// If [isFileTransfer], starts a session only for file transfer.
 connect(BuildContext context, String id,
     {bool isFileTransfer = false,
-    bool forceRelay = false,
     String? password,
     String? connToken}) async {
   if (id == '') return;
@@ -2226,23 +2191,18 @@ connect(BuildContext context, String id,
     } catch (_) {}
   }
   id = id.replaceAll(' ', '');
-  final oldId = id;
-  id = await bind.mainHandleRelayId(id: id);
-  forceRelay = id != oldId || forceRelay;
 
   if (desktopType == DesktopType.main) {
     await connectMainDesktop(
       id,
       isFileTransfer: isFileTransfer,
       password: password,
-      forceRelay: forceRelay,
     );
   } else {
     await rustDeskWinManager.call(WindowType.Main, kWindowConnect, {
       'id': id,
       'isFileTransfer': isFileTransfer,
       'password': password,
-      'forceRelay': forceRelay,
       'connToken': connToken,
     });
   }
@@ -3404,25 +3364,10 @@ String get appName {
   return _appName;
 }
 
-String getConnectionText(bool secure, bool direct, String streamType) {
-  String connectionText;
-  if (secure && direct) {
-    connectionText = translate("Direct and encrypted connection");
-  } else if (secure && !direct) {
-    connectionText = translate("Relayed and encrypted connection");
-  } else if (!secure && direct) {
-    connectionText = translate("Direct and unencrypted connection");
-  } else {
-    connectionText = translate("Relayed and unencrypted connection");
-  }
-  if (streamType == 'Relay') {
-    streamType = 'TCP';
-  }
-  if (streamType.isEmpty) {
-    return connectionText;
-  } else {
-    return '$connectionText ($streamType)';
-  }
+String getConnectionText(bool secure) {
+  return secure
+      ? translate("Direct and encrypted connection")
+      : translate("Direct and unencrypted connection");
 }
 
 // TODO: We should support individual bits combinations in the future.

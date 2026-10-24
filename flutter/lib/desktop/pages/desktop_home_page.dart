@@ -650,7 +650,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           call.arguments['id'],
           isFileTransfer: call.arguments['isFileTransfer'],
           password: call.arguments['password'],
-          forceRelay: call.arguments['forceRelay'],
           connToken: call.arguments['connToken'],
         );
       } else if (call.method == kWindowBumpMouse) {

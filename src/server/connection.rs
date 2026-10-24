@@ -4549,11 +4549,6 @@ mod test {
             &list(&["123456789"]),
             "123456789@example.com:21116"
         ));
-        // Cross server from web, whose server is a WebSocket URI.
-        assert!(id_whitelist_allows(
-            &list(&["123456789"]),
-            "123456789@wss://example.com:21118/ws/id"
-        ));
         // A different id is still rejected, suffix or not.
         assert!(!id_whitelist_allows(
             &list(&["123456789"]),

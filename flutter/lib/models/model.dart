@@ -24,7 +24,6 @@ import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:tuple/tuple.dart';
 import 'package:image/image.dart' as img2;
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
@@ -43,7 +42,7 @@ import 'package:flutter_hbb/generated_bridge.dart'
 import 'package:flutter_hbb/native/custom_cursor.dart';
 
 typedef HandleMsgBox = Function(Map<String, dynamic> evt, String id);
-typedef ReconnectHandle = Function(OverlayDialogManager, SessionID, bool);
+typedef ReconnectHandle = Function(OverlayDialogManager, SessionID);
 final _constSessionId = Uuid().v4obj();
 // Empirical restart reconnect cadence: keep the last frame briefly and retry quickly.
 const _restartReconnectSilentDelaySecs = 5;
@@ -56,8 +55,6 @@ class CachedPeerData {
   Map<String, bool> permissions = {};
 
   bool secure = false;
-  bool direct = false;
-  String streamType = '';
 
   CachedPeerData();
 
@@ -68,8 +65,6 @@ class CachedPeerData {
       'lastCursorId': lastCursorId,
       'permissions': permissions,
       'secure': secure,
-      'direct': direct,
-      'streamType': streamType,
     });
   }
 
@@ -83,8 +78,6 @@ class CachedPeerData {
         data.permissions[key] = value;
       });
       data.secure = map['secure'];
-      data.direct = map['direct'];
-      data.streamType = map['streamType'];
       return data;
     } catch (e) {
       debugPrint('Failed to parse CachedPeerData: $e');
@@ -102,8 +95,6 @@ class FfiModel with ChangeNotifier {
   Rect? _rect;
 
   final _permissions = <String, bool>{};
-  bool? _secure;
-  bool? _direct;
   bool _touchMode = false;
   late VirtualMouseMode virtualMouseMode;
   Timer? _timer;
@@ -133,10 +124,6 @@ class FfiModel with ChangeNotifier {
     _permissions.clear();
     _permissions.addAll(permissions);
   }
-
-  bool? get secure => _secure;
-
-  bool? get direct => _direct;
 
   PeerInfo get pi => _pi;
 
@@ -229,8 +216,6 @@ class FfiModel with ChangeNotifier {
     _pi = PeerInfo();
     lastUserDisplay = null;
     _cancelPendingMonitorRestore();
-    _secure = null;
-    _direct = null;
     _timer?.cancel();
     _timer = null;
     resetRestartReconnectState();
@@ -239,45 +224,13 @@ class FfiModel with ChangeNotifier {
     timerScreenshot?.cancel();
   }
 
-  setConnectionType(
-      String peerId, bool secure, bool direct, String streamType) {
+  setConnectionType(String peerId, bool secure) {
     cachedPeerData.secure = secure;
-    cachedPeerData.direct = direct;
-    cachedPeerData.streamType = streamType;
-    _secure = secure;
-    _direct = direct;
     try {
       var connectionType = ConnectionTypeState.find(peerId);
       connectionType.setSecure(secure);
-      connectionType.setDirect(direct);
-      connectionType.setStreamType(streamType);
     } catch (e) {
       //
-    }
-  }
-
-  Widget? getConnectionImageText() {
-    if (secure == null || direct == null) {
-      return null;
-    } else {
-      final icon =
-          '${secure == true ? 'secure' : 'insecure'}${direct == true ? '' : '_relay'}';
-      final iconWidget =
-          SvgPicture.asset('assets/$icon.svg', width: 48, height: 48);
-      String connectionText =
-          getConnectionText(secure!, direct!, cachedPeerData.streamType);
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          iconWidget,
-          SizedBox(height: 4),
-          Text(
-            connectionText,
-            style: TextStyle(fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      );
     }
   }
 
@@ -292,7 +245,7 @@ class FfiModel with ChangeNotifier {
       'text': kMsgboxTextWaitingForImage,
       'link': '',
     }, sessionId, peerId);
-    setConnectionType(peerId, data.secure, data.direct, data.streamType);
+    setConnectionType(peerId, data.secure);
     await handlePeerInfo(data.peerInfo, peerId, true);
     if (data.lastCursorId.isNotEmpty) {
       updateLastCursorId(data.lastCursorId);
@@ -317,8 +270,7 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'sync_platform_additions') {
         handlePlatformAdditions(evt, sessionId, peerId);
       } else if (name == 'connection_ready') {
-        setConnectionType(peerId, evt['secure'] == 'true',
-            evt['direct'] == 'true', evt['stream_type'] ?? '');
+        setConnectionType(peerId, evt['secure'] == 'true');
         resetRestartReconnectState();
       } else if (name == 'switch_display') {
         // switch display is kept for backward compatibility
@@ -666,7 +618,7 @@ class FfiModel with ChangeNotifier {
       if (_restartReconnectDelayTimer == null) {
         parent.target?.inputModel.setRelativeMouseMode(false);
         _cancelPendingMonitorRestore();
-        bind.sessionReconnect(sessionId: sessionId, forceRelay: false);
+        bind.sessionReconnect(sessionId: sessionId);
         clearPermissions();
         // Retry once more after the silent window so restart reconnect attempts
         // are spaced by the empirical short cadence instead of only updating UI.
@@ -676,13 +628,13 @@ class FfiModel with ChangeNotifier {
           if (parent.target?.closed == true) {
             return;
           }
-          reconnect(dialogManager, sessionId, false);
+          reconnect(dialogManager, sessionId);
         });
       }
     } else if (type == 'restarting-show') {
       _restartReconnectDelayTimer?.cancel();
       _restartReconnectDelayTimer = null;
-      reconnect(dialogManager, sessionId, false);
+      reconnect(dialogManager, sessionId);
     } else if (type == 'wait-remote-accept-nook') {
       showWaitAcceptDialog(sessionId, type, title, text, dialogManager);
     } else if (type == 'on-uac' || type == 'on-foreground-elevated') {
@@ -691,8 +643,6 @@ class FfiModel with ChangeNotifier {
       showWaitUacDialog(sessionId, dialogManager, type);
     } else if (type == 'elevation-error') {
       showElevationError(sessionId, type, title, text, dialogManager);
-    } else if (type == 'relay-hint' || type == 'relay-hint2') {
-      showRelayHintDialog(sessionId, type, title, text, dialogManager, peerId);
     } else if (text == kMsgboxTextWaitingForImage) {
       showConnectedWaitingForImage(dialogManager, sessionId, type, title, text);
     } else {
@@ -791,7 +741,7 @@ class FfiModel with ChangeNotifier {
     _timer?.cancel();
     if (hasRetry) {
       _timer = Timer(Duration(seconds: _reconnects), () {
-        reconnect(dialogManager, sessionId, false);
+        reconnect(dialogManager, sessionId);
       });
       _reconnects *= 2;
     } else {
@@ -811,60 +761,15 @@ class FfiModel with ChangeNotifier {
     _pendingRestoreTimer = null;
   }
 
-  void reconnect(OverlayDialogManager dialogManager, SessionID sessionId,
-      bool forceRelay) {
+  void reconnect(OverlayDialogManager dialogManager, SessionID sessionId) {
     // Disable relative mouse mode before reconnecting to ensure cursor is released.
     parent.target?.inputModel.setRelativeMouseMode(false);
     _cancelPendingMonitorRestore();
-    bind.sessionReconnect(sessionId: sessionId, forceRelay: forceRelay);
+    bind.sessionReconnect(sessionId: sessionId);
     clearPermissions();
     dialogManager.dismissAll();
     dialogManager.showLoading(translate('Connecting...'),
         onCancel: closeConnection);
-  }
-
-  Future<void> showRelayHintDialog(
-      SessionID sessionId,
-      String type,
-      String title,
-      String text,
-      OverlayDialogManager dialogManager,
-      String peerId) async {
-    var hint = "\n\n${translate('relay_hint_tip')}";
-    if (text.contains("10054") || text.contains("104")) {
-      hint = "";
-    }
-    final text2 = "${translate(text)}$hint";
-
-    dialogManager.show(tag: '$sessionId-$type', (setState, close, context) {
-      onClose() {
-        closeConnection();
-        close();
-      }
-
-      final style =
-          ElevatedButton.styleFrom(backgroundColor: Colors.green[700]);
-
-      return CustomAlertDialog(
-        title: null,
-        content: msgboxContent(type, title, text2),
-        actions: [
-          dialogButton('Close', onPressed: onClose, isOutline: true),
-          if (type == 'relay-hint')
-            dialogButton('Connect via relay',
-                onPressed: () => reconnect(dialogManager, sessionId, true),
-                buttonStyle: style,
-                isOutline: true),
-          dialogButton('Retry',
-              onPressed: () => reconnect(dialogManager, sessionId, false)),
-          if (type == 'relay-hint2')
-            dialogButton('Connect via relay',
-                onPressed: () => reconnect(dialogManager, sessionId, true),
-                buttonStyle: style),
-        ],
-        onCancel: onClose,
-      );
-    });
   }
 
   void showConnectedWaitingForImage(OverlayDialogManager dialogManager,
@@ -3475,7 +3380,6 @@ class FFI {
     String? switchUuid,
     String? password,
     String? connToken,
-    bool? forceRelay,
     int? tabWindowId,
     int? display,
     List<int>? displays,
@@ -3500,7 +3404,6 @@ class FFI {
         id: id,
         isFileTransfer: isFileTransfer,
         switchUuid: switchUuid ?? '',
-        forceRelay: forceRelay ?? false,
         password: password ?? '',
         connToken: connToken,
       );

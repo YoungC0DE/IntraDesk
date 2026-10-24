@@ -29,34 +29,18 @@ class CurrentDisplayState {
 
 class ConnectionType {
   final Rx<String> _secure = kInvalidValueStr.obs;
-  final Rx<String> _direct = kInvalidValueStr.obs;
-  final Rx<String> _stream_type = kInvalidValueStr.obs;
 
   Rx<String> get secure => _secure;
-  Rx<String> get direct => _direct;
-  Rx<String> get stream_type => _stream_type;
 
   static String get strSecure => 'secure';
   static String get strInsecure => 'insecure';
-  static String get strDirect => '';
-  static String get strIndirect => '_relay';
 
   void setSecure(bool v) {
     _secure.value = v ? strSecure : strInsecure;
   }
 
-  void setDirect(bool v) {
-    _direct.value = v ? strDirect : strIndirect;
-  }
-
-  void setStreamType(String v) {
-    _stream_type.value = v;
-  }
-
   bool isValid() {
-    return _secure.value != kInvalidValueStr &&
-        _direct.value != kInvalidValueStr &&
-        _stream_type.value != kInvalidValueStr;
+    return _secure.value != kInvalidValueStr;
   }
 }
 

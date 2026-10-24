@@ -522,32 +522,6 @@ abstract class BasePeerCard extends StatelessWidget {
           : await _openInTabsAction(id);
 
   @protected
-  Future<bool> _isForceAlwaysRelay(String id) async {
-    return option2bool(kOptionForceAlwaysRelay,
-        (await bind.mainGetPeerOption(id: id, key: kOptionForceAlwaysRelay)));
-  }
-
-  @protected
-  Future<MenuEntryBase<String>> _forceAlwaysRelayAction(String id) async {
-    return MenuEntrySwitch<String>(
-      switchType: SwitchType.scheckbox,
-      text: translate('Always connect via relay'),
-      getter: () async {
-        return await _isForceAlwaysRelay(id);
-      },
-      setter: (bool v) async {
-        await bind.mainSetPeerOption(
-            id: id,
-            key: kOptionForceAlwaysRelay,
-            value: bool2option(kOptionForceAlwaysRelay, v));
-        showToast(translate('Successful'));
-      },
-      padding: menuPadding,
-      dismissOnClicked: true,
-    );
-  }
-
-  @protected
   MenuEntryBase<String> _renameAction(String id) {
     return MenuEntryButton<String>(
       childBuilder: (TextStyle? style) => Text(
@@ -732,7 +706,6 @@ class RecentPeerCard extends BasePeerCard {
     final List favs = (await bind.mainGetFav()).toList();
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    menuItems.add(await _forceAlwaysRelayAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
     menuItems.add(_renameAction(peer.id));
@@ -773,7 +746,6 @@ class FavoritePeerCard extends BasePeerCard {
     ];
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    menuItems.add(await _forceAlwaysRelayAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
     menuItems.add(_renameAction(peer.id));
@@ -813,7 +785,6 @@ class DiscoveredPeerCard extends BasePeerCard {
     final List favs = (await bind.mainGetFav()).toList();
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    menuItems.add(await _forceAlwaysRelayAction(peer.id));
     menuItems.add(_wolAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
 

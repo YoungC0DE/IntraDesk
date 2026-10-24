@@ -39,16 +39,9 @@ use crate::{
     },
 };
 
-pub const RENDEZVOUS_TIMEOUT: u64 = 12_000;
 pub const CONNECT_TIMEOUT: u64 = 18_000;
 pub const READ_TIMEOUT: u64 = 18_000;
-// https://github.com/quic-go/quic-go/issues/525#issuecomment-294531351
-// https://datatracker.ietf.org/doc/html/draft-hamilton-early-deployment-quic-00#section-6.10
-// 15 seconds is recommended by quic, though oneSIP recommend 25 seconds,
-// https://www.onsip.com/voip-resources/voip-fundamentals/what-is-nat-keepalive
-pub const REG_INTERVAL: i64 = 15_000;
 pub const COMPRESS_LEVEL: i32 = 3;
-const SERIAL: i32 = 3;
 
 
 type Size = (i32, i32, i32, i32);
@@ -60,7 +53,6 @@ lazy_static::lazy_static! {
     static ref LOCAL_CONFIG: RwLock<LocalConfig> = RwLock::new(LocalConfig::load());
     static ref STATUS: RwLock<Status> = RwLock::new(Status::load());
     static ref TRUSTED_DEVICES: RwLock<(Vec<TrustedDevice>, bool)> = Default::default();
-    pub static ref PROD_RENDEZVOUS_SERVER: RwLock<String> = RwLock::new("".to_owned());
     pub static ref APP_NAME: RwLock<String> = RwLock::new("IntraDesk".to_owned());
     static ref KEY_PAIR: Mutex<Option<KeyPair>> = Default::default();
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
@@ -102,8 +94,6 @@ pub const RS_PUB_KEY: &str = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
-pub const WS_RENDEZVOUS_PORT: i32 = 21118;
-pub const WS_RELAY_PORT: i32 = 21119;
 
 #[inline]
 pub fn is_service_ipc_postfix(postfix: &str) -> bool {
@@ -196,10 +186,6 @@ pub struct Config {
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Config2 {
     #[serde(default, deserialize_with = "deserialize_string")]
-    rendezvous_server: String,
-    #[serde(default, deserialize_with = "deserialize_i32")]
-    serial: i32,
-    #[serde(default, deserialize_with = "deserialize_string")]
     unlock_pin: String,
     #[serde(default, deserialize_with = "deserialize_string")]
     trusted_devices: String,
@@ -261,8 +247,6 @@ pub struct PeerConfig {
     pub lock_after_session_end: LockAfterSessionEnd,
     #[serde(flatten)]
     pub allow_swap_key: AllowSwapKey,
-    #[serde(default, deserialize_with = "deserialize_i32")]
-    pub direct_failures: i32,
     #[serde(flatten)]
     pub disable_audio: DisableAudio,
     #[serde(flatten)]
@@ -351,7 +335,6 @@ impl Default for PeerConfig {
             show_remote_cursor: Default::default(),
             lock_after_session_end: Default::default(),
             allow_swap_key: Default::default(),
-            direct_failures: Default::default(),
             disable_audio: Default::default(),
             disable_clipboard: Default::default(),
             enable_file_copy_paste: Default::default(),
@@ -727,49 +710,6 @@ impl Config {
         }
     }
 
-    pub fn get_rendezvous_server() -> String {
-        let mut rendezvous_server = Self::get_option("custom-rendezvous-server");
-        if rendezvous_server.is_empty() {
-            rendezvous_server = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = CONFIG2.read().unwrap().rendezvous_server.clone();
-        }
-        if rendezvous_server.is_empty() {
-            rendezvous_server = Self::get_rendezvous_servers()
-                .drain(..)
-                .next()
-                .unwrap_or_default();
-        }
-        if !rendezvous_server.contains(':') {
-            rendezvous_server = format!("{rendezvous_server}:{RENDEZVOUS_PORT}");
-        }
-        rendezvous_server
-    }
-
-    pub fn get_rendezvous_servers() -> Vec<String> {
-        let s = Self::get_option("custom-rendezvous-server");
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let s = PROD_RENDEZVOUS_SERVER.read().unwrap().clone();
-        if !s.is_empty() {
-            return vec![s];
-        }
-        let serial_obsolute = CONFIG2.read().unwrap().serial > SERIAL;
-        if serial_obsolute {
-            let ss: Vec<String> = Self::get_option("rendezvous-servers")
-                .split(',')
-                .filter(|x| x.contains('.'))
-                .map(|x| x.to_owned())
-                .collect();
-            if !ss.is_empty() {
-                return ss;
-            }
-        }
-        Vec::new()
-    }
-
     pub fn set_id(id: &str) {
         let mut config = CONFIG.write().unwrap();
         if id == config.id {
@@ -777,19 +717,6 @@ impl Config {
         }
         config.id = id.into();
         config.store();
-    }
-
-    pub fn set_serial(serial: i32) {
-        let mut config = CONFIG2.write().unwrap();
-        if serial == config.serial {
-            return;
-        }
-        config.serial = serial;
-        config.store();
-    }
-
-    pub fn get_serial() -> i32 {
-        std::cmp::max(CONFIG2.read().unwrap().serial, SERIAL)
     }
 
 
@@ -920,15 +847,6 @@ impl Config {
         } else {
             None
         }
-    }
-
-    pub fn no_register_device() -> bool {
-        BUILTIN_SETTINGS
-            .read()
-            .unwrap()
-            .get(keys::OPTION_REGISTER_DEVICE)
-            .map(|v| v == "N")
-            .unwrap_or(false)
     }
 
     pub fn is_disable_change_permanent_password() -> bool {
@@ -2098,7 +2016,6 @@ macro_rules! deserialize_default {
 
 deserialize_default!(deserialize_string, String);
 deserialize_default!(deserialize_bool, bool);
-deserialize_default!(deserialize_i32, i32);
 deserialize_default!(deserialize_u64, u64);
 deserialize_default!(deserialize_vec_u8, Vec<u8>);
 deserialize_default!(deserialize_vec_string, Vec<String>);
@@ -2180,10 +2097,7 @@ pub fn is_disable_settings() -> bool {
 pub fn option2bool(option: &str, value: &str) -> bool {
     if option.starts_with("enable-") {
         value != "N"
-    } else if option.starts_with("allow-")
-        || option == "stop-service"
-        || option == "force-always-relay"
-    {
+    } else if option.starts_with("allow-") || option == "stop-service" {
         value == "Y"
     } else {
         value != "N"
@@ -2211,8 +2125,6 @@ pub mod keys {
     pub const OPTION_LANGUAGE: &str = "lang";
     pub const OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD: &str = "allow-numeric-one-time-password";
     pub const OPTION_TRACKPAD_SPEED: &str = "trackpad-speed";
-    pub const OPTION_REGISTER_DEVICE: &str = "register-device";
-    pub const OPTION_RELAY_SERVER: &str = "relay-server";
     pub const OPTION_ALLOW_HOSTNAME_AS_ID: &str = "allow-hostname-as-id";
     pub const OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD: &str = "disable-change-permanent-password";
     pub const OPTION_DISABLE_UNLOCK_PIN: &str = "disable-unlock-pin";

@@ -654,14 +654,10 @@ impl InvokeUiSession for FlutterHandler {
         );
     }
 
-    fn set_connection_type(&self, is_secured: bool, direct: bool, stream_type: &str) {
+    fn set_connection_type(&self, is_secured: bool) {
         self.push_event(
             "connection_ready",
-            &[
-                ("secure", &is_secured.to_string()),
-                ("direct", &direct.to_string()),
-                ("stream_type", &stream_type.to_string()),
-            ],
+            &[("secure", &is_secured.to_string())],
             &[],
         );
     }
@@ -1065,7 +1061,6 @@ pub fn session_add(
     id: &str,
     is_file_transfer: bool,
     switch_uuid: &str,
-    force_relay: bool,
     password: String,
     conn_token: Option<String>,
 ) -> ResultType<FlutterSession> {
@@ -1105,7 +1100,6 @@ pub fn session_add(
         id.to_owned(),
         conn_type,
         switch_uuid,
-        force_relay,
         get_adapter_luid(),
         conn_token,
     );

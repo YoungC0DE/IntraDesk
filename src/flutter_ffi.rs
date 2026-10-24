@@ -107,7 +107,6 @@ pub fn session_add_sync(
     id: String,
     is_file_transfer: bool,
     switch_uuid: String,
-    force_relay: bool,
     password: String,
     conn_token: Option<String>,
 ) -> SyncReturn<String> {
@@ -116,7 +115,6 @@ pub fn session_add_sync(
         &id,
         is_file_transfer,
         &switch_uuid,
-        force_relay,
         password,
         conn_token,
     );
@@ -271,9 +269,9 @@ pub fn session_is_multi_ui_session(session_id: SessionID) -> SyncReturn<bool> {
     }
 }
 
-pub fn session_reconnect(session_id: SessionID, force_relay: bool) {
+pub fn session_reconnect(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.reconnect(force_relay);
+        session.reconnect();
     }
     session_on_waiting_for_image_dialog_show(session_id);
 }
@@ -1286,10 +1284,6 @@ pub fn main_set_user_default_option(key: String, value: String) {
 
 pub fn main_get_user_default_option(key: String) -> SyncReturn<String> {
     SyncReturn(get_user_default_option(key))
-}
-
-pub fn main_handle_relay_id(id: String) -> String {
-    handle_relay_id(&id).to_owned()
 }
 
 pub fn main_is_option_fixed(key: String) -> SyncReturn<bool> {

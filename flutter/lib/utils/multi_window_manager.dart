@@ -198,7 +198,6 @@ class RustDeskMultiWindowManager {
     String remoteId,
     List<int> windows, {
     String? password,
-    bool? forceRelay,
     String? switchUuid,
     String? connToken,
   }) async {
@@ -206,7 +205,6 @@ class RustDeskMultiWindowManager {
       "type": type.index,
       "id": remoteId,
       "password": password,
-      "forceRelay": forceRelay
     };
     if (switchUuid != null) {
       params['switch_uuid'] = switchUuid;
@@ -236,7 +234,6 @@ class RustDeskMultiWindowManager {
     String remoteId, {
     String? password,
     String? switchUuid,
-    bool? forceRelay,
   }) async {
     return await newSession(
       WindowType.RemoteDesktop,
@@ -244,7 +241,6 @@ class RustDeskMultiWindowManager {
       remoteId,
       _remoteDesktopWindows,
       password: password,
-      forceRelay: forceRelay,
       switchUuid: switchUuid,
     );
   }
@@ -252,7 +248,6 @@ class RustDeskMultiWindowManager {
   Future<MultiWindowCallResult> newFileTransfer(
     String remoteId, {
     String? password,
-    bool? forceRelay,
     String? connToken,
   }) async {
     return await newSession(
@@ -261,7 +256,6 @@ class RustDeskMultiWindowManager {
       remoteId,
       _fileTransferWindows,
       password: password,
-      forceRelay: forceRelay,
       connToken: connToken,
     );
   }

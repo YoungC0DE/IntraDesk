@@ -93,7 +93,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           toolbarState: ToolbarState(),
           tabController: tabController,
           switchUuid: params['switch_uuid'],
-          forceRelay: params['forceRelay'],
         ),
       ));
       _update_remote_count();
@@ -150,10 +149,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           } else {
             bool secure =
                 connectionType.secure.value == ConnectionType.strSecure;
-            bool direct =
-                connectionType.direct.value == ConnectionType.strDirect;
-            String msgConn = getConnectionText(
-                secure, direct, connectionType.stream_type.value);
+            String msgConn = getConnectionText(secure);
             var msgFingerprint = '${translate('Fingerprint')}:\n';
             var fingerprint = FingerprintState.find(key).value;
             if (fingerprint.isEmpty) {
@@ -174,7 +170,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
                 Tooltip(
                   message: '$msgConn\n$msgFingerprint',
                   child: SvgPicture.asset(
-                    'assets/${connectionType.secure.value}${connectionType.direct.value}.svg',
+                    'assets/${connectionType.secure.value}.svg',
                     width: themeConf.iconSize,
                     height: themeConf.iconSize,
                   ).paddingOnly(right: 5),
@@ -443,7 +439,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           toolbarState: ToolbarState(),
           tabController: tabController,
           switchUuid: switchUuid,
-          forceRelay: args['forceRelay'],
         ),
       ));
     } else if (call.method == kWindowDisableGrabKeyboard) {

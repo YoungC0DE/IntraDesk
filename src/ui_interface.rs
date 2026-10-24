@@ -658,15 +658,6 @@ pub(crate) async fn send_to_cm(data: &ipc::Data) {
     }
 }
 
-// if it's relay id, return id processed, otherwise return original id
-pub fn handle_relay_id(id: &str) -> &str {
-    if id.ends_with(r"\r") || id.ends_with(r"/r") {
-        &id[0..id.len() - 2]
-    } else {
-        id
-    }
-}
-
 pub fn support_remove_wallpaper() -> bool {
     return crate::platform::WallPaperRemover::support();
 }

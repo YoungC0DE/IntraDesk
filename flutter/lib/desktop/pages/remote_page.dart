@@ -44,7 +44,6 @@ class RemotePage extends StatefulWidget {
     this.displays,
     this.tabController,
     this.switchUuid,
-    this.forceRelay,
   }) : super(key: key) {
     initSharedStates(id);
   }
@@ -57,7 +56,6 @@ class RemotePage extends StatefulWidget {
   final String? password;
   final ToolbarState toolbarState;
   final String? switchUuid;
-  final bool? forceRelay;
   final SimpleWrapper<State<RemotePage>?> _lastState = SimpleWrapper(null);
   final DesktopTabController? tabController;
 
@@ -163,7 +161,6 @@ class _RemotePageState extends State<RemotePage>
       widget.id,
       password: widget.password,
       switchUuid: widget.switchUuid,
-      forceRelay: widget.forceRelay,
       tabWindowId: widget.tabWindowId,
       display: widget.display,
       displays: widget.displays,

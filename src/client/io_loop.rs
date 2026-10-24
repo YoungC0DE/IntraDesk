@@ -120,7 +120,6 @@ impl<T: InvokeUiSession> Remote<T> {
             }
         };
 
-        let mut received = false;
         let conn_type = if self.handler.is_file_transfer() {
             ConnType::FILE_TRANSFER
         } else {
@@ -135,7 +134,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     .unwrap()
                     .set_connected();
                 let is_secured = peer.is_secured();
-                self.handler.set_connection_type(is_secured, true, "TCP"); // flutter -> connection_ready
+                self.handler.set_connection_type(is_secured); // flutter -> connection_ready
                 if !is_secured
                     && !crate::common::is_direct_ip_access(&self.handler.get_id())
                     && !client::confirm_insecure_connection(&self.handler, &mut self.receiver).await
@@ -144,7 +143,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     self.handle_disconnected(round);
                     return;
                 }
-                self.handler.update_direct(Some(true));
 
                 // just build for now
 
@@ -183,10 +181,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                     }
                                     Ok(ref bytes) => {
                                         last_recv_time = Instant::now();
-                                        if !received {
-                                            received = true;
-                                            self.handler.update_received(true);
-                                        }
                                         self.data_count.fetch_add(bytes.len(), Ordering::Relaxed);
                                         if !self.handle_msg_from_peer(bytes, &mut peer).await {
                                             break

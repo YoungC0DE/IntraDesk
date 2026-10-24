@@ -4,38 +4,23 @@ pub mod windows;
 
 pub mod win_device;
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use base::message_proto::CursorData;
-#[cfg(all(
-    not(all(target_os = "windows", not(target_pointer_width = "64"))),
-    not(any(target_os = "android", target_os = "ios"))
-))]
+#[cfg(not(not(target_pointer_width = "64")))]
 use hbb_common::sysinfo::System;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::{sysinfo::Pid, ResultType};
 
-#[cfg(not(any(target_os = "macos", target_os = "android", target_os = "ios")))]
 pub const SERVICE_INTERVAL: u64 = 300;
 
 pub fn is_xfce() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        return std::env::var_os("XDG_CURRENT_DESKTOP") == Some(std::ffi::OsString::from("XFCE"));
-    }
-    #[cfg(not(target_os = "linux"))]
     {
         return false;
     }
 }
 
 pub fn breakdown_callback() {
-    #[cfg(target_os = "linux")]
-    crate::input_service::clear_remapped_keycode();
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     crate::input_service::release_device_modifiers();
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn change_resolution(name: &str, width: usize, height: usize) -> ResultType<()> {
     let cur_resolution = current_resolution(name)?;
     // For MacOS
@@ -53,56 +38,23 @@ pub fn change_resolution(name: &str, width: usize, height: usize) -> ResultType<
 }
 
 // Android
-#[cfg(target_os = "android")]
-pub fn get_active_username() -> String {
-    // TODO
-    "android".into()
-}
 
-#[cfg(target_os = "android")]
-pub const PA_SAMPLE_RATE: u32 = 48000;
 
-#[cfg(target_os = "android")]
-#[derive(Default)]
-pub struct WakeLock(Option<android_wakelock::WakeLock>);
 
-#[cfg(target_os = "android")]
-impl WakeLock {
-    pub fn new(tag: &str) -> Self {
-        let tag = format!("{}:{tag}", crate::get_app_name());
-        match android_wakelock::partial(tag) {
-            Ok(lock) => Self(Some(lock)),
-            Err(e) => {
-                hbb_common::log::error!("Failed to get wakelock: {e:?}");
-                Self::default()
-            }
-        }
-    }
-}
 
-#[cfg(not(target_os = "ios"))]
 pub fn get_wakelock(_display: bool) -> WakeLock {
     hbb_common::log::info!("new wakelock, require display on: {_display}");
-    #[cfg(target_os = "android")]
-    return crate::platform::WakeLock::new("server");
     // display: keep screen on
     // idle: keep cpu on
     // sleep: prevent system from sleeping, even manually
-    #[cfg(not(target_os = "android"))]
     return crate::platform::WakeLock::new(_display, true, false);
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-#[inline]
-pub fn is_prelogin() -> bool {
-    false
-}
 
 // Note: This method is inefficient on Windows. It will get all the processes.
 // It should only be called when performance is not critical.
 // If we wanted to get the command line ourselves, there would be a lot of new code.
 #[allow(dead_code)]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn get_pids_of_process_with_args<S1: AsRef<str>, S2: AsRef<str>>(
     name: S1,
     args: &[S2],
@@ -110,11 +62,11 @@ fn get_pids_of_process_with_args<S1: AsRef<str>, S2: AsRef<str>>(
     // This function does not work when the process is 32-bit and the OS is 64-bit Windows,
     // `process.cmd()` always returns [] in this case.
     // So we use `windows::get_pids_with_args_by_wmic()` instead.
-    #[cfg(all(target_os = "windows", not(target_pointer_width = "64")))]
+    #[cfg(not(target_pointer_width = "64"))]
     {
         return windows::get_pids_with_args_by_wmic(name, args);
     }
-    #[cfg(not(all(target_os = "windows", not(target_pointer_width = "64"))))]
+    #[cfg(not(not(target_pointer_width = "64")))]
     {
         let name = name.as_ref().to_lowercase();
         let system = System::new_all();
@@ -135,7 +87,6 @@ fn get_pids_of_process_with_args<S1: AsRef<str>, S2: AsRef<str>>(
 
 // Note: This method is inefficient on Windows. It will get all the processes.
 // It should only be called when performance is not critical.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn get_pids_of_process_with_first_arg<S1: AsRef<str>, S2: AsRef<str>>(
     name: S1,
     arg: S2,
@@ -143,11 +94,11 @@ pub fn get_pids_of_process_with_first_arg<S1: AsRef<str>, S2: AsRef<str>>(
     // This function does not work when the process is 32-bit and the OS is 64-bit Windows,
     // `process.cmd()` always returns [] in this case.
     // So we use `windows::get_pids_with_first_arg_by_wmic()` instead.
-    #[cfg(all(target_os = "windows", not(target_pointer_width = "64")))]
+    #[cfg(not(target_pointer_width = "64"))]
     {
         return windows::get_pids_with_first_arg_by_wmic(name, arg);
     }
-    #[cfg(not(all(target_os = "windows", not(target_pointer_width = "64"))))]
+    #[cfg(not(not(target_pointer_width = "64")))]
     {
         let name = name.as_ref().to_lowercase();
         let system = System::new_all();

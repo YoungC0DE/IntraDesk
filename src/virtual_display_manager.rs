@@ -24,13 +24,8 @@ pub fn get_cur_device_string() -> &'static str {
 }
 
 pub fn is_virtual_display_supported() -> bool {
-    #[cfg(target_os = "windows")]
     {
         is_windows_version_or_greater(10, 0, 19041, 0, 0)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        false
     }
 }
 

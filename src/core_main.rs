@@ -1,8 +1,6 @@
 #[cfg(not(debug_assertions))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::platform::breakdown_callback;
 #[cfg(not(debug_assertions))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use base::platform::register_breakdown_handler;
 use hbb_common::{config, log};
 
@@ -28,13 +26,11 @@ pub enum CoreMainAction {
 /// [Note]
 /// If it returns [`None`], then the process will terminate, and flutter gui will not be started.
 /// If it returns [`Some`], the action determines whether to start the UI or report failure.
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn core_main() -> Option<CoreMainAction> {
     if !crate::common::global_init() {
         return None;
     }
     crate::load_custom_client();
-    #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
         // return None to terminate the process
         return None;
@@ -52,7 +48,6 @@ pub fn core_main() -> Option<CoreMainAction> {
         if i == 0 {
             arg_exe = arg;
         } else if i > 0 {
-            #[cfg(feature = "flutter")]
             if [
                 "--connect",
                 "--play",
@@ -77,26 +72,10 @@ pub fn core_main() -> Option<CoreMainAction> {
         i += 1;
     }
     #[cfg(not(debug_assertions))]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     register_breakdown_handler(breakdown_callback);
-    #[cfg(target_os = "linux")]
-    #[cfg(feature = "flutter")]
-    {
-        let (k, v) = ("LIBGL_ALWAYS_SOFTWARE", "1");
-        if config::option2bool(
-            "allow-always-software-render",
-            &config::Config::get_option("allow-always-software-render"),
-        ) {
-            std::env::set_var(k, v);
-        } else {
-            std::env::remove_var(k);
-        }
-    }
-    #[cfg(windows)]
     if args.contains(&"--connect".to_string()) {
         base::platform::windows::start_cpu_performance_monitor();
     }
-    #[cfg(feature = "flutter")]
     if _is_flutter_invoke_new_connection {
         return core_main_invoke_new_connection(std::env::args()).map(CoreMainAction::StartUi);
     }
@@ -109,7 +88,6 @@ pub fn core_main() -> Option<CoreMainAction> {
             return None;
         }
     }
-    #[cfg(windows)]
     {
         _is_quick_support |= args.is_empty()
             && (is_quick_support_exe(&arg_exe)
@@ -133,12 +111,7 @@ pub fn core_main() -> Option<CoreMainAction> {
     hbb_common::init_log(false, &log_name);
 
     // linux uni (url) go here.
-    #[cfg(all(target_os = "linux", feature = "flutter"))]
-    if args.len() > 0 && args[0].starts_with(&crate::get_uri_prefix()) {
-        return try_send_by_dbus(args[0].clone()).map(CoreMainAction::StartUi);
-    }
 
-    #[cfg(windows)]
     if args.is_empty()
         && _is_quick_support
         && !_is_elevate
@@ -149,41 +122,20 @@ pub fn core_main() -> Option<CoreMainAction> {
             log::error!("Failed to start portable service: {:?}", e);
         }
     }
-    #[cfg(windows)]
     if _is_elevate || _is_run_as_system {
         crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
         return None;
     }
     if args.is_empty() || crate::common::is_empty_uni_link(&args[0]) {
-        #[cfg(target_os = "macos")]
-        {
-            crate::platform::macos::try_remove_temp_update_dir(None);
-        }
 
-        #[cfg(windows)]
         {
             hbb_common::config::PeerConfig::preload_peers();
         }
         std::thread::spawn(move || crate::start_server(false, no_server));
     } else {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        // Root CLI management commands must talk to the user `--server` main IPC.
-        // Example: `sudo rustdesk --option custom-rendezvous-server` should query the
-        // user's IPC instead of root's `/tmp/<app>-0/ipc`; `connect()` still limits this
-        // routing to empty-postfix main IPC only.
-        let _user_main_ipc_scope = if crate::platform::is_installed()
-            && is_root()
-            && is_user_main_ipc_scope_cli_command(&args)
-        {
-            Some(crate::ipc::UserMainIpcScope::new())
-        } else {
-            None
-        };
 
-        #[cfg(windows)]
         {
             if args[0] == "--install-idd" {
-                #[cfg(windows)]
                 if crate::virtual_display_manager::is_virtual_display_supported() {
                     hbb_common::allow_err!(
                         crate::virtual_display_manager::rustdesk_idd::install_update_driver()
@@ -194,7 +146,6 @@ pub fn core_main() -> Option<CoreMainAction> {
                 crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
                 return None;
             } else if args[0] == "--uninstall-amyuni-idd" {
-                #[cfg(windows)]
                 hbb_common::allow_err!(
                     crate::virtual_display_manager::amyuni_idd::uninstall_driver()
                 );
@@ -276,7 +227,6 @@ fn import_config(path: &str) {
 /// this is for invoke new connection from dbus.
 /// If it returns [`None`], then the process will terminate, and flutter gui will not be started.
 /// If it returns [`Some`], then the process will continue, and flutter gui will be started.
-#[cfg(feature = "flutter")]
 fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<String>> {
     let mut authority = None;
     let mut id = None;
@@ -328,10 +278,7 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
         return None;
     }
 
-    #[cfg(target_os = "linux")]
-    return try_send_by_dbus(uni_links);
 
-    #[cfg(windows)]
     {
         use winapi::um::winuser::WM_USER;
         let res = crate::platform::send_message_to_hnwd(
@@ -343,50 +290,12 @@ fn core_main_invoke_new_connection(mut args: std::env::Args) -> Option<Vec<Strin
         );
         return if res { None } else { Some(Vec::new()) };
     }
-    #[cfg(target_os = "macos")]
-    {
-        return if let Err(_) = crate::ipc::send_url_scheme(uni_links) {
-            Some(Vec::new())
-        } else {
-            None
-        };
-    }
 }
 
-#[cfg(all(target_os = "linux", feature = "flutter"))]
-fn try_send_by_dbus(uni_links: String) -> Option<Vec<String>> {
-    use crate::dbus::invoke_new_connection;
 
-    match invoke_new_connection(uni_links) {
-        Ok(()) => {
-            return None;
-        }
-        Err(err) => {
-            log::error!("{}", err.as_ref());
-            // return Some to invoke this url by self
-            return Some(Vec::new());
-        }
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
-    matches!(
-        args.first().map(String::as_str),
-        Some("--password")
-            | Some("--set-unlock-pin")
-            | Some("--get-id")
-            | Some("--set-id")
-            | Some("--config")
-            | Some("--option")
-            | Some("--assign")
-            | Some("--deploy")
-    )
-}
 
 /// Check if the executable is a Quick Support version.
 /// Note: This function must be kept in sync with `libs/portable/src/main.rs`.
-#[cfg(windows)]
 #[inline]
 fn is_quick_support_exe(exe: &str) -> bool {
     let exe = exe.to_lowercase();

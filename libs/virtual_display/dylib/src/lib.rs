@@ -1,15 +1,10 @@
-#[cfg(windows)]
 pub mod win10;
 use hbb_common::ResultType;
-#[cfg(windows)]
 use hbb_common::{bail, lazy_static};
-#[cfg(windows)]
 use std::path::PathBuf;
 
-#[cfg(windows)]
 use std::sync::Mutex;
 
-#[cfg(windows)]
 lazy_static::lazy_static! {
     // If device is uninstalled though "Device Manager" Window.
     // RustDesk is unable to handle device any more...
@@ -17,24 +12,19 @@ lazy_static::lazy_static! {
 }
 
 #[no_mangle]
-#[cfg(windows)]
 pub fn get_driver_install_path() -> &'static str {
     win10::DRIVER_INSTALL_PATH
 }
 
 #[no_mangle]
 pub fn download_driver() -> ResultType<()> {
-    #[cfg(windows)]
     let _download_url = win10::DRIVER_DOWNLOAD_URL;
-    #[cfg(target_os = "linux")]
-    let _download_url = "";
 
     // process download and report progress
 
     Ok(())
 }
 
-#[cfg(windows)]
 fn get_driver_install_abs_path() -> ResultType<PathBuf> {
     let install_path = win10::DRIVER_INSTALL_PATH;
     let exe_file = std::env::current_exe()?;
@@ -53,7 +43,6 @@ fn get_driver_install_abs_path() -> ResultType<PathBuf> {
 
 #[no_mangle]
 pub fn install_update_driver(_reboot_required: &mut bool) -> ResultType<()> {
-    #[cfg(windows)]
     unsafe {
         {
             // Device must be created before install driver.
@@ -85,7 +74,6 @@ pub fn install_update_driver(_reboot_required: &mut bool) -> ResultType<()> {
 
 #[no_mangle]
 pub fn uninstall_driver(_reboot_required: &mut bool) -> ResultType<()> {
-    #[cfg(windows)]
     unsafe {
         {
             let abs_path = get_driver_install_abs_path()?;
@@ -111,10 +99,7 @@ pub fn uninstall_driver(_reboot_required: &mut bool) -> ResultType<()> {
 
 #[no_mangle]
 pub fn is_device_created() -> bool {
-    #[cfg(windows)]
     return *H_SW_DEVICE.lock().unwrap() != 0;
-    #[cfg(not(windows))]
-    return false;
 }
 
 #[no_mangle]
@@ -122,7 +107,6 @@ pub fn create_device() -> ResultType<()> {
     if is_device_created() {
         return Ok(());
     }
-    #[cfg(windows)]
     unsafe {
         let mut lock_device = H_SW_DEVICE.lock().unwrap();
         let mut h_sw_device = *lock_device as win10::idd::HSWDEVICE;
@@ -137,7 +121,6 @@ pub fn create_device() -> ResultType<()> {
 
 #[no_mangle]
 pub fn close_device() {
-    #[cfg(windows)]
     unsafe {
         win10::idd::DeviceClose(*H_SW_DEVICE.lock().unwrap() as win10::idd::HSWDEVICE);
         *H_SW_DEVICE.lock().unwrap() = 0;
@@ -146,7 +129,6 @@ pub fn close_device() {
 
 #[no_mangle]
 pub fn plug_in_monitor(_monitor_index: u32, _edid: u32, _retries: u32) -> ResultType<()> {
-    #[cfg(windows)]
     unsafe {
         if win10::idd::MonitorPlugIn(_monitor_index as _, _edid as _, _retries as _)
             == win10::idd::FALSE
@@ -159,7 +141,6 @@ pub fn plug_in_monitor(_monitor_index: u32, _edid: u32, _retries: u32) -> Result
 
 #[no_mangle]
 pub fn plug_out_monitor(_monitor_index: u32) -> ResultType<()> {
-    #[cfg(windows)]
     unsafe {
         if win10::idd::MonitorPlugOut(_monitor_index) == win10::idd::FALSE {
             bail!("{}", win10::get_last_msg()?);
@@ -168,10 +149,7 @@ pub fn plug_out_monitor(_monitor_index: u32) -> ResultType<()> {
     Ok(())
 }
 
-#[cfg(windows)]
 type PMonitorMode = win10::idd::PMonitorMode;
-#[cfg(not(windows))]
-type PMonitorMode = *mut std::ffi::c_void;
 
 #[no_mangle]
 pub fn update_monitor_modes(
@@ -179,7 +157,6 @@ pub fn update_monitor_modes(
     _mode_count: u32,
     _modes: PMonitorMode,
 ) -> ResultType<()> {
-    #[cfg(windows)]
     unsafe {
         if win10::idd::FALSE
             == win10::idd::MonitorModesUpdate(_monitor_index as _, _mode_count as _, _modes)

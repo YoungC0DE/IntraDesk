@@ -1,14 +1,11 @@
-#[cfg(windows)]
 use dylib_virtual_display::win10::{idd, DRIVER_INSTALL_PATH};
 
-#[cfg(windows)]
 use std::{
     ffi::CStr,
     io::{self, Read},
     path::Path,
 };
 
-#[cfg(windows)]
 fn prompt_input() -> u8 {
     println!("Press  key                  execute:");
     println!("       1. 'x'               1. exit");
@@ -26,7 +23,6 @@ fn prompt_input() -> u8 {
         .unwrap_or(0)
 }
 
-#[cfg(windows)]
 unsafe fn plug_in(index: idd::UINT, edid: idd::UINT) {
     println!("Plug in monitor begin");
     if idd::FALSE == idd::MonitorPlugIn(index, edid, 25) {
@@ -61,7 +57,6 @@ unsafe fn plug_in(index: idd::UINT, edid: idd::UINT) {
     }
 }
 
-#[cfg(windows)]
 unsafe fn plug_out(index: idd::UINT) {
     println!("Plug out monitor begin");
     if idd::FALSE == idd::MonitorPlugOut(index) {
@@ -77,7 +72,6 @@ unsafe fn plug_out(index: idd::UINT) {
 }
 
 fn main() {
-    #[cfg(windows)]
     {
         let abs_path = match Path::new(DRIVER_INSTALL_PATH).canonicalize() {
             Ok(p) => p,

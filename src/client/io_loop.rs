@@ -1,6 +1,4 @@
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{clipboard_listener, update_clipboard, ClipboardSide};
-#[cfg(not(any(target_os = "ios")))]
 use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::{
     client::{
@@ -23,8 +21,6 @@ const WEBRTC_SUSPECT_GRACE: Duration = Duration::from_secs(3);
 // KCP gets no such hint, only how long since a packet arrived; its endpoint pings an idle peer
 // about every 2s, so this is several missed pings, and matches the 8s WebRTC arrives at.
 const KCP_PEER_SILENCE_LIMIT: Duration = Duration::from_secs(8);
-#[cfg(feature = "unix-file-copy-paste")]
-use crate::{clipboard::try_empty_clipboard_files, clipboard_file::unix_file_clip};
 use base::{
     fs::{
         self, can_enable_overwrite_detection, get_job, get_string, new_send_confirm,
@@ -32,10 +28,6 @@ use base::{
     },
     message_proto::{permission_info::Permission, *},
 };
-#[cfg(any(
-    target_os = "windows",
-    all(target_os = "macos", feature = "unix-file-copy-paste")
-))]
 use clipboard::ContextSend;
 use crossbeam_queue::ArrayQueue;
 use hbb_common::{
@@ -52,7 +44,6 @@ use hbb_common::{
     },
     Stream,
 };
-#[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
 use hbb_common::{tokio::sync::Mutex as TokioMutex, ResultType};
 use scrap::CodecFormat;
 use std::{
@@ -79,10 +70,8 @@ pub struct Remote<T: InvokeUiSession> {
     is_connected: bool,
     // Whether the scheduled initial snapshot may still be sent.
     // The connection loop clears this when handling its result or a live clipboard update.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     initial_clipboard_pending: bool,
     first_frame: bool,
-    #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
     client_conn_id: i32, // used for file clipboard
     data_count: Arc<AtomicUsize>,
     video_format: CodecFormat,
@@ -126,10 +115,8 @@ impl<T: InvokeUiSession> Remote<T> {
             timer: crate::rustdesk_interval(time::interval(SEC30)),
             last_update_jobs_status: (Instant::now(), Default::default()),
             is_connected: false,
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             initial_clipboard_pending: false,
             first_frame: false,
-            #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
             client_conn_id: 0,
             data_count: Arc::new(AtomicUsize::new(0)),
             video_format: CodecFormat::Unknown,
@@ -143,7 +130,6 @@ impl<T: InvokeUiSession> Remote<T> {
     }
 
     pub async fn io_loop(&mut self, key: &str, token: &str, round: u32) {
-        #[cfg(target_os = "windows")]
         let _file_clip_context_holder = {
             if self.handler.is_default() {
                 // It is ok to call this function multiple times.
@@ -152,7 +138,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     b: true,
                     f: Box::new(|| {
                         // It's better to check if the peers are windows(support file copy&paste), but it's not necessary.
-                        #[cfg(feature = "flutter")]
                         if !crate::flutter::sessions::has_sessions_running(ConnType::DEFAULT_CONN) {
                             ContextSend::enable(false);
                         };
@@ -214,14 +199,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
 
                 // just build for now
-                #[cfg(not(any(target_os = "windows", feature = "unix-file-copy-paste")))]
-                let (_tx_holder, mut rx_clip_client) = mpsc::unbounded_channel::<i32>();
 
-                #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 let (_tx_holder, rx) = mpsc::unbounded_channel();
-                #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 let mut rx_clip_client_holder = (Arc::new(TokioMutex::new(rx)), None);
-                #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 {
                     if self.handler.is_default() {
                         (self.client_conn_id, rx_clip_client_holder.0) =
@@ -236,7 +216,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         });
                     };
                 }
-                #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 let mut rx_clip_client = rx_clip_client_holder.0.lock().await;
 
                 let mut status_timer =
@@ -409,17 +388,12 @@ impl<T: InvokeUiSession> Remote<T> {
             .unwrap()
             .set_disconnected(round);
 
-        #[cfg(not(target_os = "ios"))]
         if self.handler.is_default() && _set_disconnected_ok {
             // Other sessions may keep the listener running after this one disconnects.
-            #[cfg(feature = "flutter")]
             crate::flutter::update_text_clipboard_required();
-            #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-            crate::flutter::update_file_clipboard_required();
             Client::try_stop_clipboard();
         }
 
-        #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
         if self.handler.is_default() && _set_disconnected_ok {
             // Linux client cleanup runs synchronously in try_stop_clipboard() before FUSE is
             // unmounted. Keep this async path for other file-clipboard platforms.
@@ -427,7 +401,6 @@ impl<T: InvokeUiSession> Remote<T> {
         }
     }
 
-    #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
     async fn handle_local_clipboard_msg(
         &mut self,
         peer: &mut Stream,
@@ -460,18 +433,15 @@ impl<T: InvokeUiSession> Remote<T> {
                         view_only, stop, is_stopping_allowed, server_file_transfer_enabled, file_transfer_enabled
                     );
                     if stop {
-                        #[cfg(target_os = "windows")]
                         {
                             ContextSend::set_is_stopped();
                         }
                     } else {
-                        #[cfg(target_os = "windows")]
                         if let Err(e) = ContextSend::make_sure_enabled() {
                             log::error!("failed to restart clipboard context: {}", e);
                             // to-do: Show msgbox with "Don't show again" option
                         };
                         log::debug!("Send system clipboard message to remote");
-                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         if matches!(&clip, clipboard::ClipboardFile::FormatList { .. }) {
                             self.initial_clipboard_pending = false;
                         }
@@ -506,7 +476,6 @@ impl<T: InvokeUiSession> Remote<T> {
         self.sent_close_reason = true;
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn start_initial_clipboard_sync(&mut self) {
         let peer_info = {
             let lc = self.handler.lc.read().unwrap();
@@ -541,46 +510,12 @@ impl<T: InvokeUiSession> Remote<T> {
                 log::debug!("Failed to send initial clipboard result: {}", err);
             }
         };
-        #[cfg(target_os = "linux")]
-        self.spawn_initial_clipboard_read_after_ready(read_clipboard);
-        #[cfg(not(target_os = "linux"))]
         tokio::task::spawn_blocking(read_clipboard);
     }
 
     // Linux listener creation returns before X11/Wayland has subscribed to changes.
     // Capture after readiness so changes during the read can invalidate the snapshot.
     // A separate task keeps a stalled backend from blocking the connection loop.
-    #[cfg(target_os = "linux")]
-    fn spawn_initial_clipboard_read_after_ready(&self, read_clipboard: impl FnOnce() + Send + 'static) {
-        // Initial-sync wait budget, not a protocol-defined startup deadline.
-        const CLIPBOARD_READY_TIMEOUT: Duration = Duration::from_secs(5);
-
-        let sender = self.sender.clone();
-        tokio::spawn(async move {
-            let ready = tokio::select! {
-                result = time::timeout(CLIPBOARD_READY_TIMEOUT, clipboard_listener::wait_for_ready()) => {
-                    match result {
-                        Ok(ready) => ready,
-                        Err(err) => Err(err.into()),
-                    }
-                }
-                _ = sender.closed() => return,
-            };
-            if let Err(err) = ready {
-                log::error!(
-                    "Failed to wait for clipboard listener readiness (limit {:?}): {}",
-                    CLIPBOARD_READY_TIMEOUT,
-                    err,
-                );
-                let generation = clipboard_listener::current_generation();
-                if let Err(err) = sender.send(Data::InitialClipboard(generation, None)) {
-                    log::debug!("Failed to send initial clipboard result: {}", err);
-                }
-                return;
-            }
-            tokio::task::spawn_blocking(read_clipboard);
-        });
-    }
 
     async fn handle_msg_from_ui(&mut self, data: Data, peer: &mut Stream) -> bool {
         match data {
@@ -593,7 +528,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     .handle_login_from_ui(password, remember, peer)
                     .await;
             }
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             Data::InitialClipboard(generation, msg) => {
                 // A live update supersedes any initial snapshot still being prepared.
                 if !self.initial_clipboard_pending {
@@ -618,7 +552,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 // The Flutter clipboard broadcast is process-wide, so a clipboard can reach this
                 // round's queue before the round has logged in; it is dropped here, on the round
                 // itself.
-                #[cfg(feature = "flutter")]
                 if !self.is_connected
                     && matches!(
                         msg.union.as_ref(),
@@ -633,11 +566,9 @@ impl<T: InvokeUiSession> Remote<T> {
                         log::debug!("Discarding outgoing file clipboard message before login");
                         return true;
                     }
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     Some(message::Union::Clipboard(_)) | Some(message::Union::MultiClipboards(_)) => {
                         self.initial_clipboard_pending = false;
                     }
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     Some(message::Union::Cliprdr(clip))
                         if matches!(clip.union.as_ref(), Some(cliprdr::Union::FormatList(_))) =>
                     {
@@ -723,11 +654,7 @@ impl<T: InvokeUiSession> Remote<T> {
                                 !is_remote,
                                 true,
                             );
-                            #[cfg(not(windows))]
-                            let files = job.files().clone();
-                            #[cfg(windows)]
                             let mut files = job.files().clone();
-                            #[cfg(windows)]
                             if self.handler.peer_platform() != "Windows" {
                                 // peer is not windows, need transform \ to /
                                 fs::transform_windows_path(&mut files);
@@ -823,11 +750,7 @@ impl<T: InvokeUiSession> Remote<T> {
                                 job.is_last_job = false;
                                 job.is_resume = true;
                                 job.set_finished_size_on_resume();
-                                #[cfg(not(windows))]
-                                let files = job.files().clone();
-                                #[cfg(windows)]
                                 let mut files = job.files().clone();
-                                #[cfg(windows)]
                                 if self.handler.peer_platform() != "Windows" {
                                     // peer is not windows, need transform \ to /
                                     fs::transform_windows_path(&mut files);
@@ -1341,18 +1264,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         self.handler.handle_peer_info(pi);
                         if self.handler.is_default() {
                             // Startup notifications must see the current sessions' clipboard requirements.
-                            #[cfg(feature = "flutter")]
-                            #[cfg(not(target_os = "ios"))]
                             crate::flutter::update_text_clipboard_required();
 
-                            #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-                            crate::flutter::update_file_clipboard_required();
 
-                            #[cfg(feature = "flutter")]
-                            #[cfg(not(target_os = "ios"))]
                             let rx = Client::try_start_clipboard();
                             // To make sure current text clipboard data is updated.
-                            #[cfg(not(target_os = "ios"))]
                             if let Some(mut rx) = rx {
                                 timeout(CLIPBOARD_INTERVAL, rx.recv()).await.ok();
                             }
@@ -1360,7 +1276,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             // `is_connected`` becomes true after the first PeerInfo.
                             // Reconnects create a new Remote. Refreshes after a generation change
                             // use a separate entry point and are not blocked by this guard.
-                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
                             if !self.is_connected
                                 && self.handler.is_text_clipboard_required()
                                 && self.handler.lc.read().unwrap().sync_init_clipboard.v
@@ -1388,11 +1303,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 Some(message::Union::CursorData(cd)) => {
                     let id = cd.id;
-                    #[cfg(feature = "flutter")]
                     let compressed = cd.colors.clone();
                     match decode_cursor_data(cd) {
                         Ok(cd) => {
-                            #[cfg(feature = "flutter")]
                             self.keep_cursor_shape(cursor_shape(id, &cd, &compressed));
                             self.handler.set_cursor_data(cd)
                         }
@@ -1416,10 +1329,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         !lc.disable_clipboard.v && !lc.view_only.v
                     };
                     if clipboard_allowed {
-                        #[cfg(all(
-                            feature = "flutter",
-                            not(any(target_os = "android", target_os = "ios"))
-                        ))]
                         if self.handler.is_text_clipboard_required()
                             && crate::clipboard::is_sync_clipboard_between_sessions_enabled()
                         {
@@ -1428,24 +1337,10 @@ impl<T: InvokeUiSession> Remote<T> {
                             let session_id = self.handler.lc.read().unwrap().session_id;
                             crate::flutter::send_clipboard_msg_to_other_sessions(msg, session_id);
                         }
-                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
                             self.initial_clipboard_pending = false;
                             update_clipboard(vec![cb], ClipboardSide::Client);
                         }
-                        #[cfg(target_os = "ios")]
-                        {
-                            let content = if cb.compress {
-                                hbb_common::compress::decompress(&cb.content)
-                            } else {
-                                cb.content.into()
-                            };
-                            if let Ok(content) = String::from_utf8(content) {
-                                self.handler.clipboard(content);
-                            }
-                        }
-                        #[cfg(target_os = "android")]
-                        crate::clipboard::handle_msg_clipboard(cb);
                     }
                 }
                 Some(message::Union::MultiClipboards(_mcb)) => {
@@ -1454,10 +1349,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         !lc.disable_clipboard.v && !lc.view_only.v
                     };
                     if clipboard_allowed {
-                        #[cfg(all(
-                            feature = "flutter",
-                            not(any(target_os = "android", target_os = "ios"))
-                        ))]
                         if self.handler.is_text_clipboard_required()
                             && crate::clipboard::is_sync_clipboard_between_sessions_enabled()
                         {
@@ -1466,33 +1357,12 @@ impl<T: InvokeUiSession> Remote<T> {
                             let session_id = self.handler.lc.read().unwrap().session_id;
                             crate::flutter::send_clipboard_msg_to_other_sessions(msg, session_id);
                         }
-                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
                             self.initial_clipboard_pending = false;
                             update_clipboard(_mcb.clipboards, ClipboardSide::Client);
                         }
-                        #[cfg(target_os = "ios")]
-                        {
-                            if let Some(cb) = _mcb
-                                .clipboards
-                                .iter()
-                                .find(|c| c.format.enum_value() == Ok(ClipboardFormat::Text))
-                            {
-                                let content = if cb.compress {
-                                    hbb_common::compress::decompress(&cb.content)
-                                } else {
-                                    cb.content.to_vec()
-                                };
-                                if let Ok(content) = String::from_utf8(content) {
-                                    self.handler.clipboard(content);
-                                }
-                            }
-                        }
-                        #[cfg(target_os = "android")]
-                        crate::clipboard::handle_msg_multi_clipboards(_mcb);
                     }
                 }
-                #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
                 Some(message::Union::Cliprdr(clip)) => {
                     self.handle_cliprdr_msg(clip, peer).await;
                 }
@@ -1502,16 +1372,7 @@ impl<T: InvokeUiSession> Remote<T> {
                             self.handler.update_empty_dirs(res);
                         }
                         Some(file_response::Union::Dir(fd)) => {
-                            #[cfg(windows)]
                             let entries = fd.entries.to_vec();
-                            #[cfg(not(windows))]
-                            let mut entries = fd.entries.to_vec();
-                            #[cfg(not(windows))]
-                            {
-                                if self.handler.peer_platform() == "Windows" {
-                                    fs::transform_windows_path(&mut entries);
-                                }
-                            }
                             if fd.id <= 0 {
                                 if let Err(err) = fs::download::validate_listing(
                                     &entries,
@@ -1745,17 +1606,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         match p.permission.enum_value() {
                             Ok(Permission::Keyboard) => {
                                 *self.handler.server_keyboard_enabled.write().unwrap() = p.enabled;
-                                #[cfg(feature = "flutter")]
-                                #[cfg(not(target_os = "ios"))]
                                 crate::flutter::update_text_clipboard_required();
-                                #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-                                crate::flutter::update_file_clipboard_required();
                                 self.handler.set_permission("keyboard", p.enabled);
                             }
                             Ok(Permission::Clipboard) => {
                                 *self.handler.server_clipboard_enabled.write().unwrap() = p.enabled;
-                                #[cfg(feature = "flutter")]
-                                #[cfg(not(target_os = "ios"))]
                                 crate::flutter::update_text_clipboard_required();
                                 self.handler.set_permission("clipboard", p.enabled);
                             }
@@ -1768,16 +1623,7 @@ impl<T: InvokeUiSession> Remote<T> {
                                 if !p.enabled && self.handler.is_file_transfer() {
                                     return true;
                                 }
-                                #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-                                crate::flutter::update_file_clipboard_required();
                                 self.handler.set_permission("file", p.enabled);
-                                #[cfg(feature = "unix-file-copy-paste")]
-                                if !p.enabled {
-                                    try_empty_clipboard_files(
-                                        ClipboardSide::Client,
-                                        self.client_conn_id,
-                                    );
-                                }
                             }
                             Ok(Permission::Restart) => {
                                 self.handler.set_permission("restart", p.enabled);
@@ -1798,7 +1644,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                     Some(misc::Union::Uac(uac)) => {
                         let keyboard = self.handler.server_keyboard_enabled.read().unwrap().clone();
-                        #[cfg(feature = "flutter")]
                         {
                             if uac && keyboard {
                                 self.handler.msgbox(
@@ -1816,7 +1661,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                     Some(misc::Union::ForegroundWindowElevated(elevated)) => {
                         let keyboard = self.handler.server_keyboard_enabled.read().unwrap().clone();
-                        #[cfg(feature = "flutter")]
                         {
                             if elevated && keyboard {
                                 self.handler.msgbox(
@@ -1852,8 +1696,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             );
                         }
                     }
-                    #[cfg(feature = "flutter")]
-                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     Some(misc::Union::SwitchBack(_)) => {
                         let allow_switch_back = self
                             .handler
@@ -1943,14 +1785,12 @@ impl<T: InvokeUiSession> Remote<T> {
         }
     }
 
-    #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
     async fn handle_cliprdr_msg(&mut self, clip: base::message_proto::Cliprdr, _peer: &mut Stream) {
         if !self.is_connected {
             log::debug!("Discarding incoming file clipboard message before login");
             return;
         }
         log::debug!("handling cliprdr msg from server peer");
-        #[cfg(feature = "flutter")]
         if let Some(base::message_proto::cliprdr::Union::FormatList(_)) = &clip.union {
             if self.client_conn_id
                 != clipboard::get_client_conn_id(&crate::flutter::get_cur_peer_id()).unwrap_or(0)
@@ -1971,14 +1811,9 @@ impl<T: InvokeUiSession> Remote<T> {
                 "Process clipboard message from server peer, stop: {}, is_stopping_allowed: {}, file_transfer_enabled: {}",
                 stop, is_stopping_allowed, file_transfer_enabled);
         if !stop {
-            #[cfg(any(
-                target_os = "windows",
-                all(target_os = "macos", feature = "unix-file-copy-paste")
-            ))]
             if let Err(e) = ContextSend::make_sure_enabled() {
                 log::error!("failed to restart clipboard context: {}", e);
             };
-            #[cfg(target_os = "windows")]
             {
                 if matches!(&clip, clipboard::ClipboardFile::FormatList { .. }) {
                     self.initial_clipboard_pending = false;
@@ -1988,44 +1823,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         .server_clip_file(self.client_conn_id, clip)
                         .map_err(|e| e.into())
                 });
-            }
-            #[cfg(feature = "unix-file-copy-paste")]
-            if crate::is_support_file_copy_paste_num(self.handler.lc.read().unwrap().version) {
-                #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                if matches!(&clip, clipboard::ClipboardFile::FormatList { .. }) {
-                    self.initial_clipboard_pending = false;
-                }
-                let mut out_msgs = vec![];
-
-                #[cfg(target_os = "macos")]
-                if clipboard::platform::unix::macos::should_handle_msg(&clip) {
-                    if let Err(e) = ContextSend::proc(|context| -> ResultType<()> {
-                        context
-                            .server_clip_file(self.client_conn_id, clip)
-                            .map_err(|e| e.into())
-                    }) {
-                        log::error!("failed to handle cliprdr msg: {}", e);
-                    }
-                } else {
-                    out_msgs = unix_file_clip::serve_clip_messages(
-                        ClipboardSide::Client,
-                        clip,
-                        self.client_conn_id,
-                    );
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    out_msgs = unix_file_clip::serve_clip_messages(
-                        ClipboardSide::Client,
-                        clip,
-                        self.client_conn_id,
-                    );
-                }
-
-                for msg in out_msgs.into_iter() {
-                    allow_err!(_peer.send(&msg).await);
-                }
             }
         }
     }
@@ -2060,7 +1857,7 @@ impl<T: InvokeUiSession> Remote<T> {
                 if pixelbuffer {
                     handler.on_rgba(display, data);
                 } else {
-                    #[cfg(all(feature = "vram", feature = "flutter"))]
+                    #[cfg(feature = "vram")]
                     handler.on_texture(display, _texture);
                 }
             },
@@ -2069,7 +1866,6 @@ impl<T: InvokeUiSession> Remote<T> {
     }
 
     /// A shape that decoded, for the UI to ask for again; see `Session::cursor_shapes`.
-    #[cfg(feature = "flutter")]
     fn keep_cursor_shape(&self, shape: CursorData) {
         self.handler
             .cursor_shapes
@@ -2091,13 +1887,11 @@ impl<T: InvokeUiSession> Remote<T> {
             self.handler.set_cursor_id(id.to_string());
             return;
         }
-        #[cfg(feature = "flutter")]
         let compressed = cd.colors.clone();
         match decode_cursor_data(cd) {
             Ok(mut cd) => {
                 cd.id = id;
                 self.cursor_dedupe.record(peer_id, id);
-                #[cfg(feature = "flutter")]
                 self.keep_cursor_shape(cursor_shape(id, &cd, &compressed));
                 self.handler.set_cursor_data(cd);
             }
@@ -2113,7 +1907,6 @@ impl<T: InvokeUiSession> Remote<T> {
 /// A shape that decoded, still compressed, under the id the UI knows it by. Copied once it
 /// decoded: the message's colors may be a slice of a larger received buffer, which a clone
 /// would keep alive.
-#[cfg(feature = "flutter")]
 fn cursor_shape(id: u64, cd: &CursorData, compressed: &[u8]) -> CursorData {
     CursorData {
         id,
@@ -2127,7 +1920,6 @@ fn cursor_shape(id: u64, cd: &CursorData, compressed: &[u8]) -> CursorData {
 }
 
 /// The RGBA of a shape kept by `Session::cursor_shapes`, for the UI to draw it again.
-#[cfg(any(feature = "flutter", test))]
 pub(crate) fn kept_cursor_rgba(shape: CursorData) -> hbb_common::ResultType<CursorData> {
     decode_cursor_data(shape)
 }
@@ -2251,7 +2043,6 @@ impl Drop for VideoThread {
 }
 
 #[cfg(test)]
-#[cfg(feature = "flutter")]
 mod tests {
     use super::*;
     use crate::flutter::FlutterHandler;

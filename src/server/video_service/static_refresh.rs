@@ -79,7 +79,7 @@ pub(super) struct StaticRefresh<'a> {
     repeat_no_outputs: usize,
     repeat_failures: usize,
     source_ready: bool,
-    #[cfg(all(windows, feature = "vram"))]
+    #[cfg(feature = "vram")]
     has_texture: bool,
 }
 
@@ -124,7 +124,7 @@ impl<'a> StaticRefresh<'a> {
             repeat_no_outputs: 0,
             repeat_failures: 0,
             source_ready: false,
-            #[cfg(all(windows, feature = "vram"))]
+            #[cfg(feature = "vram")]
             has_texture: false,
         }
     }
@@ -134,7 +134,7 @@ impl<'a> StaticRefresh<'a> {
         self.repeat_output_limit = 0;
         self.repeat_no_outputs = 0;
         self.source_ready = false;
-        #[cfg(all(windows, feature = "vram"))]
+        #[cfg(feature = "vram")]
         {
             self.has_texture =
                 matches!(_frame, EncodeInput::Texture((texture, 0)) if !texture.is_null());
@@ -211,7 +211,7 @@ impl<'a> StaticRefresh<'a> {
         } else {
             Some(EncodeInput::YUV(yuv))
         };
-        #[cfg(all(windows, feature = "vram"))]
+        #[cfg(feature = "vram")]
         let frame = frame.or_else(|| self.has_texture.then_some(EncodeInput::Repeat));
         if let Some(frame) = frame {
             self.sp.snapshot(|sps| {
@@ -312,7 +312,7 @@ mod tests {
         fn encode_to_message(&mut self, frame: EncodeInput, _: i64) -> ResultType<VideoFrame> {
             match frame {
                 EncodeInput::YUV(yuv) => assert_eq!(yuv, &[1]),
-                #[cfg(all(windows, feature = "vram"))]
+                #[cfg(feature = "vram")]
                 EncodeInput::Repeat => {}
                 _ => panic!("unexpected encoder input"),
             }
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(windows, feature = "vram"))]
+    #[cfg(feature = "vram")]
     fn texture_frames_request_repeats_without_accessing_capture_resources() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let mut refresh = new_refresh(

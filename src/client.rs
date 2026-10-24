@@ -1,15 +1,12 @@
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::clipboard_listener::{self, ClipboardEvent};
 use async_trait::async_trait;
 use bytes::Bytes;
-#[cfg(not(target_os = "linux"))]
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, StreamConfig,
 };
 use crossbeam_queue::ArrayQueue;
 use magnum_opus::{Channels::*, Decoder as AudioDecoder};
-#[cfg(not(target_os = "linux"))]
 use ringbuf::{ring_buffer::RbBase, Rb};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -35,8 +32,6 @@ use crate::{
     ui_interface::{get_builtin_option, use_texture_render},
     ui_session_interface::{InvokeUiSession, Session},
 };
-#[cfg(feature = "unix-file-copy-paste")]
-use crate::{clipboard::check_clipboard_files, clipboard_file::unix_file_clip};
 pub use file_trait::FileManager;
 use hbb_common::{
     allow_err,
@@ -76,18 +71,14 @@ use base::{
 pub use helper::*;
 use scrap::{codec::Decoder, CodecFormat, ImageFormat, ImageRgb, ImageTexture};
 
-#[cfg(not(target_os = "ios"))]
 use crate::clipboard::CLIPBOARD_INTERVAL;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{check_clipboard, ClipboardSide};
 
 pub use super::lang::*;
 
-#[cfg(not(target_os = "linux"))]
 mod audio_playback;
-#[cfg(target_os = "windows")]
 mod audio_playback_recovery;
-#[cfg(all(test, not(target_os = "linux")))]
+#[cfg(test)]
 #[path = "client/tests/audio_state_tests.rs"]
 mod audio_state_tests;
 pub mod file_trait;
@@ -109,56 +100,35 @@ pub const REQUIRE_2FA: &'static str = "2FA Required";
 pub const LOGIN_MSG_NO_PASSWORD_ACCESS: &str = "No Password Access";
 pub const LOGIN_MSG_OFFLINE: &str = "Offline";
 pub const LOGIN_SCREEN_WAYLAND: &str = "Wayland login screen is not supported";
-#[cfg(target_os = "linux")]
-pub const SCRAP_UBUNTU_HIGHER_REQUIRED: &str = "ubuntu-21-04-required";
-#[cfg(target_os = "linux")]
-pub const SCRAP_OTHER_VERSION_OR_X11_REQUIRED: &str =
-    "wayland-requires-higher-linux-version";
-#[cfg(target_os = "linux")]
-pub const SCRAP_XDP_PORTAL_UNAVAILABLE: &str =
-    "xdp-portal-unavailable";
 pub const SCRAP_X11_REQUIRED: &str = "x11 expected";
 pub const SCRAP_X11_REF_URL: &str = "https://rustdesk.com/docs/en/manual/linux/#x11-required";
 
-#[cfg(not(target_os = "linux"))]
 pub const AUDIO_BUFFER_MS: usize = 3000;
 
 /// Client of the remote desktop.
 pub struct Client;
 
-#[cfg(not(target_os = "ios"))]
 struct ClipboardState {
-    #[cfg(feature = "flutter")]
     is_text_required: bool,
-    #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-    is_file_required: bool,
     running: bool,
 }
 
-#[cfg(not(target_os = "linux"))]
 lazy_static::lazy_static! {
     static ref AUDIO_HOST: Host = cpal::default_host();
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 lazy_static::lazy_static! {
     static ref ENIGO: Arc<Mutex<enigo::Enigo>> = Arc::new(Mutex::new(enigo::Enigo::new()));
 }
 
-#[cfg(not(target_os = "ios"))]
 lazy_static::lazy_static! {
     static ref CLIPBOARD_STATE: Arc<Mutex<ClipboardState>> = Arc::new(Mutex::new(ClipboardState::new()));
 }
 
 const PUBLIC_SERVER: &str = "public";
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn get_key_state(key: enigo::Key) -> bool {
     use enigo::KeyboardControllable;
-    #[cfg(target_os = "macos")]
-    if key == enigo::Key::NumLock {
-        return true;
-    }
     ENIGO.lock().unwrap().get_key_state(key)
 }
 
@@ -1857,38 +1827,19 @@ impl Client {
     }
 
     #[inline]
-    #[cfg(feature = "flutter")]
-    #[cfg(not(target_os = "ios"))]
     pub fn set_is_text_clipboard_required(b: bool) {
         CLIPBOARD_STATE.lock().unwrap().is_text_required = b;
     }
 
-    #[inline]
-    #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-    pub fn set_is_file_clipboard_required(b: bool) {
-        CLIPBOARD_STATE.lock().unwrap().is_file_required = b;
-    }
 
-    #[cfg(not(target_os = "ios"))]
     fn try_stop_clipboard() {
         // Disconnected Flutter sessions may keep UI handlers alive, so only connected sessions
         // should block clipboard cleanup.
-        #[cfg(feature = "flutter")]
         if crate::flutter::sessions::has_connected_sessions_running(ConnType::DEFAULT_CONN) {
             return;
         }
-        #[cfg(not(target_os = "android"))]
         clipboard_listener::unsubscribe(Self::CLIENT_CLIPBOARD_NAME);
         CLIPBOARD_STATE.lock().unwrap().running = false;
-        #[cfg(all(feature = "unix-file-copy-paste", target_os = "linux"))]
-        if let Err(e) = crate::clipboard::try_empty_clipboard_files_sync(
-            crate::clipboard::ClipboardSide::Client,
-            0,
-        ) {
-            log::error!("Failed to empty client clipboard files: {}", e);
-        }
-        #[cfg(all(feature = "unix-file-copy-paste", target_os = "linux"))]
-        clipboard::platform::unix::fuse::uninit_fuse_context(true);
     }
 
     // `try_start_clipboard` is called by all session when connection is established. (When handling peer info).
@@ -1896,7 +1847,6 @@ impl Client {
     // After all sessions are end, the loop exists.
     //
     // If clipboard update is detected, the text will be sent to all sessions by `send_clipboard_msg`.
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn try_start_clipboard() -> Option<UnboundedReceiver<()>> {
         let mut clipboard_lock = CLIPBOARD_STATE.lock().unwrap();
         if clipboard_lock.running {
@@ -1929,11 +1879,6 @@ impl Client {
                     Ok(ClipboardEvent::Changed) => {
                         handler.check_clipboard(true);
                     }
-                    #[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
-                    Ok(ClipboardEvent::InitialSelection) => {
-                        // Preserve file startup sync without bypassing text initial-sync settings.
-                        handler.check_clipboard(false);
-                    }
                     Ok(ClipboardEvent::Stop) => {
                         log::debug!("Clipboard listener stopped");
                         break;
@@ -1956,99 +1901,31 @@ impl Client {
         Some(rx_started)
     }
 
-    #[cfg(target_os = "android")]
-    fn try_start_clipboard() -> Option<UnboundedReceiver<()>> {
-        let mut clipboard_lock = CLIPBOARD_STATE.lock().unwrap();
-        if clipboard_lock.running {
-            return None;
-        }
-        clipboard_lock.running = true;
-
-        log::info!("Start client clipboard loop");
-        std::thread::spawn(move || {
-            loop {
-                if !CLIPBOARD_STATE.lock().unwrap().running {
-                    break;
-                }
-                if !CLIPBOARD_STATE.lock().unwrap().is_text_required {
-                    std::thread::sleep(Duration::from_millis(CLIPBOARD_INTERVAL));
-                    continue;
-                }
-
-                if let Some(msg) = crate::clipboard::get_clipboards_msg(true) {
-                    crate::flutter::send_clipboard_msg(msg, false);
-                }
-
-                std::thread::sleep(Duration::from_millis(CLIPBOARD_INTERVAL));
-            }
-            log::info!("Stop client clipboard loop");
-            CLIPBOARD_STATE.lock().unwrap().running = false;
-        });
-
-        None
-    }
 }
 
-#[cfg(not(target_os = "ios"))]
 impl ClipboardState {
     fn new() -> Self {
         Self {
-            #[cfg(feature = "flutter")]
             is_text_required: true,
-            #[cfg(all(feature = "flutter", feature = "unix-file-copy-paste"))]
-            is_file_required: true,
             running: false,
         }
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 struct ClientClipboardHandler {
     ctx: Option<crate::clipboard::ClipboardContext>,
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl ClientClipboardHandler {
     fn is_text_required(&self) -> bool {
-        #[cfg(feature = "flutter")]
         {
             CLIPBOARD_STATE.lock().unwrap().is_text_required
         }
     }
 
-    #[cfg(feature = "unix-file-copy-paste")]
-    fn is_file_required(&self) -> bool {
-        #[cfg(feature = "flutter")]
-        {
-            CLIPBOARD_STATE.lock().unwrap().is_file_required
-        }
-    }
 
     fn check_clipboard(&mut self, check_text: bool) {
         if CLIPBOARD_STATE.lock().unwrap().running {
-            #[cfg(feature = "unix-file-copy-paste")]
-            if self.is_file_required() {
-                if let Some(urls) = check_clipboard_files(&mut self.ctx, ClipboardSide::Client, false) {
-                    if !urls.is_empty() {
-                        #[cfg(target_os = "macos")]
-                        if crate::clipboard::is_file_url_set_by_rustdesk(&urls) {
-                            return;
-                        }
-                        match clipboard::platform::unix::serv_files::sync_files(&urls) {
-                            Ok(()) => {
-                                let msg = crate::clipboard_file::clip_2_msg(
-                                    unix_file_clip::get_format_list(),
-                                );
-                                self.send_msg(msg, true);
-                            }
-                            Err(e) => {
-                                log::error!("Failed to sync clipboard files: {}", e);
-                            }
-                        }
-                        return;
-                    }
-                }
-            }
 
             if check_text && self.is_text_required() {
                 if let Some(msg) = check_clipboard(&mut self.ctx, ClipboardSide::Client, false) {
@@ -2059,7 +1936,6 @@ impl ClientClipboardHandler {
     }
 
     #[inline]
-    #[cfg(feature = "flutter")]
     fn send_msg(&self, msg: Message, _is_file: bool) {
         crate::flutter::send_clipboard_msg(msg, _is_file);
     }
@@ -2069,25 +1945,16 @@ impl ClientClipboardHandler {
 #[derive(Default)]
 pub struct AudioHandler {
     audio_decoder: Option<(AudioDecoder, Vec<f32>)>,
-    #[cfg(target_os = "linux")]
-    simple: Option<psimple::Simple>,
-    #[cfg(not(target_os = "linux"))]
     audio_buffer: AudioBuffer,
-    #[cfg(not(target_os = "linux"))]
     audio_resampler: Option<crate::audio_resampler::AudioResampler>,
     sample_rate: (u32, u32),
-    #[cfg(not(target_os = "linux"))]
     audio_stream: Option<Box<dyn StreamTrait>>,
     channels: u16,
-    #[cfg(not(target_os = "linux"))]
     device_channel: u16,
-    #[cfg(not(target_os = "linux"))]
     playback_status: Arc<audio_playback::AudioPlaybackStatus>,
-    #[cfg(target_os = "windows")]
     playback_recovery: audio_playback_recovery::PlaybackRecovery,
 }
 
-#[cfg(not(target_os = "linux"))]
 #[derive(Clone, Copy)]
 struct DecodedAudioConfig {
     sample_rate: u32,
@@ -2095,7 +1962,6 @@ struct DecodedAudioConfig {
     output_channels: u16,
 }
 
-#[cfg(not(target_os = "linux"))]
 fn create_audio_resampler(
     input_rate: u32,
     output_rate: u32,
@@ -2113,7 +1979,6 @@ fn create_audio_resampler(
     )?))
 }
 
-#[cfg(not(target_os = "linux"))]
 fn prepare_decoded_audio(
     input: &[f32],
     resampler: Option<&mut crate::audio_resampler::AudioResampler>,
@@ -2135,7 +2000,6 @@ fn prepare_decoded_audio(
     Ok(output)
 }
 
-#[cfg(not(target_os = "linux"))]
 struct AudioBuffer(
     pub Arc<std::sync::Mutex<ringbuf::HeapRb<f32>>>,
     usize,
@@ -2143,7 +2007,6 @@ struct AudioBuffer(
     Arc<std::sync::atomic::AtomicUsize>,
 );
 
-#[cfg(not(target_os = "linux"))]
 impl Default for AudioBuffer {
     fn default() -> Self {
         Self(
@@ -2157,7 +2020,6 @@ impl Default for AudioBuffer {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
 impl AudioBuffer {
     pub fn resize(&mut self, sample_rate: usize, channels: usize) {
         let capacity = sample_rate * channels * AUDIO_BUFFER_MS / 1000;
@@ -2271,37 +2133,8 @@ impl AudioBuffer {
 }
 
 impl AudioHandler {
-    #[cfg(target_os = "linux")]
-    fn start_audio(&mut self, format0: AudioFormat) -> ResultType<()> {
-        use psimple::Simple;
-        use pulse::sample::{Format, Spec};
-        use pulse::stream::Direction;
-
-        let spec = Spec {
-            format: Format::F32le,
-            channels: format0.channels as _,
-            rate: format0.sample_rate as _,
-        };
-        if !spec.is_valid() {
-            bail!("Invalid audio format");
-        }
-
-        self.simple = Some(Simple::new(
-            None,                   // Use the default server
-            &crate::get_app_name(), // Our application’s name
-            Direction::Playback,    // We want a playback stream
-            None,                   // Use the default device
-            "playback",             // Description of our stream
-            &spec,                  // Our sample format
-            None,                   // Use default channel map
-            None,                   // Use default buffering attributes
-        )?);
-        self.sample_rate = (format0.sample_rate, format0.sample_rate);
-        Ok(())
-    }
 
     /// Start the audio playback.
-    #[cfg(not(target_os = "linux"))]
     fn start_audio(&mut self, format0: AudioFormat) -> ResultType<()> {
         let device = AUDIO_HOST
             .default_output_device()
@@ -2316,7 +2149,6 @@ impl AudioHandler {
         log::info!("Remote input format: {:?}", format0);
         #[allow(unused_mut)]
         let mut config: StreamConfig = config.into();
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             // this makes ios and android audio output not work
             config.buffer_size = cpal::BufferSize::Fixed(64);
@@ -2371,29 +2203,19 @@ impl AudioHandler {
         }
         match AudioDecoder::new(f.sample_rate, if f.channels > 1 { Stereo } else { Mono }) {
             Ok(d) => {
-                #[cfg(target_os = "windows")]
                 let playback_failed = self.cancel_pending_playback();
-                #[cfg(target_os = "linux")]
-                let keep_existing_stream = self.simple.is_some()
-                    && self.sample_rate.0 == f.sample_rate
-                    && u32::from(self.channels) == f.channels;
-                #[cfg(not(target_os = "linux"))]
                 let keep_existing_stream = self.audio_stream.is_some()
                     && self.sample_rate.0 == f.sample_rate
                     && u32::from(self.channels) == f.channels;
                 let buffer = vec![0.; f.sample_rate as usize * f.channels as usize];
-                #[cfg(not(target_os = "linux"))]
                 let mut previous = std::mem::take(self);
-                #[cfg(target_os = "windows")]
                 self.prepare_playback(&f);
                 self.audio_decoder = Some((d, buffer));
                 self.channels = f.channels as _;
                 let result = start(self, f);
-                #[cfg(target_os = "windows")]
                 let keep_existing_stream = keep_existing_stream
                     && !playback_failed
                     && !previous.playback_recovery.report_pending();
-                #[cfg(not(target_os = "linux"))]
                 if result.is_err() && keep_existing_stream {
                     // The restarted capture has new Opus history even when output startup fails.
                     previous.audio_decoder = self.audio_decoder.take();
@@ -2401,10 +2223,7 @@ impl AudioHandler {
                     self.handle_audio_start_result(result, true);
                     return;
                 }
-                #[cfg(target_os = "windows")]
                 self.finish_playback_replacement(result, keep_existing_stream.then_some(previous));
-                #[cfg(not(target_os = "windows"))]
-                self.handle_audio_start_result(result, keep_existing_stream);
             }
             Err(err) => {
                 log::error!("Failed to create audio decoder: {}", err);
@@ -2428,20 +2247,13 @@ impl AudioHandler {
     /// Handle audio frame and play it.
     #[inline]
     pub fn handle_frame(&mut self, frame: AudioFrame) {
-        #[cfg(not(target_os = "linux"))]
         self.playback_status.report_errors();
-        #[cfg(not(target_os = "linux"))]
         if self.audio_stream.is_none()
             || !self
                 .playback_status
                 .ready
                 .load(std::sync::atomic::Ordering::Acquire)
         {
-            return;
-        }
-        #[cfg(target_os = "linux")]
-        if self.simple.is_none() {
-            log::trace!("PulseAudio simple binding does not exists");
             return;
         }
         self.audio_decoder.as_mut().map(|(d, buffer)| {
@@ -2454,7 +2266,6 @@ impl AudioHandler {
             };
             let channels = self.channels;
             let n = decoded_frames * channels as usize;
-            #[cfg(not(target_os = "linux"))]
             {
                 let config = DecodedAudioConfig {
                     sample_rate: self.sample_rate.1,
@@ -2474,30 +2285,17 @@ impl AudioHandler {
                 };
                 self.audio_buffer.append_pcm(&buffer);
             }
-            #[cfg(target_os = "linux")]
-            {
-                let data_u8 =
-                    unsafe { std::slice::from_raw_parts::<u8>(buffer.as_ptr() as _, n * 4) };
-                self.simple.as_mut().map(|x| x.write(data_u8));
-            }
         });
     }
 
     /// Build audio output stream for current device.
-    #[cfg(not(target_os = "linux"))]
     fn build_output_stream<T: cpal::Sample + cpal::SizedSample + cpal::FromSample<f32>>(
         &mut self,
         config: &StreamConfig,
         device: &Device,
     ) -> ResultType<()> {
         self.device_channel = config.channels;
-        #[cfg(target_os = "windows")]
         let err_fn = self.playback_recovery.new_error_callback();
-        #[cfg(not(target_os = "windows"))]
-        let err_fn = move |err| {
-            // too many errors, will improve later
-            log::trace!("an error occurred on stream: {}", err);
-        };
         self.audio_buffer
             .resize(config.sample_rate.0 as _, config.channels as _);
         let audio_buffer = self.audio_buffer.0.clone();
@@ -2576,7 +2374,6 @@ pub struct VideoHandler {
 }
 
 impl VideoHandler {
-    #[cfg(feature = "flutter")]
     pub fn get_adapter_luid() -> Option<i64> {
         crate::flutter::get_adapter_luid()
     }
@@ -2651,8 +2448,6 @@ impl VideoHandler {
             "reset video handler for display #{}, format: {format:?}",
             self._display
         );
-        #[cfg(target_os = "macos")]
-        self.rgb.set_align(crate::get_dst_align_rgba());
         let luid = Self::get_adapter_luid();
         let format = format.unwrap_or(self.decoder.format());
         self.decoder = Decoder::new(format, luid);
@@ -2729,8 +2524,6 @@ pub struct LoginConfigHandler {
     pub direct: Option<bool>,
     pub received: bool,
     switch_uuid: Option<String>,
-    #[cfg(feature = "flutter")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     switch_back_allowed: bool,
     pub save_ab_password_to_recent: bool, // true: connected with ab password
     pub other_server: Option<(String, String, String)>,
@@ -2849,8 +2642,6 @@ impl LoginConfigHandler {
 
         self.direct = None;
         self.received = false;
-        #[cfg(feature = "flutter")]
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             self.switch_back_allowed = false;
         }
@@ -2860,14 +2651,10 @@ impl LoginConfigHandler {
         self.shared_password = shared_password;
     }
 
-    #[cfg(feature = "flutter")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn allow_switch_back_once(&mut self) {
         self.switch_back_allowed = true;
     }
 
-    #[cfg(feature = "flutter")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn consume_switch_back_permission(&mut self) -> bool {
         if self.switch_back_allowed {
             self.switch_back_allowed = false;
@@ -3157,10 +2944,6 @@ impl LoginConfigHandler {
             return None;
         }
 
-        #[cfg(feature = "unix-file-copy-paste")]
-        if option.enable_file_transfer.enum_value() == Ok(BoolOption::No) {
-            crate::clipboard::try_empty_clipboard_files(crate::clipboard::ClipboardSide::Client, 0);
-        }
 
         self.save_config(config);
         let mut misc = Misc::new();
@@ -3204,7 +2987,6 @@ impl LoginConfigHandler {
                 quality
             };
             msg.custom_image_quality = quality << 8;
-            #[cfg(feature = "flutter")]
             if let Some(custom_fps) = self.options.get("custom-fps") {
                 let mut custom_fps = custom_fps.parse().unwrap_or(30);
                 if !allow_more && custom_fps > 30 {
@@ -3577,10 +3359,7 @@ impl LoginConfigHandler {
             })
             .collect::<Vec<_>>()
             .join(" ");
-        #[cfg(not(target_os = "android"))]
         let my_platform = hbb_common::whoami::platform().to_string();
-        #[cfg(target_os = "android")]
-        let my_platform = "Android".into();
         let hwid = if self.get_option("trust-this-device") == "Y" {
             crate::get_hwid()
         } else {
@@ -3711,7 +3490,6 @@ pub fn start_video_thread<F, T>(
     let mut last_chroma = None;
 
     std::thread::spawn(move || {
-        #[cfg(windows)]
         sync_cpu_usage();
         get_hwcodec_config();
         let mut video_handler = None;
@@ -3839,10 +3617,7 @@ pub fn start_audio_thread() -> MediaSender {
     std::thread::spawn(move || {
         let mut audio_handler = AudioHandler::default();
         loop {
-            #[cfg(target_os = "windows")]
             let received = audio_handler.receive_audio(&audio_receiver);
-            #[cfg(not(target_os = "windows"))]
-            let received = audio_receiver.recv();
             if let Ok(data) = received {
                 match data {
                     MediaData::AudioFrame(af) => {
@@ -3898,7 +3673,6 @@ fn fps_calculate(
 fn get_hwcodec_config() {
     // for unilink
     #[cfg(feature = "hwcodec")]
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
         use std::sync::Once;
         static ONCE: Once = Once::new();
@@ -3916,7 +3690,6 @@ fn get_hwcodec_config() {
     }
 }
 
-#[cfg(windows)]
 fn sync_cpu_usage() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
@@ -3926,7 +3699,6 @@ fn sync_cpu_usage() {
     });
 }
 
-#[cfg(windows)]
 #[tokio::main(flavor = "current_thread")]
 async fn do_sync_cpu_usage() {
     use crate::ipc::{connect, Data};
@@ -4219,8 +3991,6 @@ pub fn handle_login_error(
 
 // "Switch sides" requires the incoming-only client to connect back to its
 // controlling peer; verify the local pending uuid before opening the connection.
-#[cfg(feature = "flutter")]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn is_switch_sides_back(conn_type: ConnType, interface: &impl Interface) -> bool {
     if conn_type != ConnType::DEFAULT_CONN {
         return false;
@@ -4254,13 +4024,7 @@ async fn is_switch_sides_back(conn_type: ConnType, interface: &impl Interface) -
     lc.id == id && current_uuid.as_ref() == Some(&uuid)
 }
 
-#[cfg(not(all(feature = "flutter", not(any(target_os = "android", target_os = "ios")))))]
-async fn is_switch_sides_back(_conn_type: ConnType, _interface: &impl Interface) -> bool {
-    false
-}
 
-#[cfg(feature = "flutter")]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn request_local_switch_sides_uuid(
     id: &str,
     uuid: &Uuid,
@@ -4315,8 +4079,6 @@ pub async fn handle_hash(
     // Take care of password application order
 
     // switch_uuid
-    #[cfg(feature = "flutter")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let uuid = lc.write().unwrap().switch_uuid.take();
         if let Some(uuid) = uuid {
@@ -4592,7 +4354,6 @@ pub enum Data {
     RejectInsecureConnection,
     Login((String, bool)),
     Message(Message),
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     InitialClipboard(usize, Option<Message>),
     SendFiles((i32, JobType, String, String, i32, bool, bool)),
     RemoveDirAll((i32, String, bool, bool)),

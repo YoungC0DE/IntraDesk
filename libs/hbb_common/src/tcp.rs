@@ -107,8 +107,6 @@ pub(crate) fn new_socket(addr: std::net::SocketAddr, reuse: bool) -> Result<TcpS
         // almost equals to unix's reuse_port + reuse_address,
         // though may introduce nondeterministic behavior
         // illumos has no support for SO_REUSEPORT
-        #[cfg(all(unix, not(target_os = "illumos")))]
-        socket.set_reuseport(true).ok();
         socket.set_reuseaddr(true).ok();
     }
     socket.bind(addr)?;
@@ -270,19 +268,6 @@ pub async fn new_listener<T: ToSocketAddrs>(addr: T, reuse: bool) -> ResultType<
 
 pub async fn listen_any(port: u16) -> ResultType<TcpListener> {
     if let Ok(mut socket) = TcpSocket::new_v6() {
-        #[cfg(unix)]
-        {
-            // illumos has no support for SO_REUSEPORT
-            #[cfg(not(target_os = "illumos"))]
-            socket.set_reuseport(true).ok();
-            socket.set_reuseaddr(true).ok();
-            use std::os::unix::io::{FromRawFd, IntoRawFd};
-            let raw_fd = socket.into_raw_fd();
-            let sock2 = unsafe { socket2::Socket::from_raw_fd(raw_fd) };
-            sock2.set_only_v6(false).ok();
-            socket = unsafe { TcpSocket::from_raw_fd(sock2.into_raw_fd()) };
-        }
-        #[cfg(windows)]
         {
             use std::os::windows::prelude::{FromRawSocket, IntoRawSocket};
             let raw_socket = socket.into_raw_socket();

@@ -240,9 +240,6 @@ pub fn event_to_key_name(event: &rdev::Event) -> Option<String> {
 /// written.
 pub fn reload_from_config() {
     let raw = hbb_common::config::LocalConfig::get_option(LOCAL_CONFIG_KEY);
-    #[cfg(target_os = "linux")]
-    let is_wayland = crate::platform::linux::current_is_wayland();
-    #[cfg(not(target_os = "linux"))]
     let is_wayland = false;
     reload_from_raw(&raw, std::env::consts::OS, is_wayland);
 }
@@ -323,28 +320,14 @@ pub fn match_event(event: &rdev::Event) -> Option<String> {
     let action = match_normalized(&key_name, &mods, &bindings)?;
     // AltGraph is text input, not the ordinary Alt recorded in a shortcut.
     // Keep the shared modifier snapshot unchanged for remote key encoding.
-    #[cfg(target_os = "windows")]
     if unsafe { super::IS_0X021D_DOWN }
         && super::MODIFIERS_STATE.lock().unwrap().get(&rdev::Key::AltGr) == Some(&true)
     {
         return None;
     }
-    #[cfg(target_os = "linux")]
-    if super::MODIFIERS_STATE.lock().unwrap().get(&rdev::Key::AltGr) == Some(&true) {
-        match crate::platform::linux::right_alt_is_level3_shift() {
-            Ok(true) => return None,
-            Ok(false) => {}
-            Err(err) => {
-                hbb_common::throttled_log!(std::time::Duration::from_secs(5), warn,
-                    "Cannot identify AltGraph for keyboard shortcuts: {}", err);
-                return None;
-            }
-        }
-    }
     Some(action.to_owned())
 }
 
-#[cfg(feature = "flutter")]
 lazy_static::lazy_static! {
     /// Physical keys whose press fired a shortcut and whose release has not
     /// arrived yet. Every event of such a key belongs to RustDesk until its
@@ -393,7 +376,6 @@ pub fn runs_on_release(action_id: &str) -> bool {
 /// Forget the modifiers a session released on its remote and the actions it
 /// still owes on key release. Fired keys are physical and stay owned until
 /// their release, whichever session gets it.
-#[cfg(feature = "flutter")]
 pub fn clear_session_state(session_id: &hbb_common::SessionID) {
     RELEASE_ACTIONS.lock().unwrap().retain(|_, (sid, _)| sid != session_id);
     let held = RELEASED_MODIFIERS.lock().unwrap().remove(session_id);
@@ -412,7 +394,6 @@ pub fn clear_session_state(session_id: &hbb_common::SessionID) {
 }
 
 /// Clear local state on focus loss when the shortcut already released the remote key.
-#[cfg(feature = "flutter")]
 pub(super) fn release_modifier_on_leave(key: rdev::Key) -> bool {
     let sid = crate::flutter::get_cur_session_id();
     let mut released = RELEASED_MODIFIERS.lock().unwrap();
@@ -428,9 +409,7 @@ pub(super) fn release_modifier_on_leave(key: rdev::Key) -> bool {
     true
 }
 
-#[cfg(feature = "flutter")]
 pub fn enter_view_only(session_id: &hbb_common::SessionID) {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     if super::IS_RDEV_ENABLED.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }
@@ -441,7 +420,6 @@ pub fn enter_view_only(session_id: &hbb_common::SessionID) {
     clear_session_state(session_id);
 }
 
-#[cfg(feature = "flutter")]
 pub fn transfer_released_modifiers(from: &hbb_common::SessionID, to: &hbb_common::SessionID) {
     if from == to {
         return;
@@ -466,7 +444,6 @@ pub fn transfer_released_modifiers(from: &hbb_common::SessionID, to: &hbb_common
 ///
 /// `peer` and `send` must belong to the same session as `session_id`, so the
 /// remote key releases go to the session the chord was typed into.
-#[cfg(feature = "flutter")]
 pub fn try_dispatch(
     session_id: Option<&hbb_common::SessionID>,
     event: &rdev::Event,
@@ -543,7 +520,6 @@ pub fn try_dispatch(
     true
 }
 
-#[cfg(feature = "flutter")]
 fn push_shortcut_event(session_id: &hbb_common::SessionID, action_id: &str) {
     if let Some(session) = crate::flutter::sessions::get_session_by_session_id(session_id) {
         session.ui_handler.push_event_to(
@@ -554,7 +530,6 @@ fn push_shortcut_event(session_id: &hbb_common::SessionID, action_id: &str) {
     }
 }
 
-#[cfg(feature = "flutter")]
 fn restore_remote_modifiers(
     session_id: &hbb_common::SessionID,
     event: &rdev::Event,
@@ -588,7 +563,6 @@ fn restore_remote_modifiers(
 
 // Actions that move focus, stop input or change its mode must release ordinary
 // keys too: their physical key-up may no longer balance the original key-down.
-#[cfg(feature = "flutter")]
 fn release_remote_non_modifiers(
     keyboard_mode: &str,
     peer: &str,
@@ -614,7 +588,6 @@ fn release_remote_non_modifiers(
 /// the user is still physically holding the modifiers, and the next key of
 /// the chord (or an auto repeat) must still see them. It also sends through
 /// `send` instead of the globally current session.
-#[cfg(feature = "flutter")]
 fn release_remote_keys(
     session_id: &hbb_common::SessionID,
     keyboard_mode: &str,
@@ -670,7 +643,6 @@ fn release_remote_keys(
     TO_RELEASE.lock().unwrap().extend(held);
 }
 
-#[cfg(feature = "flutter")]
 fn send_windows_menu_ctrl(
     down: bool,
     swap_ctrl_cmd: bool,
@@ -726,27 +698,11 @@ mod tests {
             position_code: 0,
             event_type: rdev::EventType::KeyPress(k),
             usb_hid: 0,
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
             extra_data: 0,
         };
-        #[cfg(target_os = "windows")]
         {
             event.platform_code = rdev::win_code_from_key(k).unwrap_or_default();
             event.position_code = rdev::win_scancode_from_key(k).unwrap_or_default();
-        }
-        #[cfg(target_os = "macos")]
-        {
-            event.platform_code = rdev::macos_keycode_from_key(k).unwrap_or_default() as _;
-            event.position_code = event.platform_code;
-        }
-        #[cfg(target_os = "linux")]
-        {
-            event.position_code = rdev::linux_keycode_from_key(k).unwrap_or_default();
-            event.platform_code = event.position_code;
-        }
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        {
-            event.usb_hid = rdev::usb_hid_keycode_from_key(k).unwrap_or_default();
         }
         event
     }
@@ -980,7 +936,6 @@ mod tests {
         assert_eq!(serde_json::from_str::<Bindings>(&raw).unwrap(), saved);
     }
 
-    #[cfg(feature = "flutter")]
     fn make_release(k: rdev::Key) -> rdev::Event {
         let mut e = make_press(k);
         e.event_type = rdev::EventType::KeyRelease(k);
@@ -991,7 +946,6 @@ mod tests {
     /// actions once each: releasing the modifiers on the remote must not clear
     /// them locally, and overlapping fired keys each own their repeats and
     /// release.
-    #[cfg(feature = "flutter")]
     #[test]
     fn dispatch_consumes_overlapping_fired_keys() {
         use rdev::Key;
@@ -1034,7 +988,6 @@ mod tests {
     }
 
     /// A fired key stays owned until its release even after the modifiers go.
-    #[cfg(feature = "flutter")]
     #[test]
     fn dispatch_consumes_fired_key_after_modifiers_release() {
         use rdev::Key;
@@ -1055,7 +1008,6 @@ mod tests {
     /// Close tab is itself a shortcut: the session that fired the key is gone
     /// before the key is released, and the session that receives the rest of
     /// the key's events still owns them.
-    #[cfg(feature = "flutter")]
     #[test]
     fn dispatch_keeps_fired_key_after_session_close() {
         use rdev::Key;
@@ -1077,7 +1029,6 @@ mod tests {
         assert!(!dispatch(&SID_B, &make_release(Key::KeyP)));
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn dispatch_consumes_fired_key_after_session_switch() {
         use rdev::Key;
@@ -1104,7 +1055,6 @@ mod tests {
         crate::flutter::set_cur_session_id(previous_session);
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn dispatch_preserves_modifier_cleanup_on_leave() {
         use rdev::Key;
@@ -1124,7 +1074,6 @@ mod tests {
         reset_fired_keys();
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn repeated_shortcuts_leave_remote_modifiers_released() {
         use rdev::Key;
@@ -1160,7 +1109,6 @@ mod tests {
         reset_fired_keys();
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn shortcut_cleanup_keeps_unrelated_keys_held() {
         use base::message_proto::KeyboardMode;
@@ -1208,7 +1156,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn repeated_forwarded_key_does_not_start_shortcut() {
         use base::message_proto::KeyboardMode;
@@ -1241,11 +1188,9 @@ mod tests {
         assert!(!release_events[0].down);
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn alt_only_shortcut_neutralizes_windows_menu() {
         use base::message_proto::KeyEvent;
-        #[cfg(windows)]
         use rdev::EventType;
         use rdev::Key;
 
@@ -1254,10 +1199,8 @@ mod tests {
         for (mode, alt) in ["map", "translate", "legacy"].into_iter()
             .flat_map(|mode| [Key::Alt, Key::AltGr].map(|alt| (mode, alt)))
         {
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            if mode == "legacy" { continue; } // Mobile does not encode Legacy events.
-            #[cfg(target_os = "macos")]
-            if mode == "translate" && alt == Key::AltGr { continue; } // Right Option is filtered.
+             // Mobile does not encode Legacy events.
+             // Right Option is filtered.
             reload_from_raw(r#"{"enabled":true,"bindings":[{"action":"toggle_mute","mods":["alt"],"key":"m"}]}"#, "windows", false);
             reset_fired_keys();
             clear_session_state(&SID_A);
@@ -1266,7 +1209,6 @@ mod tests {
                 sent.borrow_mut().push(windows_shortcut_modifier(event));
             };
             let handle = |event: &rdev::Event| {
-                #[cfg(windows)]
                 if matches!(event.event_type, EventType::KeyPress(k) | EventType::KeyRelease(k) if k == alt) {
                     rdev::set_modifier(alt, matches!(event.event_type, EventType::KeyPress(_)));
                 }
@@ -1293,7 +1235,6 @@ mod tests {
         ]), "the consumed M must not leave a bare Alt tap on Windows: {results:?}");
     }
 
-    #[cfg(feature = "flutter")]
     fn windows_shortcut_modifier(event: &base::message_proto::KeyEvent) -> (rdev::Key, bool) {
         use base::message_proto::{key_event::Union, ControlKey};
         use rdev::Key;
@@ -1311,7 +1252,6 @@ mod tests {
         (key, event.down)
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn shortcut_cleanup_does_not_tap_alt() {
         use base::message_proto::KeyboardMode;
@@ -1340,7 +1280,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "flutter")]
     fn shortcut_followed_by_c(release_primary: bool) -> (rdev::Key, Vec<(rdev::Key, bool)>) {
         use base::message_proto::KeyboardMode;
         use rdev::Key;
@@ -1389,21 +1328,18 @@ mod tests {
         (primary, result)
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn unbound_key_restores_modifiers_held_after_shortcut() {
         let (primary, sent) = shortcut_followed_by_c(false);
         assert_eq!(sent, vec![(primary, true), (rdev::Key::KeyC, true)]);
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn unbound_key_does_not_restore_released_modifiers() {
         let (_, sent) = shortcut_followed_by_c(true);
         assert_eq!(sent, vec![(rdev::Key::KeyC, true)]);
     }
 
-    #[cfg(all(feature = "flutter", not(any(target_os = "android", target_os = "ios"))))]
     #[test]
     fn view_only_preserves_rdev_shortcut_keys() {
         use rdev::Key;
@@ -1425,7 +1361,6 @@ mod tests {
         assert!(fired, "rdev still receives the held shortcut key's release");
     }
 
-    #[cfg(all(feature = "flutter", not(any(target_os = "android", target_os = "ios"))))]
     #[test]
     fn view_only_clears_flutter_shortcut_keys_and_modifiers() {
         use rdev::Key;
@@ -1479,7 +1414,6 @@ mod tests {
     /// Close tab and tab switching move focus away before the key is
     /// released; they run on the release so the same matcher sees the whole
     /// press.
-    #[cfg(feature = "flutter")]
     #[test]
     fn focus_changing_actions_run_on_release() {
         use rdev::Key;
@@ -1518,7 +1452,6 @@ mod tests {
         release_chord(chord);
     }
 
-    #[cfg(feature = "flutter")]
     #[test]
     fn clipboard_prompt_waits_for_release_before_taking_focus() {
         use rdev::Key;
@@ -1551,23 +1484,18 @@ mod tests {
         release_chord(chord);
     }
 
-    #[cfg(feature = "flutter")]
     const SID_A: hbb_common::SessionID = hbb_common::SessionID::from_u128(0xA);
-    #[cfg(feature = "flutter")]
     const SID_B: hbb_common::SessionID = hbb_common::SessionID::from_u128(0xB);
 
-    #[cfg(feature = "flutter")]
     fn fired_keys() -> std::collections::HashSet<rdev::Key> {
         FIRED_KEYS.lock().unwrap().clone()
     }
 
-    #[cfg(feature = "flutter")]
     fn reset_fired_keys() {
         FIRED_KEYS.lock().unwrap().clear();
         RELEASE_ACTIONS.lock().unwrap().clear();
     }
 
-    #[cfg(feature = "flutter")]
     fn enable_defaults_and_hold_chord() -> [rdev::Key; 3] {
         use base::message_proto::KeyboardMode;
         use rdev::Key;
@@ -1592,7 +1520,6 @@ mod tests {
         chord
     }
 
-    #[cfg(feature = "flutter")]
     fn release_chord(chord: [rdev::Key; 3]) {
         use base::message_proto::KeyboardMode;
         for k in chord {

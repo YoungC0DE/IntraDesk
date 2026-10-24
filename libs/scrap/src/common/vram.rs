@@ -98,9 +98,9 @@ impl EncoderApi for VRamEncoder {
         frame: EncodeInput,
         ms: i64,
     ) -> ResultType<base::message_proto::VideoFrame> {
-        #[cfg(all(windows, feature = "vram"))]
+        #[cfg(feature = "vram")]
         let repeated = matches!(&frame, EncodeInput::Repeat);
-        #[cfg(not(all(windows, feature = "vram")))]
+        #[cfg(not(feature = "vram"))]
         let repeated = false;
         let (texture, rotation) = if repeated {
             (std::ptr::null_mut(), 0)

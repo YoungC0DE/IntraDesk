@@ -8,19 +8,14 @@ use std::{
 use bin_reader::{normalize_path, BinaryReader};
 
 pub mod bin_reader;
-#[cfg(windows)]
 mod ui;
 
-#[cfg(windows)]
 const APP_METADATA: &[u8] = include_bytes!("../app_metadata.toml");
-#[cfg(not(windows))]
-const APP_METADATA: &[u8] = &[];
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
 const META_LINE_PREFIX_FILE: &str = "file = ";
 const APP_PREFIX: &str = "rustdesk";
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
-#[cfg(windows)]
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
 
 // The extraction directory follows whatever executable the payload asks for, so a
@@ -172,7 +167,6 @@ fn setup(
 
     let mut ts = 0;
     if !is_timestamp_matches(&dir, &mut ts) {
-        #[cfg(windows)]
         if _args.is_empty() {
             *_ui = true;
             ui::setup();
@@ -191,7 +185,6 @@ fn setup(
 }
 
 fn use_null_stdio() -> bool {
-    #[cfg(windows)]
     {
         // When running in CMD on Windows 7, using Stdio::inherit() with spawn returns an "invalid handle" error.
         // Since using Stdio::null() didn’t cause any issues, and determining whether the program is launched from CMD or by double-clicking would require calling more APIs during startup, we also use Stdio::null() when launched by double-clicking on Windows 7.
@@ -199,11 +192,8 @@ fn use_null_stdio() -> bool {
         println!("is windows7: {}", is_windows_7);
         return is_windows_7;
     }
-    #[cfg(not(windows))]
-    false
 }
 
-#[cfg(windows)]
 fn is_windows_7() -> bool {
     use windows::Wdk::System::SystemServices::RtlGetVersion;
     use windows::Win32::System::SystemInformation::OSVERSIONINFOW;
@@ -232,7 +222,6 @@ fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
     // run executable
     let mut cmd = Command::new(path);
     cmd.args(args);
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(winapi::um::winbase::CREATE_NO_WINDOW);
@@ -253,7 +242,6 @@ fn execute(path: PathBuf, args: Vec<String>, _ui: bool) {
     }
     let _child = cmd.spawn();
 
-    #[cfg(windows)]
     if _ui {
         match _child {
             Ok(child) => unsafe {
@@ -278,10 +266,7 @@ fn main() -> Result<(), String> {
         }
         i += 1;
     }
-    #[cfg(windows)]
     let quick_support = args.is_empty() && win::is_quick_support_exe(&arg_exe);
-    #[cfg(not(windows))]
-    let quick_support = false;
 
     let mut ui = false;
     let reader = BinaryReader::new()?;
@@ -294,7 +279,6 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
 mod win {
     /// Check if the executable is a Quick Support version.
     /// Note: This function must be kept in sync with `src/core_main.rs`.

@@ -25,7 +25,7 @@ use hwcodec::{
     },
 };
 
-#[cfg(all(test, windows, feature = "vram"))]
+#[cfg(all(test, feature = "vram"))]
 mod tests;
 
 const DEFAULT_PIXFMT: AVPixelFormat = AVPixelFormat::AV_PIX_FMT_NV12;
@@ -36,7 +36,6 @@ pub const ERR_HEVC_POC: i32 = HwcodecErrno::HWCODEC_ERR_HEVC_COULD_NOT_FIND_POC 
 
 crate::generate_call_macro!(call_yuv, false);
 
-#[cfg(not(target_os = "android"))]
 lazy_static::lazy_static! {
     static ref CONFIG: std::sync::Arc<std::sync::Mutex<Option<HwCodecConfig>>> = Default::default();
     static ref CONFIG_SET_BY_IPC: std::sync::Arc<std::sync::Mutex<bool>> = Default::default();
@@ -244,10 +243,6 @@ impl HwRamEncoder {
     }
 
     fn rate_control(_config: &HwRamEncoderConfig) -> RateControl {
-        #[cfg(target_os = "android")]
-        if _config.name.contains("mediacodec") {
-            return RC_VBR;
-        }
         RC_CBR
     }
 
@@ -283,26 +278,6 @@ impl HwRamEncoder {
     }
 
     pub fn check_bitrate_range(_config: &HwRamEncoderConfig, bitrate: u32) -> u32 {
-        #[cfg(target_os = "android")]
-        if _config.name.contains("mediacodec") {
-            let info = crate::android::ffi::get_codec_info();
-            if let Some(info) = info {
-                if let Some(codec) = info
-                    .codecs
-                    .iter()
-                    .find(|c| Some(c.name.clone()) == _config.mc_name && c.is_encoder)
-                {
-                    if codec.max_bitrate > codec.min_bitrate {
-                        if bitrate > codec.max_bitrate {
-                            return codec.max_bitrate;
-                        }
-                        if bitrate < codec.min_bitrate {
-                            return codec.min_bitrate;
-                        }
-                    }
-                }
-            }
-        }
         bitrate
     }
 }
@@ -479,16 +454,6 @@ impl HwRamDecoderImage<'_> {
     }
 }
 
-#[cfg(target_os = "android")]
-fn get_mime_type(codec: DataFormat) -> &'static str {
-    match codec {
-        DataFormat::VP8 => "video/x-vnd.on2.vp8",
-        DataFormat::VP9 => "video/x-vnd.on2.vp9",
-        DataFormat::AV1 => "video/av01",
-        DataFormat::H264 => "video/avc",
-        DataFormat::H265 => "video/hevc",
-    }
-}
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct HwCodecConfig {
@@ -520,12 +485,10 @@ struct HwCodecConfig2 {
 // portable: ui start check process, check process send to ui
 // unilink: get from ipc server
 impl HwCodecConfig {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn set(config: String) {
         let config = serde_json::from_str(&config).unwrap_or_default();
         log::info!("set hwcodec config");
         log::debug!("{config:?}");
-        #[cfg(any(windows, target_os = "macos"))]
         hbb_common::config::common_store(
             &HwCodecConfig2 {
                 config: serde_json::to_string_pretty(&config).unwrap_or_default(),
@@ -537,72 +500,6 @@ impl HwCodecConfig {
     }
 
     pub fn get() -> HwCodecConfig {
-        #[cfg(target_os = "android")]
-        {
-            let info = crate::android::ffi::get_codec_info();
-            log::info!("all codec info: {info:?}");
-            struct T {
-                name_prefix: &'static str,
-                data_format: DataFormat,
-            }
-            let ts = vec![
-                T {
-                    name_prefix: "h264",
-                    data_format: DataFormat::H264,
-                },
-                T {
-                    name_prefix: "hevc",
-                    data_format: DataFormat::H265,
-                },
-            ];
-            let mut e = vec![];
-            if let Some(info) = info {
-                ts.iter().for_each(|t| {
-                    let codecs: Vec<_> = info
-                        .codecs
-                        .iter()
-                        .filter(|c| {
-                            c.is_encoder
-                                && c.mime_type.as_str() == get_mime_type(t.data_format)
-                                && c.nv12
-                                && c.hw == Some(true) //only use hardware codec
-                        })
-                        .collect();
-                    let screen_wh = std::cmp::max(info.w, info.h);
-                    let mut best = None;
-                    if let Some(codec) = codecs
-                        .iter()
-                        .find(|c| c.max_width >= screen_wh && c.max_height >= screen_wh)
-                    {
-                        best = Some(codec.name.clone());
-                    } else {
-                        // find the max resolution
-                        let mut max_area = 0;
-                        for codec in codecs.iter() {
-                            if codec.max_width * codec.max_height > max_area {
-                                best = Some(codec.name.clone());
-                                max_area = codec.max_width * codec.max_height;
-                            }
-                        }
-                    }
-                    if let Some(best) = best {
-                        e.push(CodecInfo {
-                            name: format!("{}_mediacodec", t.name_prefix),
-                            mc_name: Some(best),
-                            format: t.data_format,
-                            hwdevice: hwcodec::ffmpeg::AVHWDeviceType::AV_HWDEVICE_TYPE_NONE,
-                            priority: 0,
-                        });
-                    }
-                });
-            }
-            log::debug!("e: {e:?}");
-            HwCodecConfig {
-                ram_encode: e,
-                ..Default::default()
-            }
-        }
-        #[cfg(any(windows, target_os = "macos"))]
         {
             let config = CONFIG.lock().unwrap().clone();
             match config {
@@ -627,17 +524,8 @@ impl HwCodecConfig {
                 }
             }
         }
-        #[cfg(target_os = "linux")]
-        {
-            CONFIG.lock().unwrap().clone().unwrap_or_default()
-        }
-        #[cfg(target_os = "ios")]
-        {
-            HwCodecConfig::default()
-        }
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn get_set_value() -> Option<HwCodecConfig> {
         let set = CONFIG_SET_BY_IPC.lock().unwrap().clone();
         if set {
@@ -647,16 +535,12 @@ impl HwCodecConfig {
         }
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn already_set() -> bool {
         CONFIG_SET_BY_IPC.lock().unwrap().clone()
     }
 
     pub fn clear(vram: bool, encode: bool) {
         log::info!("clear hwcodec config, vram: {vram}, encode: {encode}");
-        #[cfg(target_os = "android")]
-        crate::android::ffi::clear_codec_info();
-        #[cfg(not(target_os = "android"))]
         {
             let mut c = CONFIG.lock().unwrap();
             if let Some(c) = c.as_mut() {
@@ -681,8 +565,6 @@ impl HwCodecConfig {
 }
 
 pub fn check_available_hwcodec() -> String {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    hwcodec::common::setup_parent_death_signal();
     let ctx = EncodeContext {
         name: String::from(""),
         mc_name: None,
@@ -717,7 +599,6 @@ pub fn check_available_hwcodec() -> String {
     serde_json::to_string(&c).unwrap_or_default()
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn start_check_process() {
     if !enable_hwcodec_option() || HwCodecConfig::already_set() {
         return;
@@ -729,7 +610,6 @@ pub fn start_check_process() {
             if let Some(_) = exe.file_name().to_owned() {
                 let arg = "--check-hwcodec-config";
                 if let Ok(mut child) = std::process::Command::new(exe).arg(arg).spawn() {
-                    #[cfg(windows)]
                     hwcodec::common::child_exit_when_parent_exit(child.id());
                     // wait up to 30 seconds, it maybe slow on windows startup for poorly performing machines
                     for _ in 0..30 {

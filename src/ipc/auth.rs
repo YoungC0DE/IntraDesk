@@ -1,36 +1,19 @@
 use crate::ipc::{Connection, ConnectionTmpl};
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use hbb_common::{anyhow, bail, log, ResultType};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use hbb_common::{
-    libc,
-    tokio::io::{AsyncRead, AsyncWrite},
-};
-#[cfg(windows)]
 use parity_tokio_ipc::SecurityAttributes;
-#[cfg(windows)]
 use std::io;
-#[cfg(target_os = "macos")]
-use std::os::unix::fs::MetadataExt;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use std::os::unix::io::RawFd;
-#[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-#[cfg(windows)]
 use windows::Win32::{Foundation::HANDLE, System::Pipes::GetNamedPipeClientProcessId};
 
-#[cfg(windows)]
 #[inline]
 pub(crate) fn should_allow_everyone_create_on_windows(postfix: &str) -> bool {
     postfix.is_empty() || hbb_common::config::is_service_ipc_postfix(postfix)
 }
 
-#[cfg(windows)]
 #[inline]
 pub(crate) fn portable_service_listener_security_attributes() -> io::Result<SecurityAttributes> {
     let user_sid = crate::platform::windows::current_process_user_sid_string().map_err(|err| {
@@ -66,43 +49,7 @@ pub(crate) fn portable_service_listener_security_attributes() -> io::Result<Secu
     })
 }
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn macos_service_ipc_allows_gui_and_service_binaries(
-    peer_exe: &Path,
-    current_exe: &Path,
-    postfix: &str,
-) -> bool {
-    if postfix != crate::POSTFIX_SERVICE {
-        return false;
-    }
-    let Some(peer_dir) = peer_exe.parent() else {
-        return false;
-    };
-    let Some(current_dir) = current_exe.parent() else {
-        return false;
-    };
-    if !executable_paths_match(peer_dir, current_dir) {
-        return false;
-    }
 
-    // On installed macOS builds, `_service` is listened by the `service` binary while the GUI
-    // process connects from the app executable within the same app bundle.
-    let gui_exe_name = std::ffi::OsString::from(crate::get_app_name());
-    let gui_exe = gui_exe_name.as_os_str();
-    let service_exe = std::ffi::OsStr::new("service");
-    let allowed_exe = [Some(gui_exe), Some(service_exe)];
-    let peer_name = peer_exe.file_name();
-    let current_name = current_exe.file_name();
-    allowed_exe
-        .iter()
-        .any(|name| os_str_eq_ignore_ascii_case(peer_name, *name))
-        && allowed_exe
-            .iter()
-            .any(|name| os_str_eq_ignore_ascii_case(current_name, *name))
-}
-
-#[cfg(target_os = "windows")]
 #[inline]
 fn windows_portable_service_ipc_allows_logon_helper_executable(
     _peer_exe: &Path,
@@ -114,7 +61,6 @@ fn windows_portable_service_ipc_allows_logon_helper_executable(
     false
 }
 
-#[cfg(windows)]
 #[inline]
 pub(crate) fn is_allowed_windows_session_scoped_peer(
     client_is_system: bool,
@@ -128,7 +74,6 @@ pub(crate) fn is_allowed_windows_session_scoped_peer(
         )
 }
 
-#[cfg(windows)]
 #[inline]
 fn is_allowed_windows_portable_service_peer(
     client_is_system: Option<bool>,
@@ -141,131 +86,15 @@ fn is_allowed_windows_portable_service_peer(
     matches!(client_is_system, Some(true))
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-#[inline]
-pub(crate) fn is_allowed_service_peer_uid(peer_uid: u32, active_uid: Option<u32>) -> bool {
-    // Root is allowed at the UID gate because the service side may run as root.
-    // Callers still enforce executable matching before accepting service-scoped peers.
-    peer_uid == 0 || active_uid.is_some_and(|uid| uid == peer_uid)
-}
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn console_owner_uid() -> Option<u32> {
-    fs::metadata("/dev/console")
-        .ok()
-        .map(|metadata| metadata.uid())
-}
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn active_uid_strict() -> Option<u32> {
-    // Prefer the filesystem metadata over parsing external command output.
-    console_owner_uid()
-}
 
-#[cfg(target_os = "linux")]
-#[inline]
-fn active_uid_strict() -> Option<u32> {
-    let reported_uid_raw = crate::platform::linux::get_active_userid();
-    let trimmed = reported_uid_raw.trim();
-    if let Ok(uid) = trimmed.parse::<u32>() {
-        return Some(uid);
-    }
-    if trimmed.is_empty() {
-        log::debug!("Failed to resolve active user uid on linux: active uid is empty");
-    } else {
-        log::warn!("Failed to parse active user uid on linux: '{}'", trimmed);
-    }
-    None
-}
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[inline]
-pub(crate) fn active_uid() -> Option<u32> {
-    active_uid_strict()
-}
 
-/// The active session uid read ONLY from the service-loop cache, never from a fresh (blocking) seat0
-/// lookup. `None` on a cache miss. For hot, latency-sensitive, fail-closed re-auth on an async runtime
-/// thread (the `_drm` per-frame re-auth), where a blocking `loginctl` per frame would stall the stream.
-// Gated with the feature, not just the OS: the `_drm` per-frame re-auth is its only caller, so a
-// drm-off Linux build would carry it as dead code and warn about it.
-#[cfg(all(target_os = "linux", feature = "drm"))]
-#[inline]
-pub(crate) fn active_uid_cached() -> Option<u32> {
-    crate::platform::linux::get_active_userid_cached()
-}
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[inline]
-pub(crate) fn peer_uid_from_fd(fd: RawFd) -> Option<u32> {
-    #[cfg(target_os = "linux")]
-    {
-        return peer_cred_from_fd(fd).map(|cred| cred.uid as u32);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let mut uid = 0;
-        let mut gid = 0;
-        if unsafe { libc::getpeereid(fd, &mut uid, &mut gid) } == 0 {
-            Some(uid as u32)
-        } else {
-            None
-        }
-    }
-}
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[inline]
-fn peer_pid_from_fd(fd: RawFd) -> Option<u32> {
-    #[cfg(target_os = "linux")]
-    {
-        return peer_cred_from_fd(fd).and_then(|cred| (cred.pid > 0).then_some(cred.pid as u32));
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let mut pid = 0;
-        let mut len = std::mem::size_of::<libc::pid_t>() as _;
-        let rc = unsafe {
-            libc::getsockopt(
-                fd,
-                libc::SOL_LOCAL,
-                libc::LOCAL_PEERPID,
-                &mut pid as *mut _ as *mut libc::c_void,
-                &mut len,
-            )
-        };
-        if rc == 0 && pid > 0 {
-            Some(pid as _)
-        } else {
-            None
-        }
-    }
-}
 
-#[cfg(target_os = "linux")]
-#[inline]
-fn peer_cred_from_fd(fd: RawFd) -> Option<libc::ucred> {
-    let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
-    let mut len = std::mem::size_of::<libc::ucred>() as _;
-    let rc = unsafe {
-        libc::getsockopt(
-            fd,
-            libc::SOL_SOCKET,
-            libc::SO_PEERCRED,
-            &mut cred as *mut _ as *mut libc::c_void,
-            &mut len,
-        )
-    };
-    if rc == 0 {
-        Some(cred)
-    } else {
-        None
-    }
-}
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[inline]
 fn current_exe_canonical_path() -> ResultType<PathBuf> {
     let current = std::env::current_exe()
@@ -280,55 +109,8 @@ fn current_exe_canonical_path() -> ResultType<PathBuf> {
     })
 }
 
-#[cfg(target_os = "linux")]
-#[inline]
-fn peer_exe_canonical_path_by_pid(peer_pid: u32) -> ResultType<PathBuf> {
-    let proc_exe = PathBuf::from(format!("/proc/{peer_pid}/exe"));
-    let peer_exe = fs::read_link(&proc_exe).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to read peer executable link '{}': {}",
-            proc_exe.display(),
-            err
-        )
-    })?;
-    fs::canonicalize(&peer_exe).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to canonicalize peer executable path '{}': {}",
-            peer_exe.display(),
-            err
-        )
-        .into()
-    })
-}
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn peer_exe_canonical_path_by_pid(peer_pid: u32) -> ResultType<PathBuf> {
-    const PROC_PIDPATH_BUF_SIZE: usize = libc::PROC_PIDPATHINFO_MAXSIZE as _;
-    let mut buffer = vec![0u8; PROC_PIDPATH_BUF_SIZE];
-    let length = unsafe {
-        libc::proc_pidpath(
-            peer_pid as _,
-            buffer.as_mut_ptr() as _,
-            PROC_PIDPATH_BUF_SIZE as _,
-        )
-    };
-    if length <= 0 {
-        bail!("Failed to query peer process path from pid {}", peer_pid);
-    }
-    buffer.truncate(length as _);
-    let path = PathBuf::from(String::from_utf8_lossy(&buffer).to_string());
-    fs::canonicalize(&path).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to canonicalize peer executable path '{}': {}",
-            path.display(),
-            err
-        )
-        .into()
-    })
-}
 
-#[cfg(target_os = "windows")]
 #[inline]
 fn peer_exe_canonical_path_by_pid(peer_pid: u32) -> ResultType<PathBuf> {
     let path = crate::platform::windows::get_process_executable_path(peer_pid)?;
@@ -342,10 +124,8 @@ fn peer_exe_canonical_path_by_pid(peer_pid: u32) -> ResultType<PathBuf> {
     })
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[inline]
 pub(crate) fn executable_paths_match(left: &Path, right: &Path) -> bool {
-    #[cfg(target_os = "windows")]
     {
         // Callers pass paths resolved through fs::canonicalize() first, so NT
         // namespace paths and 8.3 short names are expected to be resolved before
@@ -360,42 +140,10 @@ pub(crate) fn executable_paths_match(left: &Path, right: &Path) -> bool {
         }
         return normalize(left) == normalize(right);
     }
-    #[cfg(target_os = "macos")]
-    {
-        return paths_refer_to_same_file(left, right);
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        left == right
-    }
 }
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn paths_refer_to_same_file(left: &Path, right: &Path) -> bool {
-    if left == right {
-        return true;
-    }
-    let (Ok(left), Ok(right)) = (fs::metadata(left), fs::metadata(right)) else {
-        return false;
-    };
-    left.dev() == right.dev() && left.ino() == right.ino()
-}
 
-#[cfg(target_os = "macos")]
-#[inline]
-fn os_str_eq_ignore_ascii_case(
-    left: Option<&std::ffi::OsStr>,
-    right: Option<&std::ffi::OsStr>,
-) -> bool {
-    let (Some(left), Some(right)) = (left, right) else {
-        return false;
-    };
-    left.to_string_lossy()
-        .eq_ignore_ascii_case(&right.to_string_lossy())
-}
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[inline]
 fn ensure_peer_executable_matches_current_by_pid(peer_pid: u32, postfix: &str) -> ResultType<()> {
     let peer_exe = peer_exe_canonical_path_by_pid(peer_pid)?;
@@ -403,11 +151,6 @@ fn ensure_peer_executable_matches_current_by_pid(peer_pid: u32, postfix: &str) -
     if executable_paths_match(&peer_exe, &current_exe) {
         return Ok(());
     }
-    #[cfg(target_os = "macos")]
-    if macos_service_ipc_allows_gui_and_service_binaries(&peer_exe, &current_exe, postfix) {
-        return Ok(());
-    }
-    #[cfg(target_os = "windows")]
     if windows_portable_service_ipc_allows_logon_helper_executable(&peer_exe, postfix) {
         return Ok(());
     }
@@ -420,7 +163,6 @@ fn ensure_peer_executable_matches_current_by_pid(peer_pid: u32, postfix: &str) -
     );
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[inline]
 pub(crate) fn ensure_peer_executable_matches_current_by_pid_opt(
     peer_pid: Option<u32>,
@@ -432,52 +174,11 @@ pub(crate) fn ensure_peer_executable_matches_current_by_pid_opt(
     ensure_peer_executable_matches_current_by_pid(peer_pid, postfix)
 }
 
-#[cfg(target_os = "linux")]
-#[inline]
-pub(crate) fn ensure_peer_executable_matches_current_by_fd(
-    fd: RawFd,
-    postfix: &str,
-) -> ResultType<()> {
-    let peer_pid = peer_pid_from_fd(fd).ok_or_else(|| {
-        anyhow::anyhow!("Failed to resolve peer pid on ipc channel '{}'", postfix)
-    })?;
-    ensure_peer_executable_matches_current_by_pid(peer_pid, postfix)
-}
 
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 const UNAUTHORIZED_IPC_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[inline]
-fn log_rejected_service_connection(postfix: &str, peer_uid: Option<u32>, active_uid: Option<u32>) {
-    hbb_common::throttled_log!(
-        UNAUTHORIZED_IPC_LOG_INTERVAL,
-        warn,
-        "Rejected unauthorized connection on protected service-scoped IPC channel: postfix={}, peer_uid={:?}, active_uid={:?}",
-        postfix,
-        peer_uid,
-        active_uid
-    );
-}
 
-#[cfg(target_os = "linux")]
-#[inline]
-pub(crate) fn log_rejected_uinput_connection(
-    postfix: &str,
-    peer_uid: Option<u32>,
-    active_uid: Option<u32>,
-) {
-    hbb_common::throttled_log!(
-        UNAUTHORIZED_IPC_LOG_INTERVAL,
-        warn,
-        "Rejected unauthorized connection on uinput ipc channel: postfix={}, peer_uid={:?}, active_uid={:?}",
-        postfix,
-        peer_uid,
-        active_uid
-    );
-}
 
-#[cfg(windows)]
 #[inline]
 pub(crate) fn log_rejected_windows_ipc_connection(
     postfix: &str,
@@ -500,53 +201,8 @@ pub(crate) fn log_rejected_windows_ipc_connection(
     );
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-pub(crate) fn authorize_service_scoped_ipc_connection(stream: &Connection, postfix: &str) -> bool {
-    let peer_pid = stream.peer_pid();
-    let (authorized, peer_uid, active_uid) = stream.service_authorization_status();
-    if !authorized {
-        log_rejected_service_connection(postfix, peer_uid, active_uid);
-        return false;
-    }
-    if let Err(err) = ensure_peer_executable_matches_current_by_pid_opt(peer_pid, postfix) {
-        log::warn!(
-            "Rejected unauthorized connection on protected service-scoped IPC channel due to executable mismatch: postfix={}, peer_pid={:?}, err={}",
-            postfix,
-            peer_pid,
-            err
-        );
-        return false;
-    }
-    true
-}
 
-#[cfg(target_os = "macos")]
-pub(crate) fn authorize_user_server_process(
-    peer_uid: Option<u32>,
-    peer_pid: Option<u32>,
-    expected_uid: u32,
-) -> bool {
-    if peer_uid != Some(expected_uid) {
-        return false;
-    }
-    let Some(peer_pid) = peer_pid else {
-        return false;
-    };
-    let Ok(peer_exe) = peer_exe_canonical_path_by_pid(peer_pid) else {
-        return false;
-    };
-    let expected_path = PathBuf::from(format!(
-        "/Applications/{}.app/Contents/MacOS/{}",
-        crate::get_app_name(),
-        crate::get_app_name()
-    ));
-    let Ok(expected_path) = fs::canonicalize(expected_path) else {
-        return false;
-    };
-    paths_refer_to_same_file(&peer_exe, &expected_path)
-}
 
-#[cfg(windows)]
 pub(crate) fn authorize_windows_main_ipc_connection(stream: &Connection, postfix: &str) -> bool {
     let (
         authorized,
@@ -579,7 +235,6 @@ pub(crate) fn authorize_windows_main_ipc_connection(stream: &Connection, postfix
     true
 }
 
-#[cfg(windows)]
 pub(crate) fn authorize_windows_portable_service_ipc_connection(
     stream: &Connection,
     postfix: &str,
@@ -634,30 +289,7 @@ pub(crate) fn authorize_windows_portable_service_ipc_connection(
     true
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-impl<T> ConnectionTmpl<T>
-where
-    T: AsyncRead + AsyncWrite + std::marker::Unpin + std::os::unix::io::AsRawFd,
-{
-    pub(super) fn peer_uid(&self) -> Option<u32> {
-        peer_uid_from_fd(self.inner.get_ref().as_raw_fd())
-    }
 
-    fn service_authorization_status(&self) -> (bool, Option<u32>, Option<u32>) {
-        let peer_uid = self.peer_uid();
-        // On Linux, `_service` can use the cached active UID from the service loop for
-        // stable config sync. Uinput does a fresh active-UID lookup in its own authorizer.
-        let active_uid = active_uid();
-        let authorized = peer_uid.is_some_and(|uid| is_allowed_service_peer_uid(uid, active_uid));
-        (authorized, peer_uid, active_uid)
-    }
-
-    pub(super) fn peer_pid(&self) -> Option<u32> {
-        peer_pid_from_fd(self.inner.get_ref().as_raw_fd())
-    }
-}
-
-#[cfg(windows)]
 impl ConnectionTmpl<parity_tokio_ipc::Connection> {
     fn peer_pid(&self) -> Option<u32> {
         let pipe_handle = self.inner.get_ref().as_raw_handle();
@@ -799,17 +431,8 @@ impl ConnectionTmpl<parity_tokio_ipc::Connection> {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    fn test_service_peer_uid_policy() {
-        assert!(super::is_allowed_service_peer_uid(0, None));
-        assert!(super::is_allowed_service_peer_uid(501, Some(501)));
-        assert!(!super::is_allowed_service_peer_uid(502, Some(501)));
-        assert!(!super::is_allowed_service_peer_uid(501, None));
-    }
 
     #[test]
-    #[cfg(windows)]
     fn test_windows_server_peer_policy() {
         assert!(super::is_allowed_windows_session_scoped_peer(
             true, None, None
@@ -832,7 +455,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(windows)]
     fn test_windows_portable_service_peer_policy() {
         assert!(super::is_allowed_windows_portable_service_peer(
             Some(true),

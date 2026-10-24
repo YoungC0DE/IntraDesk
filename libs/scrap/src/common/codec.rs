@@ -7,8 +7,6 @@ use std::{
 
 #[cfg(feature = "hwcodec")]
 use crate::hwcodec::*;
-#[cfg(feature = "mediacodec")]
-use crate::mediacodec::{MediaCodecDecoder, H264_DECODER_SUPPORT, H265_DECODER_SUPPORT};
 #[cfg(feature = "vram")]
 use crate::vram::*;
 use crate::{
@@ -22,12 +20,6 @@ use base::message_proto::{
     supported_decoding::PreferCodec, video_frame, Chroma, CodecAbility, EncodedVideoFrames,
     SupportedDecoding, SupportedEncoding, VideoFrame,
 };
-#[cfg(any(
-    feature = "hwcodec",
-    feature = "mediacodec",
-    feature = "vram",
-    target_os = "windows"
-))]
 use hbb_common::config::option2bool;
 use hbb_common::{
     anyhow::anyhow,
@@ -112,10 +104,6 @@ pub struct Decoder {
     h264_vram: Option<VRamDecoder>,
     #[cfg(feature = "vram")]
     h265_vram: Option<VRamDecoder>,
-    #[cfg(feature = "mediacodec")]
-    h264_media_codec: MediaCodecDecoder,
-    #[cfg(feature = "mediacodec")]
-    h265_media_codec: MediaCodecDecoder,
     format: CodecFormat,
     valid: bool,
     #[cfg(feature = "hwcodec")]
@@ -470,21 +458,6 @@ impl Decoder {
                 0
             };
         }
-        #[cfg(feature = "mediacodec")]
-        if enable_hwcodec_option() {
-            decoding.ability_h264 =
-                if H264_DECODER_SUPPORT.load(std::sync::atomic::Ordering::SeqCst) {
-                    1
-                } else {
-                    0
-                };
-            decoding.ability_h265 =
-                if H265_DECODER_SUPPORT.load(std::sync::atomic::Ordering::SeqCst) {
-                    1
-                } else {
-                    0
-                };
-        }
         for unsupported in mark_unsupported {
             match unsupported {
                 CodecFormat::VP8 => decoding.ability_vp8 = 0,
@@ -505,8 +478,6 @@ impl Decoder {
         let (mut h264_ram, mut h265_ram) = (None, None);
         #[cfg(feature = "vram")]
         let (mut h264_vram, mut h265_vram) = (None, None);
-        #[cfg(feature = "mediacodec")]
-        let (mut h264_media_codec, mut h265_media_codec) = (None, None);
         let mut valid = false;
 
         match format {
@@ -552,14 +523,6 @@ impl Decoder {
                     }
                     valid = h264_ram.is_some();
                 }
-                #[cfg(feature = "mediacodec")]
-                if !valid && enable_hwcodec_option() {
-                    h264_media_codec = MediaCodecDecoder::new(format);
-                    if h264_media_codec.is_none() {
-                        log::error!("create H264 media codec decoder failed");
-                    }
-                    valid = h264_media_codec.is_some();
-                }
             }
             CodecFormat::H265 => {
                 #[cfg(feature = "vram")]
@@ -577,14 +540,6 @@ impl Decoder {
                         Err(e) => log::error!("create H265 ram decoder failed: {}", e),
                     }
                     valid = h265_ram.is_some();
-                }
-                #[cfg(feature = "mediacodec")]
-                if !valid && enable_hwcodec_option() {
-                    h265_media_codec = MediaCodecDecoder::new(format);
-                    if h265_media_codec.is_none() {
-                        log::error!("create H265 media codec decoder failed");
-                    }
-                    valid = h265_media_codec.is_some();
                 }
             }
             CodecFormat::Unknown => {
@@ -608,10 +563,6 @@ impl Decoder {
             h264_vram,
             #[cfg(feature = "vram")]
             h265_vram,
-            #[cfg(feature = "mediacodec")]
-            h264_media_codec,
-            #[cfg(feature = "mediacodec")]
-            h265_media_codec,
             format,
             valid,
             #[cfg(feature = "hwcodec")]
@@ -685,24 +636,6 @@ impl Decoder {
                     return Decoder::handle_hwram_video_frame(decoder, h265s, rgb, &mut self.i420);
                 }
                 Err(anyhow!("don't support h265!"))
-            }
-            #[cfg(feature = "mediacodec")]
-            video_frame::Union::H264s(h264s) => {
-                *chroma = Some(Chroma::I420);
-                if let Some(decoder) = &mut self.h264_media_codec {
-                    Decoder::handle_mediacodec_video_frame(decoder, h264s, rgb)
-                } else {
-                    Err(anyhow!("don't support h264!"))
-                }
-            }
-            #[cfg(feature = "mediacodec")]
-            video_frame::Union::H265s(h265s) => {
-                *chroma = Some(Chroma::I420);
-                if let Some(decoder) = &mut self.h265_media_codec {
-                    Decoder::handle_mediacodec_video_frame(decoder, h265s, rgb)
-                } else {
-                    Err(anyhow!("don't support h265!"))
-                }
             }
             _ => Err(anyhow!("unsupported video frame type!")),
         }
@@ -803,18 +736,6 @@ impl Decoder {
     }
 
     // rgb [in/out] fmt and stride must be set in ImageRgb
-    #[cfg(feature = "mediacodec")]
-    fn handle_mediacodec_video_frame(
-        decoder: &mut MediaCodecDecoder,
-        frames: &EncodedVideoFrames,
-        rgb: &mut ImageRgb,
-    ) -> ResultType<bool> {
-        let mut ret = false;
-        for h264 in frames.frames.iter() {
-            return decoder.decode(&h264.data, rgb);
-        }
-        return Ok(false);
-    }
 
     fn preference(id: Option<&str>) -> (PreferCodec, Chroma) {
         let id = id.unwrap_or_default();
@@ -847,7 +768,7 @@ impl Decoder {
     }
 }
 
-#[cfg(any(feature = "hwcodec", feature = "mediacodec"))]
+#[cfg(feature = "hwcodec")]
 pub fn enable_hwcodec_option() -> bool {
     use base::config::keys::OPTION_ENABLE_HWCODEC;
 
@@ -878,13 +799,11 @@ pub fn enable_vram_option(encode: bool) -> bool {
     }
 }
 
-#[cfg(windows)]
 pub fn enable_directx_capture() -> bool {
     use base::config::keys::OPTION_ENABLE_DIRECTX_CAPTURE as OPTION;
     option2bool(OPTION, &Config::get_option(OPTION))
 }
 
-#[cfg(windows)]
 pub fn allow_d3d_render() -> bool {
     use base::config::keys::OPTION_ALLOW_D3D_RENDER as OPTION;
     option2bool(OPTION, &hbb_common::config::LocalConfig::get_option(OPTION))
@@ -958,13 +877,6 @@ pub fn base_bitrate(width: u32, height: u32) -> u32 {
 
     let bitrate = (*preset_bitrate as f32 * (pixels as f32 / preset_pixels as f32)).round() as u32;
 
-    #[cfg(target_os = "android")]
-    {
-        let fix = crate::Display::fix_quality() as u32;
-        log::debug!("Android screen, fix quality:{}", fix);
-        bitrate * fix
-    }
-    #[cfg(not(target_os = "android"))]
     {
         bitrate
     }
@@ -977,7 +889,6 @@ pub fn codec_thread_num(limit: usize) -> usize {
     let mut s = System::new();
     s.refresh_memory();
     let memory = s.available_memory() / 1024 / 1024 / 1024;
-    #[cfg(windows)]
     {
         res = 0;
         let percent = base::platform::windows::cpu_uage_one_minute();
@@ -987,14 +898,6 @@ pub fn codec_thread_num(limit: usize) -> usize {
                 res = ((100.0 - pecent) * (max as f64) / 200.0).round() as usize;
             }
         }
-    }
-    #[cfg(not(windows))]
-    {
-        s.refresh_cpu_usage();
-        // https://man7.org/linux/man-pages/man3/getloadavg.3.html
-        let avg = s.load_average();
-        info = format!("cpu loadavg: {}", avg.one);
-        res = (((max as f64) - avg.one) * 0.5).round() as usize;
     }
     res = std::cmp::min(res, max / 2);
     res = std::cmp::min(res, memory as usize / 2);
@@ -1036,7 +939,6 @@ fn disable_av1() -> bool {
     std::mem::size_of::<usize>() == 4
 }
 
-#[cfg(not(target_os = "ios"))]
 pub fn test_av1() {
     use base::config::keys::OPTION_AV1_TEST;
     use hbb_common::rand::Rng;

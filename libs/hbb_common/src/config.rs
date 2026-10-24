@@ -52,10 +52,6 @@ pub const REG_INTERVAL: i64 = 15_000;
 pub const COMPRESS_LEVEL: i32 = 3;
 const SERIAL: i32 = 3;
 
-#[cfg(target_os = "macos")]
-lazy_static::lazy_static! {
-    pub static ref ORG: RwLock<String> = RwLock::new("com.carriez".to_owned());
-}
 
 type Size = (i32, i32, i32, i32);
 type KeyPair = (Vec<u8>, Vec<u8>);
@@ -83,19 +79,11 @@ lazy_static::lazy_static! {
     pub static ref BUILTIN_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
 }
 
-#[cfg(target_os = "android")]
-lazy_static::lazy_static! {
-    pub static ref ANDROID_RUSTLS_PLATFORM_VERIFIER_INITIALIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-}
 
 lazy_static::lazy_static! {
     pub static ref APP_DIR: RwLock<String> = Default::default();
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-lazy_static::lazy_static! {
-    pub static ref APP_HOME_DIR: RwLock<String> = Default::default();
-}
 
 pub const LINK_DOCS_HOME: &str = "https://rustdesk.com/docs/en/";
 pub const LINK_DOCS_X11_REQUIRED: &str = "https://rustdesk.com/docs/en/manual/linux/#x11-required";
@@ -134,16 +122,6 @@ pub fn is_service_ipc_postfix(postfix: &str) -> bool {
 
 // Keep Linux/macOS IPC parent directory rules in one place to avoid drift between
 // `ipc_path()` and Unix `ipc_path_for_uid()`.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-#[inline]
-fn ipc_parent_dir_for_uid(uid: u32, postfix: &str) -> String {
-    let app_name = APP_NAME.read().unwrap().clone();
-    if is_service_ipc_postfix(postfix) {
-        format!("/tmp/{app_name}-service")
-    } else {
-        format!("/tmp/{app_name}-{uid}")
-    }
-}
 
 macro_rules! serde_field_string {
     ($default_func:ident, $de_func:ident, $default_expr:expr) => {
@@ -447,32 +425,14 @@ pub fn get_online_state() -> i64 {
     *ONLINE.lock().unwrap().values().max().unwrap_or(&0)
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn patch(path: PathBuf) -> PathBuf {
     if let Some(_tmp) = path.to_str() {
-        #[cfg(windows)]
         return _tmp
             .replace(
                 "system32\\config\\systemprofile",
                 "ServiceProfiles\\LocalService",
             )
             .into();
-        #[cfg(target_os = "macos")]
-        return _tmp.replace("Application Support", "Preferences").into();
-        #[cfg(target_os = "linux")]
-        {
-            if _tmp == "/root" {
-                if let Ok(user) = crate::sh::run_cmds_trim_newline("whoami") {
-                    if user != "root" {
-                        let cmd = format!("getent passwd '{}' | awk -F':' '{{print $6}}'", user);
-                        if let Ok(output) = crate::sh::run_cmds_trim_newline(&cmd) {
-                            return output.into();
-                        }
-                        return format!("/home/{user}").into();
-                    }
-                }
-            }
-        }
     }
     path
 }
@@ -563,16 +523,6 @@ pub fn load_path<T: serde::Serialize + serde::de::DeserializeOwned + Default + s
 
 #[inline]
 pub fn store_path<T: serde::Serialize>(path: PathBuf, cfg: T) -> crate::ResultType<()> {
-    #[cfg(not(windows))]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        Ok(confy::store_path_perms(
-            path,
-            cfg,
-            fs::Permissions::from_mode(0o600),
-        )?)
-    }
-    #[cfg(windows)]
     {
         Ok(confy::store_path(path, cfg)?)
     }
@@ -754,9 +704,6 @@ impl Config {
     /// where an attacker can manipulate the environment variable to inject malicious
     /// paths into privileged operations.
     pub fn get_home() -> PathBuf {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        return PathBuf::from(APP_HOME_DIR.read().unwrap().as_str());
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             if let Some(path) = dirs_next::home_dir() {
                 patch(path)
@@ -769,18 +716,8 @@ impl Config {
     }
 
     pub fn path<P: AsRef<Path>>(p: P) -> PathBuf {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
         {
-            let mut path: PathBuf = APP_DIR.read().unwrap().clone().into();
-            path.push(p);
-            return path;
-        }
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        {
-            #[cfg(not(target_os = "macos"))]
             let org = "".to_owned();
-            #[cfg(target_os = "macos")]
-            let org = ORG.read().unwrap().clone();
             // /var/root for root
             if let Some(project) =
                 directories_next::ProjectDirs::from("", &org, &APP_NAME.read().unwrap())
@@ -801,27 +738,6 @@ impl Config {
     /// See [`Self::get_home()`] for security considerations regarding `$HOME` usage.
     #[allow(unreachable_code)]
     pub fn log_path() -> PathBuf {
-        #[cfg(target_os = "macos")]
-        {
-            if let Some(path) = dirs_next::home_dir().as_mut() {
-                path.push(format!("Library/Logs/{}", *APP_NAME.read().unwrap()));
-                return path.clone();
-            }
-        }
-        #[cfg(target_os = "linux")]
-        {
-            let mut path = Self::get_home();
-            path.push(format!(".local/share/logs/{}", *APP_NAME.read().unwrap()));
-            std::fs::create_dir_all(&path).ok();
-            return path;
-        }
-        #[cfg(target_os = "android")]
-        {
-            let mut path = Self::get_home();
-            path.push(format!("{}/Logs", *APP_NAME.read().unwrap()));
-            std::fs::create_dir_all(&path).ok();
-            return path;
-        }
         if let Some(path) = Self::path("").parent() {
             let mut path: PathBuf = path.into();
             path.push("log");
@@ -831,7 +747,6 @@ impl Config {
     }
 
     pub fn ipc_path(postfix: &str) -> String {
-        #[cfg(windows)]
         {
             // \\ServerName\pipe\PipeName
             // where ServerName is either the name of a remote computer or a period, to specify the local computer.
@@ -842,44 +757,8 @@ impl Config {
                 postfix
             )
         }
-        #[cfg(not(windows))]
-        {
-            #[cfg(target_os = "android")]
-            use std::os::unix::fs::PermissionsExt;
-            #[cfg(target_os = "android")]
-            let mut path: PathBuf =
-                format!("{}/{}", *APP_DIR.read().unwrap(), *APP_NAME.read().unwrap()).into();
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            let mut path: PathBuf = {
-                let uid = unsafe { libc::geteuid() as u32 };
-                ipc_parent_dir_for_uid(uid, postfix).into()
-            };
-            #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "macos")))]
-            let mut path: PathBuf = format!("/tmp/{}", *APP_NAME.read().unwrap()).into();
-            // Android stores IPC sockets under app-controlled directories. Create the IPC parent
-            // dir and enforce the expected mode here. On other Unix platforms, `ipc_path()` is
-            // intentionally side-effect free (no mkdir/chmod); callers should enforce directory and
-            // socket permissions at the IPC server boundary.
-            #[cfg(target_os = "android")]
-            {
-                fs::create_dir_all(&path).ok();
-                let path_mode = if is_service_ipc_postfix(postfix) {
-                    0o0711
-                } else {
-                    0o0700
-                };
-                fs::set_permissions(&path, fs::Permissions::from_mode(path_mode)).ok();
-            }
-            path.push(format!("ipc{postfix}"));
-            path.to_str().unwrap_or("").to_owned()
-        }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    pub fn ipc_path_for_uid(uid: u32, postfix: &str) -> String {
-        let parent = ipc_parent_dir_for_uid(uid, postfix);
-        format!("{parent}/ipc{postfix}")
-    }
 
     pub fn icon_path() -> PathBuf {
         let mut path = Self::path("icons");
@@ -1008,12 +887,7 @@ impl Config {
         std::cmp::max(CONFIG2.read().unwrap().serial, SERIAL)
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    fn gen_id() -> Option<String> {
-        Self::get_auto_id()
-    }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn gen_id() -> Option<String> {
         let hostname_as_id = BUILTIN_SETTINGS
             .read()
@@ -1035,16 +909,7 @@ impl Config {
     }
 
     fn get_auto_id() -> Option<String> {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        {
-            return Some(
-                rand::thread_rng()
-                    .gen_range(1_000_000_000..2_000_000_000)
-                    .to_string(),
-            );
-        }
 
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             let mut id = 0u32;
             if let Ok(Some(ma)) = mac_address::get_mac_address() {
@@ -1652,29 +1517,10 @@ impl Config {
         *lock = cfg;
         lock.store();
         // Drop CONFIG lock before acquiring KEY_PAIR lock to avoid potential deadlock.
-        #[cfg(target_os = "macos")]
-        let new_key_pair = lock.key_pair.clone();
         drop(lock);
-        #[cfg(target_os = "macos")]
-        Self::invalidate_key_pair_cache_if_changed(&new_key_pair);
         true
     }
 
-    /// Invalidate KEY_PAIR cache if it differs from the new key_pair.
-    /// Use None to invalidate the cache instead of Some(key_pair).
-    /// If we use Some with an empty key_pair, get_key_pair() would always return
-    /// the empty key_pair from cache without regenerating.
-    /// By clearing the cache, get_key_pair() will reload and regenerate if needed.
-    #[cfg(target_os = "macos")]
-    fn invalidate_key_pair_cache_if_changed(new_key_pair: &KeyPair) {
-        let mut key_pair_cache = KEY_PAIR.lock().unwrap();
-        if let Some(cached) = key_pair_cache.as_ref() {
-            if cached != new_key_pair {
-                *key_pair_cache = None;
-                log::info!("key pair cache invalidated");
-            }
-        }
-    }
 
     fn with_extension(path: PathBuf) -> PathBuf {
         let ext = path.extension();
@@ -2338,9 +2184,6 @@ impl UserDefaultConfig {
 
     pub fn get(&self, key: &str) -> String {
         match key {
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            keys::OPTION_VIEW_STYLE => self.get_string(key, "adaptive", vec!["original"]),
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             keys::OPTION_VIEW_STYLE => self.get_string(key, "original", vec!["adaptive"]),
             keys::OPTION_SCROLL_STYLE => {
                 self.get_string(key, "scrollauto", vec!["scrolledge", "scrollbar"])
@@ -3612,40 +3455,6 @@ mod tests {
         cfg.store(&peerconfig_id);
         assert_eq!(PeerConfig::load(&peerconfig_id), cfg);
 
-        #[cfg(not(windows))]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            assert_eq!(
-                // ignore file type information by masking with 0o777 (see https://stackoverflow.com/a/50045872)
-                fs::metadata(PeerConfig::path(&peerconfig_id))
-                    .expect("reading metadata failed")
-                    .permissions()
-                    .mode()
-                    & 0o777,
-                0o600
-            );
-        }
     }
 
-    #[test]
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn test_uinput_ipc_path_is_shared_across_uids() {
-        const ROOT_UID: u32 = 0;
-        const USER_UID: u32 = 1000;
-
-        let path_root = Config::ipc_path_for_uid(ROOT_UID, "_uinput_keyboard");
-        let path_user = Config::ipc_path_for_uid(USER_UID, "_uinput_keyboard");
-        assert_eq!(path_root, path_user);
-
-        let app_name = APP_NAME.read().unwrap().clone();
-        assert!(
-            path_root.starts_with(&format!("/tmp/{app_name}-service/")),
-            "unexpected uinput ipc path: {}",
-            path_root
-        );
-
-        let non_service_root = Config::ipc_path_for_uid(ROOT_UID, "");
-        let non_service_user = Config::ipc_path_for_uid(USER_UID, "");
-        assert_ne!(non_service_root, non_service_user);
-    }
 }

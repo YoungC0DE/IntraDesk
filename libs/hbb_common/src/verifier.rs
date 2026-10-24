@@ -60,107 +60,8 @@ impl ServerCertVerifier for NoVerifier {
     }
 }
 
-/// A certificate verifier that tries a primary verifier first,
-/// and falls back to a platform verifier if the primary fails.
-#[cfg(any(target_os = "android", target_os = "ios"))]
-#[derive(Debug)]
-struct FallbackPlatformVerifier {
-    primary: Arc<dyn ServerCertVerifier>,
-    fallback: Arc<dyn ServerCertVerifier>,
-}
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-impl FallbackPlatformVerifier {
-    fn with_platform_fallback(
-        primary: Arc<dyn ServerCertVerifier>,
-        provider: Arc<rustls::crypto::CryptoProvider>,
-    ) -> Result<Self, TLSError> {
-        #[cfg(target_os = "android")]
-        if !crate::config::ANDROID_RUSTLS_PLATFORM_VERIFIER_INITIALIZED
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            return Err(TLSError::General(
-                "rustls-platform-verifier not initialized".to_string(),
-            ));
-        }
-        let fallback = Arc::new(rustls_platform_verifier::Verifier::new(provider)?);
-        Ok(Self { primary, fallback })
-    }
-}
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-impl ServerCertVerifier for FallbackPlatformVerifier {
-    fn verify_server_cert(
-        &self,
-        end_entity: &rustls_pki_types::CertificateDer<'_>,
-        intermediates: &[rustls_pki_types::CertificateDer<'_>],
-        server_name: &ServerName<'_>,
-        ocsp_response: &[u8],
-        now: UnixTime,
-    ) -> Result<ServerCertVerified, TLSError> {
-        match self.primary.verify_server_cert(
-            end_entity,
-            intermediates,
-            server_name,
-            ocsp_response,
-            now,
-        ) {
-            Ok(verified) => Ok(verified),
-            Err(primary_err) => {
-                match self.fallback.verify_server_cert(
-                    end_entity,
-                    intermediates,
-                    server_name,
-                    ocsp_response,
-                    now,
-                ) {
-                    Ok(verified) => Ok(verified),
-                    Err(fallback_err) => {
-                        log::error!(
-                            "Both primary and fallback verifiers failed to verify server certificate, primary error: {:?}, fallback error: {:?}",
-                            primary_err,
-                            fallback_err
-                        );
-                        Err(primary_err)
-                    }
-                }
-            }
-        }
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &rustls_pki_types::CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, TLSError> {
-        // Both WebPkiServerVerifier and rustls_platform_verifier use the same signature verification implementation.
-        // https://github.com/rustls/rustls/blob/1ee126adb3352a2dcd72420dcd6040351a6ddc1e/rustls/src/webpki/server_verifier.rs#L278
-        // https://github.com/rustls/rustls/blob/1ee126adb3352a2dcd72420dcd6040351a6ddc1e/rustls/src/crypto/mod.rs#L17
-        // https://github.com/rustls/rustls-platform-verifier/blob/1099f161bfc5e3ac7f90aad88b1bf788e72906cb/rustls-platform-verifier/src/verification/android.rs#L9
-        // https://github.com/rustls/rustls-platform-verifier/blob/1099f161bfc5e3ac7f90aad88b1bf788e72906cb/rustls-platform-verifier/src/verification/apple.rs#L6
-        self.primary.verify_tls12_signature(message, cert, dss)
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &rustls_pki_types::CertificateDer<'_>,
-        dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, TLSError> {
-        // Same implementation as verify_tls12_signature.
-        self.primary.verify_tls13_signature(message, cert, dss)
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        // Both WebPkiServerVerifier and rustls_platform_verifier use the same crypto provider,
-        // so their supported signature schemes are identical.
-        // https://github.com/rustls/rustls/blob/1ee126adb3352a2dcd72420dcd6040351a6ddc1e/rustls/src/webpki/server_verifier.rs#L172C52-L172C85
-        // https://github.com/rustls/rustls-platform-verifier/blob/1099f161bfc5e3ac7f90aad88b1bf788e72906cb/rustls-platform-verifier/src/verification/android.rs#L327
-        // https://github.com/rustls/rustls-platform-verifier/blob/1099f161bfc5e3ac7f90aad88b1bf788e72906cb/rustls-platform-verifier/src/verification/apple.rs#L304
-        self.primary.supported_verify_schemes()
-    }
-}
 
 fn webpki_server_verifier(
     provider: Arc<rustls::crypto::CryptoProvider>,
@@ -217,29 +118,6 @@ pub fn client_config_safe() -> ResultType<ClientConfig> {
     let config_builder = rustls::ClientConfig::builder();
     let provider = config_builder.crypto_provider().clone();
     let webpki_verifier = webpki_server_verifier(provider.clone())?;
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    {
-        match FallbackPlatformVerifier::with_platform_fallback(webpki_verifier.clone(), provider) {
-            Ok(fallback_verifier) => {
-                let config = config_builder
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(fallback_verifier))
-                    .with_no_client_auth();
-                Ok(config)
-            }
-            Err(e) => {
-                log::error!(
-                    "Failed to create fallback verifier: {:?}, use webpki verifier instead",
-                    e
-                );
-                let config = config_builder
-                    .with_webpki_verifier(webpki_verifier)
-                    .with_no_client_auth();
-                Ok(config)
-            }
-        }
-    }
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let config = config_builder
             .with_webpki_verifier(webpki_verifier)

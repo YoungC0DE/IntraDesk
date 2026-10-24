@@ -19,11 +19,6 @@
 // https://slhck.info/video/2017/03/01/rate-control.html
 
 use super::{display_service::check_display_changed, service::ServiceTmpl, video_qos::VideoQoS, *};
-#[cfg(target_os = "linux")]
-use crate::common::SimpleCallOnReturn;
-#[cfg(target_os = "linux")]
-use crate::platform::linux::is_x11;
-#[cfg(windows)]
 use crate::platform::windows::is_process_consent_running;
 use hbb_common::{
     tokio::sync::{
@@ -35,17 +30,13 @@ use hbb_common::{
 use scrap::hwcodec::{HwRamEncoder, HwRamEncoderConfig};
 #[cfg(feature = "vram")]
 use scrap::vram::{VRamEncoder, VRamEncoderConfig};
-#[cfg(not(windows))]
-use scrap::Capturer;
 use scrap::{
     aom::AomEncoderConfig,
     codec::{Encoder, EncoderCfg},
     vpxcodec::{VpxEncoderConfig, VpxVideoCodecId},
     CodecFormat, Display, EncodeInput, TraitCapturer, TraitPixelBuffer,
 };
-#[cfg(windows)]
 use std::io::ErrorKind::ConnectionReset;
-#[cfg(windows)]
 use std::sync::Once;
 use std::{
     collections::HashSet,
@@ -58,14 +49,10 @@ pub const OPTION_REFRESH: &'static str = "refresh";
 
 mod static_refresh;
 
-#[cfg(windows)]
 const DXGI_RECOVERY_LIMIT: usize = 3;
-#[cfg(windows)]
 const DXGI_RECOVERY_WINDOW: Duration = Duration::from_secs(10);
-#[cfg(windows)]
 const DXGI_RECOVERY_FRAME_GRACE: Duration = Duration::from_secs(2);
 
-#[cfg(windows)]
 struct DxgiRecoveryState {
     attempts: usize,
     window_started: Option<Instant>,
@@ -73,7 +60,6 @@ struct DxgiRecoveryState {
     fallback_pending: bool,
 }
 
-#[cfg(windows)]
 impl DxgiRecoveryState {
     fn new() -> Self {
         Self {
@@ -259,7 +245,6 @@ pub struct VideoService {
     sp: GenericService,
     idx: usize,
     source: VideoSource,
-    #[cfg(windows)]
     dxgi_recovery_state: Arc<Mutex<DxgiRecoveryState>>,
 }
 
@@ -294,7 +279,6 @@ pub fn new(source: VideoSource, idx: usize) -> GenericService {
         sp: GenericService::new(get_service_name(source, idx), true),
         idx,
         source,
-        #[cfg(windows)]
         dxgi_recovery_state: Arc::new(Mutex::new(DxgiRecoveryState::new())),
     };
     GenericService::run(&vs, run);
@@ -307,7 +291,6 @@ fn create_capturer(
     _current: usize,
     _portable_service_running: bool,
 ) -> ResultType<Box<dyn TraitCapturer>> {
-    #[cfg(windows)]
     {
         log::debug!("Create capturer dxgi|gdi");
         return crate::portable_service::client::create_capturer(
@@ -315,13 +298,6 @@ fn create_capturer(
             display,
             _portable_service_running,
         );
-    }
-    #[cfg(not(windows))]
-    {
-        log::debug!("Create capturer from scrap");
-        return Ok(Box::new(
-            Capturer::new(display).with_context(|| "Failed to create capturer")?,
-        ));
     }
 }
 
@@ -352,12 +328,6 @@ fn get_capturer_monitor(
     current: usize,
     portable_service_running: bool,
 ) -> ResultType<CapturerInfo> {
-    #[cfg(target_os = "linux")]
-    {
-        if !is_x11() {
-            return super::wayland::get_capturer_for_display(current);
-        }
-    }
 
     let mut displays = Display::all()?;
     let ndisplay = displays.len();
@@ -371,15 +341,6 @@ fn get_capturer_monitor(
 
     let display = displays.remove(current);
 
-    #[cfg(target_os = "linux")]
-    if let Display::X11(inner) = &display {
-        if let Err(err) = inner.get_shm_status() {
-            log::warn!(
-                "MIT-SHM extension not working properly on select X11 server: {:?}",
-                err
-            );
-        }
-    }
 
     let (origin, width, height) = (display.origin(), display.width(), display.height());
     let name = display.name();
@@ -423,36 +384,13 @@ fn run(vs: VideoService) -> ResultType<()> {
     // ensure_inited() is needed because clear() may be called.
     // to-do: wayland ensure_inited should pass current display index.
     // But for now, we do not support multi-screen capture on wayland.
-    #[cfg(target_os = "linux")]
-    super::wayland::ensure_inited()?;
-    #[cfg(target_os = "linux")]
-    let _wayland_call_on_ret = {
-        // Increment active display count when starting
-        let _display_count = super::wayland::increment_active_display_count();
 
-        SimpleCallOnReturn {
-            b: true,
-            f: Box::new(|| {
-                // Decrement active display count and only clear if this was the last display
-                let remaining_count = super::wayland::decrement_active_display_count();
-                if remaining_count == 0 {
-                    super::wayland::clear();
-                }
-            }),
-        }
-    };
-
-    #[cfg(windows)]
     let last_portable_service_running = crate::portable_service::client::running();
-    #[cfg(not(windows))]
-    let last_portable_service_running = false;
 
     let display_idx = vs.idx;
-    #[cfg(windows)]
     let dxgi_recovery_state = vs.dxgi_recovery_state.clone();
     let sp = vs.sp;
     let mut c = get_capturer(vs.source, display_idx, last_portable_service_running)?;
-    #[cfg(windows)]
     // ACCESS_LOST marks the next successful capturer creation as a recovery. This timestamp is
     // consumed once and temporarily holds off the normal WouldBlock-to-GDI fallback, giving the
     // replacement DXGI capturer time to produce its first frame. Normal startup is unaffected.
@@ -461,12 +399,10 @@ fn run(vs: VideoService) -> ResultType<()> {
         .unwrap()
         .take_restart_pending()
         .then(Instant::now);
-    #[cfg(windows)]
     if dxgi_recovery_state.lock().unwrap().take_fallback_pending() {
         c.set_gdi();
         log::info!("dxgi recovery exhausted, fall back to gdi");
     }
-    #[cfg(windows)]
     if !scrap::codec::enable_directx_capture() && !c.is_gdi() {
         log::info!("disable dxgi with option, fall back to gdi");
         c.set_gdi();
@@ -518,15 +454,10 @@ fn run(vs: VideoService) -> ResultType<()> {
 
     let start = time::Instant::now();
     let mut last_check_displays = time::Instant::now();
-    #[cfg(windows)]
     let mut try_gdi = 1;
-    #[cfg(windows)]
     log::info!("gdi: {}", c.is_gdi());
-    #[cfg(windows)]
     start_uac_elevation_check();
 
-    #[cfg(target_os = "linux")]
-    let mut would_block_count = 0u32;
     let mut yuv = Vec::new();
     let mut mid_data = Vec::new();
     let mut repeat_encode_counter = 0;
@@ -570,7 +501,6 @@ fn run(vs: VideoService) -> ResultType<()> {
             );
             bail!("SWITCH");
         }
-        #[cfg(windows)]
         if last_portable_service_running != crate::portable_service::client::running() {
             log::info!("switch due to portable service running changed");
             bail!("SWITCH");
@@ -579,13 +509,12 @@ fn run(vs: VideoService) -> ResultType<()> {
             log::info!("switch due to i444 changed");
             bail!("SWITCH");
         }
-        #[cfg(all(windows, feature = "vram"))]
+        #[cfg(feature = "vram")]
         if c.is_gdi() && encoder.input_texture() {
             log::info!("changed to gdi when using vram");
             VRamEncoder::set_fallback_gdi(sp.name(), true);
             bail!("SWITCH");
         }
-        #[cfg(windows)]
         {
             if crate::platform::windows::desktop_changed()
                 && !crate::portable_service::client::running()
@@ -636,7 +565,7 @@ fn run(vs: VideoService) -> ResultType<()> {
                                         vec![],
                                     )
                                 } else {
-                                    #[cfg(all(windows, feature = "vram"))]
+                                    #[cfg(feature = "vram")]
                                     VRamEncoder::set_not_use(sp.name(), true);
                                     screenshot.restore_vram = true;
                                     SCREENSHOTS
@@ -672,7 +601,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                     frame_controller.set_send(now, result.send_conn_ids);
                     send_counter += 1;
                 }
-                #[cfg(windows)]
                 {
                     #[cfg(feature = "vram")]
                     if try_gdi == 1 && !c.is_gdi() {
@@ -687,7 +615,6 @@ fn run(vs: VideoService) -> ResultType<()> {
 
         match res {
             Err(ref e) if e.kind() == WouldBlock => {
-                #[cfg(windows)]
                 if dxgi_recovery_started
                     .map(|started| started.elapsed() >= DXGI_RECOVERY_FRAME_GRACE)
                     .unwrap_or(true)
@@ -699,22 +626,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                             log::info!("No image, fall back to gdi");
                         }
                         try_gdi += 1;
-                    }
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    would_block_count += 1;
-                    if !is_x11() {
-                        if would_block_count >= 100 {
-                            // to-do: Unknown reason for WouldBlock 100 times (seconds = 100 * 1 / fps)
-                            // https://github.com/rustdesk/rustdesk/blob/63e6b2f8ab51743e77a151e2b7ff18816f5fa2fb/libs/scrap/src/common/wayland.rs#L81
-                            //
-                            // Do not reset the capturer for now, as it will cause the prompt to show every few minutes.
-                            // https://github.com/rustdesk/rustdesk/issues/4276
-                            //
-                            // super::wayland::clear();
-                            // bail!("Wayland capturer none 100 times, try restart capture");
-                        }
                     }
                 }
                 if !encoder.latency_free() && yuv.len() > 0 {
@@ -748,7 +659,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                 )?;
             }
             Err(err) => {
-                #[cfg(windows)]
                 // The display-change check can restart capture before error handling below.
                 let recovery_attempt = if !c.is_gdi() && err.kind() == ConnectionReset {
                     dxgi_recovery_state.lock().unwrap().next_attempt()
@@ -759,7 +669,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                 // The previous check in `sp.is_option_true(OPTION_REFRESH)` block may be enough.
                 try_broadcast_display_changed(&sp, display_idx, &c, true)?;
 
-                #[cfg(windows)]
                 if !c.is_gdi() {
                     if err.kind() == ConnectionReset {
                         if let Some(attempt) = recovery_attempt {
@@ -781,10 +690,6 @@ fn run(vs: VideoService) -> ResultType<()> {
                 return Err(err.into());
             }
             _ => {
-                #[cfg(target_os = "linux")]
-                {
-                    would_block_count = 0;
-                }
             }
         }
 
@@ -871,7 +776,7 @@ fn get_encoder_config(
     _portable_service: bool,
     _source: VideoSource,
 ) -> EncoderCfg {
-    #[cfg(all(windows, feature = "vram"))]
+    #[cfg(feature = "vram")]
     if _portable_service || c.is_gdi() {
         log::info!("gdi:{}, portable:{}", c.is_gdi(), _portable_service);
         VRamEncoder::set_not_use(_name, true);
@@ -939,43 +844,6 @@ fn get_encoder_config(
     }
 }
 
-#[cfg(target_os = "android")]
-fn check_change_scale(hardware: bool) -> ResultType<()> {
-    use base::config::keys::OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE as SCALE_SOFT;
-
-    // isStart flag is set at the end of startCapture() in Android, wait it to be set.
-    let n = 60; // 3s
-    for i in 0..n {
-        if scrap::is_start() == Some(true) {
-            log::info!("start flag is set");
-            break;
-        }
-        log::info!("wait for start, {i}");
-        std::thread::sleep(Duration::from_millis(50));
-        if i == n - 1 {
-            log::error!("wait for start timeout");
-        }
-    }
-    let screen_size = scrap::screen_size();
-    let scale_soft = hbb_common::config::option2bool(SCALE_SOFT, &Config::get_option(SCALE_SOFT));
-    let half_scale = !hardware && scale_soft;
-    log::info!("hardware: {hardware}, scale_soft: {scale_soft}, screen_size: {screen_size:?}",);
-    scrap::android::call_main_service_set_by_name(
-        "half_scale",
-        Some(half_scale.to_string().as_str()),
-        None,
-    )
-    .ok();
-    let old_scale = screen_size.2;
-    let new_scale = scrap::screen_size().2;
-    log::info!("old_scale: {old_scale}, new_scale: {new_scale}");
-    if old_scale != new_scale {
-        log::info!("switch due to scale changed, {old_scale} -> {new_scale}");
-        // switch is not a must, but it is better to do so.
-        bail!("SWITCH");
-    }
-    Ok(())
-}
 
 #[inline]
 fn refresh_allowed(unfed: bool, warmed_up: bool, latency_free: bool) -> bool {
@@ -1056,11 +924,8 @@ fn handle_one_frame(
 
 #[inline]
 pub fn refresh() {
-    #[cfg(target_os = "android")]
-    Display::refresh_size();
 }
 
-#[cfg(windows)]
 fn start_uac_elevation_check() {
     static START: Once = Once::new();
     START.call_once(|| {
@@ -1134,7 +999,6 @@ pub fn make_display_changed_msg(
         cursor_embedded: match source {
             VideoSource::Monitor => display_service::capture_cursor_embedded(),
         },
-        #[cfg(not(target_os = "android"))]
         resolutions: Some(SupportedResolutions {
             resolutions: match source {
                 VideoSource::Monitor => {

@@ -4,21 +4,6 @@ use std::{
     println,
 };
 
-#[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
-fn link_pkg_config(name: &str) -> Vec<PathBuf> {
-    // sometimes an override is needed
-    let pc_name = match name {
-        "libvpx" => "vpx",
-        _ => name,
-    };
-    let lib = pkg_config::probe_library(pc_name)
-        .expect(format!(
-            "unable to find '{pc_name}' development headers with pkg-config (feature linux-pkg-config is enabled).
-            try installing '{pc_name}-dev' from your system package manager.").as_str());
-
-    lib.include_paths
-}
-#[cfg(not(all(target_os = "linux", feature = "linux-pkg-config")))]
 fn link_pkg_config(_name: &str) -> Vec<PathBuf> {
     unimplemented!()
 }

@@ -13,10 +13,7 @@
 // https://github.com/krruzic/pulsectl
 
 use super::*;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 use hbb_common::anyhow::anyhow;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use magnum_opus::Application::LowDelay;
 use magnum_opus::{Channels::*, Encoder};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -24,19 +21,12 @@ pub const NAME: &'static str = "audio";
 pub const AUDIO_DATA_SIZE_U8: usize = 960 * 4; // 10ms in 48000 stereo
 static RESTARTING: AtomicBool = AtomicBool::new(false);
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 pub fn new() -> GenericService {
     let svc = EmptyExtraFieldService::new(NAME.to_owned(), true);
     GenericService::repeat::<cpal_impl::State, _, _>(&svc.clone(), 33, cpal_impl::run);
     svc.sp
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub fn new() -> GenericService {
-    let svc = EmptyExtraFieldService::new(NAME.to_owned(), true);
-    GenericService::run(&svc.clone(), pa_impl::run);
-    svc.sp
-}
 
 #[inline]
 fn get_audio_input() -> String {
@@ -51,126 +41,12 @@ pub fn restart() {
     RESTARTING.store(true, Ordering::SeqCst);
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-mod pa_impl {
-    use super::*;
 
-    /// Reading the sample bytes back as `f32` needs a 4-byte aligned pointer.
-    /// Returns an aligned copy only when `data` is not already aligned; `None`
-    /// means the caller can reinterpret `data` where it is, with no copy.
-    fn align_to_32_if_needed(data: &[u8]) -> Option<hbb_common::mem::AlignedU8Vec> {
-        if (data.as_ptr() as usize & 3) == 0 {
-            return None;
-        }
-        let mut buf = hbb_common::mem::aligned_u8_vec(data.len(), 4);
-        buf.extend_from_slice(data);
-        Some(buf)
-    }
 
-    #[tokio::main(flavor = "current_thread")]
-    pub async fn run(sp: EmptyExtraFieldService) -> ResultType<()> {
-        hbb_common::sleep(0.1).await; // one moment to wait for _pa ipc
-        RESTARTING.store(false, Ordering::SeqCst);
-        // The `_pa` ipc is served by the cm, which is not started at a login
-        // screen, so connecting there fails and logs an error every second.
-        // Wait here instead; audio starts once a user logs in. Poll slowly,
-        // `is_prelogin` spawns a process on every call.
-        #[cfg(target_os = "linux")]
-        while crate::platform::is_prelogin() {
-            if !sp.ok() {
-                return Ok(());
-            }
-            hbb_common::sleep(3.).await;
-        }
-        #[cfg(target_os = "linux")]
-        let mut stream = crate::ipc::connect(1000, "_pa").await?;
-        let mut encoder = AudioEncoder::new(Encoder::new(
-            crate::platform::PA_SAMPLE_RATE,
-            Stereo,
-            LowDelay,
-        )?);
-        #[cfg(target_os = "linux")]
-        allow_err!(
-            stream
-                .send(&crate::ipc::Data::Config((
-                    "audio-input".to_owned(),
-                    Some(super::get_audio_input())
-                )))
-                .await
-        );
-        #[cfg(target_os = "linux")]
-        let zero_audio_frame: Vec<f32> = vec![0.; AUDIO_DATA_SIZE_U8 / 4];
-        #[cfg(target_os = "android")]
-        let mut android_data = vec![];
-        while sp.ok() && !RESTARTING.load(Ordering::SeqCst) {
-            sp.snapshot(|sps| {
-                sps.send(create_format_msg(crate::platform::PA_SAMPLE_RATE, 2));
-                Ok(())
-            })?;
-
-            #[cfg(target_os = "linux")]
-            {
-                // The `_pa` peer closing surfaces as `Err` here. Dropping it left the loop polling
-                // a dead socket -- one 0-byte read per poll, ready at once and never `Pending` --
-                // which burned a full core for the rest of the process lifetime.
-                let data = stream.next_raw().await?;
-                if data.len() == 0 {
-                    send_f32(&zero_audio_frame, &mut encoder, &sp);
-                    continue;
-                }
-
-                if data.len() != AUDIO_DATA_SIZE_U8 {
-                    continue;
-                }
-
-                let data: Vec<u8> = data.into();
-                let aligned = align_to_32_if_needed(&data);
-                let bytes = aligned.as_deref().unwrap_or(&data[..]);
-                // SAFETY: `bytes` is 4-byte aligned (either checked above or freshly
-                // allocated with align 4), and only whole f32s are read from it.
-                let data = unsafe {
-                    std::slice::from_raw_parts::<f32>(bytes.as_ptr() as _, bytes.len() / 4)
-                };
-                send_f32(data, &mut encoder, &sp);
-            }
-
-            #[cfg(target_os = "android")]
-            if scrap::android::ffi::get_audio_raw(&mut android_data, &mut vec![]).is_some() {
-                // Keep `android_data` as the reusable receive buffer: overwriting it with
-                // an exact-capacity aligned buffer only made the next `get_audio_raw`
-                // reallocate it, which dropped the alignment again.
-                let aligned = align_to_32_if_needed(&android_data);
-                let bytes = aligned.as_deref().unwrap_or(&android_data[..]);
-                // SAFETY: `bytes` is 4-byte aligned (either checked above or freshly
-                // allocated with align 4), and only whole f32s are read from it.
-                let data = unsafe {
-                    std::slice::from_raw_parts::<f32>(bytes.as_ptr() as _, bytes.len() / 4)
-                };
-                send_f32(data, &mut encoder, &sp);
-            } else {
-                hbb_common::sleep(0.1).await;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[inline]
-#[cfg(feature = "screencapturekit")]
-pub fn is_screen_capture_kit_available() -> bool {
-    cpal::available_hosts()
-        .iter()
-        .any(|host| *host == cpal::HostId::ScreenCaptureKit)
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 mod audio_capture;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 mod audio_capture_error;
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 mod audio_capture_queue;
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
 mod cpal_impl {
     use self::service::{Reset, ServiceSwap};
     use super::audio_capture_error::CaptureErrorHandler;
@@ -186,10 +62,6 @@ mod cpal_impl {
 
     const AUDIO_PACKETS_PER_SECOND: usize = 100;
 
-    #[cfg(feature = "screencapturekit")]
-    lazy_static::lazy_static! {
-        static ref HOST_SCREEN_CAPTURE_KIT: Result<Host, cpal::HostUnavailable> = cpal::host_from_id(cpal::HostId::ScreenCaptureKit);
-    }
 
     #[derive(Default)]
     pub struct State {
@@ -226,8 +98,6 @@ mod cpal_impl {
         }
         if let Some(stream) = &state.stream {
             sp.send_shared(stream.format.clone());
-            #[cfg(target_os = "macos")]
-            log::info!("Audio capture stream recreated; replacement format sent");
         }
         RESTARTING.store(false, Ordering::SeqCst);
         Ok(())
@@ -349,28 +219,7 @@ mod cpal_impl {
         Ok((frames, samples))
     }
 
-    #[cfg(feature = "screencapturekit")]
-    fn get_device() -> ResultType<(Device, SupportedStreamConfig)> {
-        let audio_input = super::get_audio_input();
-        if !audio_input.is_empty() {
-            return get_audio_input(&audio_input);
-        }
-        if !is_screen_capture_kit_available() {
-            return get_audio_input("");
-        }
-        let device = HOST_SCREEN_CAPTURE_KIT
-            .as_ref()?
-            .default_input_device()
-            .with_context(|| "Failed to get default input device for loopback")?;
-        let format = device
-            .default_input_config()
-            .map_err(|e| anyhow!(e))
-            .with_context(|| "Failed to get input output format")?;
-        log::info!("Default input format: {:?}", format);
-        Ok((device, format))
-    }
 
-    #[cfg(windows)]
     fn get_device() -> ResultType<(Device, SupportedStreamConfig)> {
         let audio_input = super::get_audio_input();
         if !audio_input.is_empty() {
@@ -400,27 +249,9 @@ mod cpal_impl {
         Ok((device, format))
     }
 
-    #[cfg(not(any(windows, feature = "screencapturekit")))]
-    fn get_device() -> ResultType<(Device, SupportedStreamConfig)> {
-        let audio_input = super::get_audio_input();
-        get_audio_input(&audio_input)
-    }
 
     fn get_audio_input(audio_input: &str) -> ResultType<(Device, SupportedStreamConfig)> {
         let mut device = None;
-        #[cfg(feature = "screencapturekit")]
-        if !audio_input.is_empty() && is_screen_capture_kit_available() {
-            for d in HOST_SCREEN_CAPTURE_KIT
-                .as_ref()?
-                .devices()
-                .with_context(|| "Failed to get audio devices")?
-            {
-                if d.name().unwrap_or("".to_owned()) == audio_input {
-                    device = Some(d);
-                    break;
-                }
-            }
-        }
         if device.is_none() && !audio_input.is_empty() {
             for d in HOST
                 .devices()
@@ -491,8 +322,6 @@ mod cpal_impl {
             f => bail!("unsupported audio format: {:?}", f),
         };
         stream.play()?;
-        #[cfg(target_os = "macos")]
-        log::info!("Audio capture start call succeeded");
         Ok(ActiveCaptureStream {
             stream: Some(Box::new(stream)),
             format: Arc::new(create_format_msg(sample_rate, ch as _)),
@@ -510,30 +339,6 @@ mod cpal_impl {
             .map(|sample| <f32 as cpal::FromSample<T>>::from_sample_(*sample))
     }
 
-    #[cfg(target_os = "macos")]
-    fn log_capture_startup<T>(
-        data: &[T],
-        received_samples: bool,
-        received_signal: bool,
-    ) -> (bool, bool)
-    where
-        T: cpal::SizedSample,
-        f32: cpal::FromSample<T>,
-    {
-        // Starting capture does not guarantee sample delivery or audible data.
-        if !received_samples && !data.is_empty() {
-            log::info!(
-                "Audio capture received first PCM block: {} samples",
-                data.len()
-            );
-        }
-        let has_signal = received_signal
-            || convert_input_samples(data).any(|sample| sample.is_finite() && sample != 0.0);
-        if !received_signal && has_signal {
-            log::info!("Audio capture received first nonzero PCM");
-        }
-        (received_samples || !data.is_empty(), has_signal)
-    }
 
     fn build_input_stream<T>(
         device: cpal::Device,
@@ -548,8 +353,6 @@ mod cpal_impl {
         let callback_errors = errors.clone();
         let err_fn = move |err| callback_errors.handle(err);
         let processor_errors = errors.clone();
-        #[cfg(target_os = "macos")]
-        let (mut received_samples, mut received_signal) = (false, false);
         let sample_rate_0 = config.sample_rate().0;
         log::debug!("Audio sample rate : {}", output.sample_rate);
         let device_channel = config.channels();
@@ -568,11 +371,6 @@ mod cpal_impl {
             move |data: &[T], _: &InputCallbackInfo| {
                 if processor_errors.needs_restart() {
                     return;
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    (received_samples, received_signal) =
-                        log_capture_startup(data, received_samples, received_signal);
                 }
                 frame.process(convert_input_samples(data), |frame| {
                     processor_errors.process_frame(|| processor.process(frame));
@@ -636,38 +434,7 @@ fn send_f32(data: &[f32], encoder: &mut AudioEncoder, sp: &GenericService) {
     if !encoder.should_encode(data) {
         return;
     }
-    #[cfg(target_os = "android")]
-    {
-        // the permitted opus data size are 120, 240, 480, 960, 1920, and 2880
-        // if data size is bigger than BATCH_SIZE, AND is an integer multiple of BATCH_SIZE
-        // then upload in batches
-        const BATCH_SIZE: usize = 960;
-        let input_size = data.len();
-        if input_size > BATCH_SIZE && input_size % BATCH_SIZE == 0 {
-            let n = input_size / BATCH_SIZE;
-            for i in 0..n {
-                match encoder
-                    .encoder
-                    .encode_vec_float(&data[i * BATCH_SIZE..(i + 1) * BATCH_SIZE], BATCH_SIZE)
-                {
-                    Ok(data) => {
-                        let mut msg_out = Message::new();
-                        msg_out.set_audio_frame(AudioFrame {
-                            data: data.into(),
-                            ..Default::default()
-                        });
-                        sp.send(msg_out);
-                    }
-                    Err(error) => log::warn!("Failed to encode audio frame: {error:?}"),
-                }
-            }
-        } else {
-            log::debug!("invalid audio data size:{} ", input_size);
-            return;
-        }
-    }
 
-    #[cfg(not(target_os = "android"))]
     match encoder.encoder.encode_vec_float(data, data.len() * 6) {
         Ok(data) => {
             let mut msg_out = Message::new();

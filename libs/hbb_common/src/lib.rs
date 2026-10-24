@@ -27,7 +27,6 @@ pub use futures_util;
 pub mod config;
 pub mod mem;
 pub use lazy_static;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use mac_address;
 pub use rand;
 pub use regex;
@@ -39,12 +38,8 @@ pub mod password_security;
 pub use chrono;
 pub use directories_next;
 pub use libc;
-#[cfg(target_os = "linux")]
-pub mod sh;
 pub use base64;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use dlopen;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use machine_uid;
 pub use serde_derive;
 pub use serde_json;
@@ -61,18 +56,12 @@ pub mod stream;
 pub mod websocket;
 #[cfg(feature = "webrtc")]
 pub mod webrtc;
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub use rustls_platform_verifier;
 pub use stream::Stream;
 pub use whoami;
 pub mod tls;
 pub mod verifier;
 pub use async_recursion;
-#[cfg(target_os = "linux")]
-pub use users;
 pub use libloading;
-#[cfg(target_os = "linux")]
-pub use x11;
 
 pub type SessionID = uuid::Uuid;
 
@@ -316,7 +305,6 @@ pub fn get_exe_time() -> SystemTime {
 /// - Windows shutdown: "The media is write protected. (os error 19)"
 /// - macOS (hard to reproduce, reproduced at login screen): "No matching IOPlatformUUID in `ioreg -rd1 -c IOPlatformExpertDevice` command"
 pub fn get_uuid() -> Vec<u8> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -327,28 +315,6 @@ pub fn get_uuid() -> Vec<u8> {
         // Only macOS needs retry logic here because:
         // - macOS: in testing, only one failure occurred when reading at 50ms intervals, so retry helps
         // - Windows: failures during shutdown are persistent, retrying is pointless
-        #[cfg(target_os = "macos")]
-        {
-            static INIT: std::sync::Once = std::sync::Once::new();
-            INIT.call_once(|| {
-                // Keep in sync with upstream handling:
-                // https://github.com/rustdesk/rustdesk/blob/85db6779828349b23ca3eba91cc7cd36c5337797/src/common.rs#L822
-                let username = whoami::username().trim_end_matches('\0').to_owned();
-                let max_retries = if username == "root" { 16 } else { 8 };
-                for i in 0..max_retries {
-                    match machine_uid::get() {
-                        Ok(id) => {
-                            let _ = CACHED_MACHINE_UID.set(id.into());
-                            return;
-                        }
-                        Err(e) => {
-                            log::error!("Failed to get machine uid in macOS retry #{i}: {e}");
-                        }
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-            });
-        }
 
         if let Some(uid) = CACHED_MACHINE_UID.get() {
             return uid.clone();
@@ -444,10 +410,6 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
             // https://docs.rs/flexi_logger/latest/flexi_logger/error_info/index.html#write
             // though async logger more efficient, but it also causes more problems, disable it for now
             let mut path = config::Config::log_path();
-            #[cfg(target_os = "android")]
-            if !config::Config::get_home().exists() {
-                return;
-            }
             if !_name.is_empty() {
                 path.push(_name);
             }

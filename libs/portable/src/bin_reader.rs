@@ -6,12 +6,10 @@ use std::{
 };
 
 // The generic payload, shared by every customer and compiled in once per release.
-#[cfg(windows)]
 const BIN_DATA: &[u8] = include_bytes!("../data.bin");
 
 // The per-customer payload, injected into the RCDATA resource after the template
 // has been built, so that customizing a client needs no recompilation.
-#[cfg(windows)]
 const PACKAGE_RESOURCE_NAME: &str = "RDPKG";
 
 // 4bytes
@@ -136,15 +134,10 @@ fn parse(blob: &'static [u8]) -> Option<(Vec<BinaryData>, String)> {
     Some((parsed, executable))
 }
 
-#[cfg(windows)]
 fn read_embedded() -> Result<(Vec<BinaryData>, String), String> {
     parse(BIN_DATA).ok_or_else(|| "bin file is not valid!".to_owned())
 }
 
-#[cfg(not(windows))]
-fn read_embedded() -> Result<(Vec<BinaryData>, String), String> {
-    Ok(Default::default())
-}
 
 fn parse_package_blob(blob: Option<&'static [u8]>) -> Result<(Vec<BinaryData>, String), String> {
     let Some(blob) = blob else {
@@ -157,20 +150,14 @@ fn parse_package_blob(blob: Option<&'static [u8]>) -> Result<(Vec<BinaryData>, S
     Ok(package)
 }
 
-#[cfg(windows)]
 fn read_package() -> Result<(Vec<BinaryData>, String), String> {
     parse_package_blob(read_resource(PACKAGE_RESOURCE_NAME))
 }
 
-#[cfg(not(windows))]
-fn read_package() -> Result<(Vec<BinaryData>, String), String> {
-    Ok(Default::default())
-}
 
 // Reads an RCDATA resource out of the running image. Resources live in the mapped
 // image for the lifetime of the process, so the slice is genuinely 'static and no
 // copy is needed.
-#[cfg(windows)]
 fn read_resource(name: &str) -> Option<&'static [u8]> {
     use std::ptr::null_mut;
     use winapi::um::libloaderapi::{FindResourceW, LoadResource, LockResource, SizeofResource};

@@ -1,4 +1,3 @@
-#[cfg(windows)]
 use std::os::windows::prelude::*;
 use std::{
     fmt::{Debug, Display},
@@ -46,7 +45,6 @@ pub fn read_dir(path: &Path, include_hidden: bool) -> ResultType<FileDirectory> 
         path: get_string(path),
         ..Default::default()
     };
-    #[cfg(windows)]
     if "/" == &get_string(path) {
         let drives = unsafe { winapi::um::fileapi::GetLogicalDrives() };
         for i in 0..32 {
@@ -82,12 +80,7 @@ pub fn read_dir(path: &Path, include_hidden: bool) -> ResultType<FileDirectory> 
             continue;
         }
         // docs.microsoft.com/en-us/windows/win32/fileio/file-attribute-constants
-        #[cfg(windows)]
         if meta.file_attributes() & 0x2 != 0 {
-            is_hidden = true;
-        }
-        #[cfg(not(windows))]
-        if name.find('.').unwrap_or(usize::MAX) == 0 {
             is_hidden = true;
         }
         if is_hidden && !include_hidden {
@@ -469,7 +462,6 @@ pub fn validate_file_name_no_traversal(name: &str) -> ResultType<()> {
     if has_traversal {
         bail!("path traversal detected in file name");
     }
-    #[cfg(windows)]
     {
         if name.len() >= 2 {
             let bytes = name.as_bytes();
@@ -480,10 +472,6 @@ pub fn validate_file_name_no_traversal(name: &str) -> ResultType<()> {
         if name.starts_with('/') || name.starts_with('\\') {
             bail!("absolute path detected in file name");
         }
-    }
-    #[cfg(not(windows))]
-    if name.starts_with('/') {
-        bail!("absolute path detected in file name");
     }
     Ok(())
 }
@@ -1661,7 +1649,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(windows, ignore = "requires symlink privilege to create test symlink")]
+    #[ignore = "requires symlink privilege to create test symlink"]
     fn path_traversal_e2e_write_rejects_symlink_escape() {
         let tmp_root = TestTempDir::new("rustdesk_e2e_symlink");
         let downloads = tmp_root.join("downloads");
@@ -1671,12 +1659,6 @@ mod tests {
         std::fs::create_dir_all(&outside).expect("create outside dir");
 
         let symlink_path = downloads.join("link");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::symlink;
-            symlink(&outside, &symlink_path).expect("create symlink for test");
-        }
-        #[cfg(windows)]
         {
             use std::os::windows::fs::symlink_dir;
             symlink_dir(&outside, &symlink_path).expect("create directory symlink for test");
@@ -1715,7 +1697,6 @@ mod tests {
         assert_err_contains(err, "path traversal");
     }
 
-    #[cfg(windows)]
     #[test]
     fn set_files_rejects_unc_absolute_path() {
         let mut job = new_validation_job(105);
@@ -1746,15 +1727,8 @@ mod tests {
             .expect_err("null byte in new file name must be rejected");
         assert_err_contains(err_null, "null bytes");
 
-        #[cfg(windows)]
         {
             let err_abs = rename_file(&src_str, "C:\\Windows\\Temp\\payload.txt")
-                .expect_err("absolute new file name must be rejected");
-            assert_err_contains(err_abs, "absolute path");
-        }
-        #[cfg(not(windows))]
-        {
-            let err_abs = rename_file(&src_str, "/tmp/payload.txt")
                 .expect_err("absolute new file name must be rejected");
             assert_err_contains(err_abs, "absolute path");
         }

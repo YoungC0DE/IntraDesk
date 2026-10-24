@@ -1,5 +1,4 @@
 fn main() {
-    #[cfg(windows)]
     {
         use std::io::Write;
         let mut res = winres::WindowsResource::new();

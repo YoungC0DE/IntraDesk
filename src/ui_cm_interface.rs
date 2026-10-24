@@ -1,23 +1,15 @@
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::ipc::Connection;
-#[cfg(not(any(target_os = "ios")))]
 use crate::ipc::{self, Data};
-#[cfg(target_os = "windows")]
 use crate::{clipboard::ClipboardSide, ipc::ClipboardNonFile};
-#[cfg(target_os = "windows")]
 use base::config::keys::*;
-#[cfg(not(any(target_os = "ios")))]
 use base::fs::serialize_transfer_job;
 use base::{
     config::keys::{OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW, OPTION_FILE_TRANSFER_MAX_FILES},
     fs::{self, get_string, is_write_need_confirmation, new_send_confirm, DigestCheckResult},
     message_proto::*,
 };
-#[cfg(target_os = "windows")]
 use clipboard::ContextSend;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::tokio::sync::mpsc::unbounded_channel;
-#[cfg(target_os = "windows")]
 use hbb_common::tokio::sync::Mutex as TokioMutex;
 use hbb_common::{
     allow_err,
@@ -32,11 +24,8 @@ use hbb_common::{
     ResultType,
 };
 use serde_derive::Serialize;
-#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 use std::iter::FromIterator;
-#[cfg(not(any(target_os = "ios")))]
 use std::path::PathBuf;
-#[cfg(target_os = "windows")]
 use std::sync::Arc;
 use std::{
     collections::HashMap,
@@ -49,7 +38,6 @@ use std::{
 
 /// Default maximum number of files allowed per transfer request.
 /// Unit: number of files (not bytes).
-#[cfg(not(any(target_os = "ios")))]
 const DEFAULT_MAX_VALIDATED_FILES: usize = 10_000;
 
 /// Maximum number of files allowed in a single file transfer request.
@@ -63,7 +51,6 @@ const DEFAULT_MAX_VALIDATED_FILES: usize = 10_000;
 /// Unit: number of files (not bytes).
 /// Default: 10,000 files.
 /// Configured via: `OPTION_FILE_TRANSFER_MAX_FILES` ("file-transfer-max-files")
-#[cfg(not(any(target_os = "ios")))]
 static MAX_VALIDATED_FILES: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 
 /// Get the maximum number of files allowed per transfer request.
@@ -77,7 +64,6 @@ static MAX_VALIDATED_FILES: std::sync::OnceLock<usize> = std::sync::OnceLock::ne
 ///   (Note: negative values are not valid for `usize` and will cause parsing to fail.)
 ///
 /// Unit: number of files.
-#[cfg(not(any(target_os = "ios")))]
 #[inline]
 pub fn get_max_validated_files() -> usize {
     // If `OPTION_FILE_TRANSFER_MAX_FILES` unset, negative, or non-integer, use
@@ -110,7 +96,6 @@ pub fn get_max_validated_files() -> usize {
 /// # Returns
 /// * `Ok(())` if within limit
 /// * `Err(String)` with error message if limit exceeded
-#[cfg(not(any(target_os = "ios")))]
 pub fn check_file_count_limit(file_count: usize) -> Result<(), String> {
     let max_files = get_max_validated_files();
     if file_count > max_files {
@@ -142,11 +127,9 @@ pub struct Client {
     pub restart: bool,
     pub from_switch: bool,
     #[serde(skip)]
-    #[cfg(not(any(target_os = "ios")))]
     tx: UnboundedSender<Data>,
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 struct IpcTaskRunner<T: InvokeUiCM> {
     stream: Connection,
     cm: ConnectionManager<T>,
@@ -155,9 +138,7 @@ struct IpcTaskRunner<T: InvokeUiCM> {
     close: bool,
     running: bool,
     conn_id: i32,
-    #[cfg(target_os = "windows")]
     file_transfer_enabled: bool,
-    #[cfg(target_os = "windows")]
     file_transfer_enabled_peer: bool,
     /// Read jobs for CM-side file reading (server to client transfers)
     read_jobs: Vec<fs::TransferJob>,
@@ -233,7 +214,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             file,
             restart,
             from_switch,
-            #[cfg(not(any(target_os = "ios")))]
             tx,
         };
         CLIENTS
@@ -245,7 +225,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
     }
 
     #[inline]
-    #[cfg(target_os = "windows")]
     fn is_authorized(&self, id: i32) -> bool {
         CLIENTS
             .read()
@@ -266,38 +245,20 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
                 .map(|c| c.disconnected = true);
         }
 
-        #[cfg(target_os = "windows")]
         {
             crate::clipboard::try_empty_clipboard_files(ClipboardSide::Host, id);
         }
 
-        #[cfg(any(target_os = "android"))]
-        if CLIENTS
-            .read()
-            .unwrap()
-            .iter()
-            .filter(|(_k, v)| !v.is_file_transfer)
-            .next()
-            .is_none()
-        {
-            if let Err(e) =
-                scrap::android::call_main_service_set_by_name("stop_capture", None, None)
-            {
-                log::debug!("stop_capture err:{}", e);
-            }
-        }
 
         self.ui_handler.remove_connection(id, close);
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn show_elevation(&self, show: bool) {
         self.ui_handler.show_elevation(show);
     }
 }
 
 #[inline]
-#[cfg(not(any(target_os = "ios")))]
 pub fn check_click_time(id: i32) {
     if let Some(client) = CLIENTS.read().unwrap().get(&id) {
         allow_err!(client.tx.send(Data::ClickTime(0)));
@@ -310,7 +271,6 @@ pub fn get_click_time() -> i64 {
 }
 
 #[inline]
-#[cfg(not(any(target_os = "ios")))]
 pub fn authorize(id: i32) {
     if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
         client.authorized = true;
@@ -319,21 +279,12 @@ pub fn authorize(id: i32) {
 }
 
 #[inline]
-#[cfg(not(any(target_os = "ios")))]
 pub fn close(id: i32) {
     if let Some(client) = CLIENTS.read().unwrap().get(&id) {
         allow_err!(client.tx.send(Data::Close));
     };
 }
 
-/// Like `close`, but says the CM's WINDOW closed rather than a person disconnecting this peer.
-/// See `ipc::Data::CmWindowClosed`.
-#[cfg(target_os = "linux")]
-pub fn close_window(id: i32) {
-    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
-        allow_err!(client.tx.send(Data::CmWindowClosed));
-    };
-}
 
 #[inline]
 pub fn remove(id: i32) {
@@ -341,11 +292,7 @@ pub fn remove(id: i32) {
 }
 
 #[inline]
-#[cfg(not(any(target_os = "ios")))]
 pub fn switch_permission(id: i32, name: String, enabled: bool) {
-    #[cfg(target_os = "android")]
-    let is_keyboard_permission = name == "keyboard";
-    #[cfg(not(target_os = "android"))]
     let is_keyboard_permission = false;
     if !option2bool(
         OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW,
@@ -365,31 +312,7 @@ pub fn switch_permission(id: i32, name: String, enabled: bool) {
     };
 }
 
-#[inline]
-#[cfg(target_os = "android")]
-pub fn switch_permission_all(name: String, enabled: bool) {
-    if name != "keyboard"
-        && !option2bool(
-            OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW,
-            &crate::get_builtin_option(OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW),
-        )
-    {
-        log::info!(
-            "blocked cm switch_permission_all by policy, permission={}, enabled={}",
-            name,
-            enabled
-        );
-        return;
-    }
-    for (_, client) in CLIENTS.read().unwrap().iter() {
-        allow_err!(client.tx.send(Data::SwitchPermission {
-            name: name.clone(),
-            enabled
-        }));
-    }
-}
 
-#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 #[inline]
 pub fn get_clients_state() -> String {
     let clients = CLIENTS.read().unwrap();
@@ -403,23 +326,14 @@ pub fn get_clients_length() -> usize {
     clients.len()
 }
 
-#[inline]
-#[cfg(target_os = "android")]
-pub fn has_active_clients() -> bool {
-    let clients = CLIENTS.read().unwrap();
-    clients.values().any(|c| !c.disconnected)
-}
 
 #[inline]
-#[cfg(feature = "flutter")]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn switch_back(id: i32) {
     if let Some(client) = CLIENTS.read().unwrap().get(&id) {
         allow_err!(client.tx.send(Data::SwitchSidesBack));
     };
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl<T: InvokeUiCM> IpcTaskRunner<T> {
     async fn run(&mut self) {
         use hbb_common::config::LocalConfig;
@@ -434,14 +348,11 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
         let mut file_timer =
             crate::rustdesk_interval(time::interval_at(Instant::now() + SEC30, SEC30));
 
-        #[cfg(target_os = "windows")]
         let is_authorized = self.cm.is_authorized(self.conn_id);
 
-        #[cfg(target_os = "windows")]
         let rx_clip_holder;
         let mut rx_clip;
         let _tx_clip;
-        #[cfg(target_os = "windows")]
         if self.conn_id > 0 && is_authorized {
             log::debug!("Clipboard is enabled from client peer: type 1");
             let conn_id = self.conn_id;
@@ -462,12 +373,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
             rx_clip_holder = (Arc::new(TokioMutex::new(rx_clip2)), None);
             rx_clip = rx_clip_holder.0.lock().await;
         }
-        #[cfg(not(target_os = "windows"))]
-        {
-            (_tx_clip, rx_clip) = unbounded_channel::<i32>();
-        }
 
-        #[cfg(target_os = "windows")]
         {
             if ContextSend::is_enabled() {
                 log::debug!("Clipboard is enabled");
@@ -724,9 +630,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
             close: true,
             running: true,
             conn_id: 0,
-            #[cfg(target_os = "windows")]
             file_transfer_enabled: false,
-            #[cfg(target_os = "windows")]
             file_transfer_enabled_peer: false,
             read_jobs: Vec::new(),
         };
@@ -743,10 +647,8 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tokio::main(flavor = "current_thread")]
 pub async fn start_ipc<T: InvokeUiCM>(cm: ConnectionManager<T>) {
-    #[cfg(target_os = "windows")]
     {
         let enabled = crate::Connection::is_permission_enabled_locally(OPTION_ENABLE_FILE_TRANSFER);
         let mut lock = crate::ui_interface::IS_FILE_TRANSFER_ENABLED
@@ -779,75 +681,7 @@ pub async fn start_ipc<T: InvokeUiCM>(cm: ConnectionManager<T>) {
     quit_cm();
 }
 
-#[cfg(target_os = "android")]
-#[tokio::main(flavor = "current_thread")]
-pub async fn start_listen<T: InvokeUiCM>(
-    cm: ConnectionManager<T>,
-    mut rx: mpsc::UnboundedReceiver<Data>,
-    tx: mpsc::UnboundedSender<Data>,
-) {
-    let mut current_id = 0;
-    let mut write_jobs: Vec<fs::TransferJob> = Vec::new();
-    loop {
-        match rx.recv().await {
-            Some(Data::Login {
-                id,
-                is_file_transfer,
-                peer_id,
-                name,
-                avatar,
-                authorized,
-                keyboard,
-                clipboard,
-                audio,
-                file,
-                restart,
-                from_switch,
-                ..
-            }) => {
-                current_id = id;
-                cm.add_connection(
-                    id,
-                    is_file_transfer,
-                    peer_id,
-                    name,
-                    avatar,
-                    authorized,
-                    keyboard,
-                    clipboard,
-                    audio,
-                    file,
-                    restart,
-                    from_switch,
-                    tx.clone(),
-                );
-            }
-            Some(Data::FS(fs)) => {
-                // Android doesn't need CM-side file reading (no need_validate_file_read_access)
-                let mut read_jobs_placeholder: Vec<fs::TransferJob> = Vec::new();
-                handle_fs(
-                    fs,
-                    &mut write_jobs,
-                    &mut read_jobs_placeholder,
-                    &tx,
-                    None,
-                    current_id,
-                )
-                .await;
-            }
-            Some(Data::Close) => {
-                break;
-            }
-            None => {
-                break;
-            }
-            _ => {}
-        }
-    }
-    cm.remove_connection(current_id, true);
-}
 
-#[cfg(not(any(target_os = "ios")))]
 async fn handle_fs(
     fs: ipc::FS,
     write_jobs: &mut Vec<fs::TransferJob>,
@@ -859,58 +693,6 @@ async fn handle_fs(
     // Android is scoped-storage only, so every peer supplied path has to stay inside the
     // app workspace. This is the filesystem boundary, keep it enforced here even though
     // `Connection` rejects out-of-workspace requests earlier as well.
-    #[cfg(target_os = "android")]
-    {
-        // (path, job id, file num, allow empty) of the peer supplied path this message
-        // acts on.
-        let checked: Option<(&str, i32, i32, bool)> = match &fs {
-            ipc::FS::ReadEmptyDirs { dir, .. } => Some((dir.as_str(), -1, -1, false)),
-            ipc::FS::ReadDir { dir, .. } => Some((dir.as_str(), -1, -1, true)),
-            ipc::FS::RemoveDir { path, id, .. } | ipc::FS::CreateDir { path, id } => {
-                Some((path.as_str(), *id, 0, false))
-            }
-            ipc::FS::Rename { path, id, .. } => Some((path.as_str(), *id, 0, false)),
-            ipc::FS::RemoveFile { path, id, file_num } => {
-                Some((path.as_str(), *id, *file_num, false))
-            }
-            ipc::FS::ReadAllFiles { path, id, .. } => Some((path.as_str(), *id, -1, false)),
-            ipc::FS::NewWrite {
-                path, id, file_num, ..
-            }
-            | ipc::FS::ReadFile {
-                path, id, file_num, ..
-            } => Some((path.as_str(), *id, *file_num, false)),
-            _ => None,
-        };
-        if let Some((path, id, file_num, allow_empty)) = checked {
-            if !crate::common::is_peer_path_allowed(path, allow_empty) {
-                log::warn!("Reject file operation outside the app workspace: {}", path);
-                if id >= 0 {
-                    send_raw(fs::new_error(id, "Permission denied", file_num), tx);
-                }
-                return;
-            }
-        }
-        if let ipc::FS::Rename { path, new_name, id } = &fs {
-            let destination = std::path::Path::new(path)
-                .parent()
-                .map(|parent| parent.join(new_name));
-            let allowed = destination
-                .as_deref()
-                .and_then(std::path::Path::to_str)
-                .map_or(false, |path| {
-                    crate::common::is_peer_path_allowed(path, false)
-                });
-            if !allowed {
-                log::warn!(
-                    "Reject rename destination outside the app workspace: {:?}",
-                    destination
-                );
-                send_raw(fs::new_error(*id, "Permission denied", 0), tx);
-                return;
-            }
-        }
-    }
     match fs {
         ipc::FS::ReadEmptyDirs {
             dir,
@@ -1169,7 +951,6 @@ async fn handle_fs(
 /// `src/server/connection.rs`. On non-Windows platforms, Connection handles
 /// read jobs directly. Both use `TransferJob::new_read()` with similar logic.
 /// When modifying job creation or validation, ensure both paths stay in sync.
-#[cfg(not(any(target_os = "ios")))]
 async fn start_read_job(
     path: String,
     file_num: i32,
@@ -1282,7 +1063,6 @@ async fn start_read_job(
 /// `libs/base/src/fs.rs`. The logic mirrors that implementation
 /// but communicates via IPC instead of direct network stream.
 /// When modifying job processing logic, ensure both implementations stay in sync.
-#[cfg(not(any(target_os = "ios")))]
 async fn handle_read_jobs_tick(
     jobs: &mut Vec<fs::TransferJob>,
     tx: &UnboundedSender<Data>,
@@ -1381,7 +1161,6 @@ async fn handle_read_jobs_tick(
 /// `libs/base/src/fs.rs`. It calls `init_data_stream_for_cm()` and sends
 /// digest via IPC instead of direct network stream.
 /// When modifying initialization or digest logic, ensure both paths stay in sync.
-#[cfg(not(any(target_os = "ios")))]
 async fn init_read_job_for_cm(
     job: &mut fs::TransferJob,
     tx: &UnboundedSender<Data>,
@@ -1409,7 +1188,6 @@ async fn init_read_job_for_cm(
     Ok(())
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn read_all_files(
     path: String,
     include_hidden: bool,
@@ -1451,7 +1229,6 @@ async fn read_all_files(
     }
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn read_empty_dirs(dir: &str, include_hidden: bool, tx: &UnboundedSender<Data>) {
     let path = dir.to_owned();
     let path_clone = dir.to_owned();
@@ -1471,7 +1248,6 @@ async fn read_empty_dirs(dir: &str, include_hidden: bool, tx: &UnboundedSender<D
     }
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn read_dir(dir: &str, include_hidden: bool, tx: &UnboundedSender<Data>) {
     let path = {
         if dir.is_empty() {
@@ -1495,7 +1271,6 @@ async fn read_dir(dir: &str, include_hidden: bool, tx: &UnboundedSender<Data>) {
     send_raw(msg_out, tx);
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn handle_result<F: std::fmt::Display, S: std::fmt::Display>(
     res: std::result::Result<std::result::Result<(), F>, S>,
     id: i32,
@@ -1515,7 +1290,6 @@ async fn handle_result<F: std::fmt::Display, S: std::fmt::Display>(
     }
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn remove_file(path: String, id: i32, file_num: i32, tx: &UnboundedSender<Data>) {
     handle_result(
         spawn_blocking(move || fs::remove_file(&path)).await,
@@ -1526,7 +1300,6 @@ async fn remove_file(path: String, id: i32, file_num: i32, tx: &UnboundedSender<
     .await;
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn create_dir(path: String, id: i32, tx: &UnboundedSender<Data>) {
     handle_result(
         spawn_blocking(move || fs::create_dir(&path)).await,
@@ -1537,7 +1310,6 @@ async fn create_dir(path: String, id: i32, tx: &UnboundedSender<Data>) {
     .await;
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn rename_file(path: String, new_name: String, id: i32, tx: &UnboundedSender<Data>) {
     handle_result(
         spawn_blocking(move || fs::rename_file(&path, &new_name)).await,
@@ -1548,7 +1320,6 @@ async fn rename_file(path: String, new_name: String, id: i32, tx: &UnboundedSend
     .await;
 }
 
-#[cfg(not(any(target_os = "ios")))]
 async fn remove_dir(path: String, id: i32, recursive: bool, tx: &UnboundedSender<Data>) {
     let path = fs::get_path(&path);
     handle_result(
@@ -1567,7 +1338,6 @@ async fn remove_dir(path: String, id: i32, recursive: bool, tx: &UnboundedSender
     .await;
 }
 
-#[cfg(not(any(target_os = "ios")))]
 fn send_raw(msg: Message, tx: &UnboundedSender<Data>) {
     match msg.write_to_bytes() {
         Ok(bytes) => {
@@ -1582,7 +1352,6 @@ pub fn can_elevate() -> bool {
 }
 
 pub fn elevate_portable(_id: i32) {
-    #[cfg(windows)]
     {
         let lock = CLIENTS.read().unwrap();
         if let Some(s) = lock.get(&_id) {
@@ -1593,7 +1362,6 @@ pub fn elevate_portable(_id: i32) {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn quit_cm() {
     // in case of std::process::exit not work
     log::info!("quit cm");
@@ -1608,9 +1376,6 @@ pub fn quit_cm() {
     // NOTE: a client merely disconnecting does not come here, the Flutter side
     // closes the window then, so this is a fallback rather than an explanation
     // for the stale processes of #15698.
-    #[cfg(all(target_os = "linux", feature = "flutter"))]
-    std::process::exit(0);
-    #[cfg(not(all(target_os = "linux", feature = "flutter")))]
     crate::platform::quit_gui();
 }
 
@@ -1624,7 +1389,6 @@ mod tests {
     use std::fs;
 
     #[test]
-    #[cfg(not(any(target_os = "ios")))]
     fn read_all_files_success() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
@@ -1650,7 +1414,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(any(target_os = "ios")))]
     fn read_dir_reports_success_and_error() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {

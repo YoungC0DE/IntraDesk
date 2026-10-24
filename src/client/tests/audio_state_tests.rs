@@ -16,7 +16,6 @@ const MAX_PACKET_BYTES: usize = 4_096;
 const SAMPLE_VALUE: f32 = 0.25;
 const MONO_CHANNELS: u16 = 1;
 
-#[cfg(target_os = "windows")]
 #[path = "audio_playback_recovery_tests.rs"]
 mod recovery_tests;
 

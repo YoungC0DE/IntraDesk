@@ -21,7 +21,7 @@ use hbb_common::{
     whoami, SessionID, Stream,
 };
 use rdev::{Event, EventType::*, KeyCode};
-#[cfg(all(feature = "vram", feature = "flutter"))]
+#[cfg(feature = "vram")]
 use std::ffi::c_void;
 use std::{
     collections::HashMap,
@@ -41,7 +41,6 @@ use crate::client::{
     input_os_password, send_mouse, send_pointer_device_event, FileManager, Key, LoginConfigHandler,
     QualityStatus, KEY_MAP,
 };
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::common::GrabState;
 use crate::keyboard;
 use crate::{client::Data, client::Interface};
@@ -66,7 +65,6 @@ pub struct Session<T: InvokeUiSession> {
     pub reconnect_count: Arc<AtomicUsize>,
     // Every cursor shape as the peer sent it, compressed, by the id the UI knows it by. The
     // peer sends a shape once, and a window asks for it whenever it has to draw it again.
-    #[cfg(feature = "flutter")]
     pub cursor_shapes: Arc<RwLock<HashMap<u64, CursorData>>>,
 }
 
@@ -169,7 +167,6 @@ impl ChangeDisplayRecord {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl SessionPermissionConfig {
     pub fn is_text_clipboard_required(&self) -> bool {
         *self.server_clipboard_enabled.read().unwrap()
@@ -178,18 +175,9 @@ impl SessionPermissionConfig {
             && !self.lc.read().unwrap().view_only.v
     }
 
-    #[cfg(feature = "unix-file-copy-paste")]
-    pub fn is_file_clipboard_required(&self) -> bool {
-        let lc = self.lc.read().unwrap();
-        *self.server_keyboard_enabled.read().unwrap()
-            && *self.server_file_transfer_enabled.read().unwrap()
-            && lc.enable_file_copy_paste.v
-            && !lc.view_only.v
-    }
 }
 
 impl<T: InvokeUiSession> Session<T> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn get_permission_config(&self) -> SessionPermissionConfig {
         SessionPermissionConfig {
             lc: self.lc.clone(),
@@ -215,7 +203,6 @@ impl<T: InvokeUiSession> Session<T> {
             .eq(&ConnType::DEFAULT_CONN)
     }
 
-    #[cfg(feature = "flutter")]
     pub fn is_multi_ui_session(&self) -> bool {
         self.ui_handler.is_multi_ui_session()
     }
@@ -370,7 +357,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.read().unwrap().get_toggle_option(&name)
     }
 
-    #[cfg(not(target_os = "ios"))]
     pub fn is_text_clipboard_required(&self) -> bool {
         *self.server_clipboard_enabled.read().unwrap()
             && *self.server_keyboard_enabled.read().unwrap()
@@ -378,7 +364,6 @@ impl<T: InvokeUiSession> Session<T> {
             && !self.lc.read().unwrap().view_only.v
     }
 
-    #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
     pub fn is_file_clipboard_required(&self) -> bool {
         let lc = self.lc.read().unwrap();
         *self.server_keyboard_enabled.read().unwrap()
@@ -387,7 +372,6 @@ impl<T: InvokeUiSession> Session<T> {
             && !lc.view_only.v
     }
 
-    #[cfg(feature = "flutter")]
     pub fn refresh_video(&self, display: i32) {
         if crate::common::is_support_multi_ui_session_num(self.lc.read().unwrap().version) {
             self.send(Data::Message(LoginConfigHandler::refresh_display(
@@ -669,13 +653,11 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn enter(&self, keyboard_mode: String) {
         let session_id = self.lc.read().unwrap().session_id as u128;
         keyboard::client::change_grab_status(GrabState::Run, &keyboard_mode, session_id);
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     pub fn leave(&self, keyboard_mode: String) {
         let session_id = self.lc.read().unwrap().session_id as u128;
         keyboard::client::change_grab_status(GrabState::Wait, &keyboard_mode, session_id);
@@ -711,20 +693,7 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::Message(msg_out));
     }
 
-    #[cfg(any(target_os = "ios"))]
-    pub fn handle_flutter_raw_key_event(
-        &self,
-        _session_id: SessionID,
-        _keyboard_mode: &str,
-        _name: &str,
-        _platform_code: i32,
-        _position_code: i32,
-        _lock_modes: i32,
-        _down_or_up: bool,
-    ) {
-    }
 
-    #[cfg(not(any(target_os = "ios")))]
     pub fn handle_flutter_raw_key_event(
         &self,
         session_id: SessionID,
@@ -749,7 +718,6 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    #[cfg(not(any(target_os = "ios")))]
     fn _handle_raw_key_non_flutter_simulation(
         &self,
         session_id: SessionID,
@@ -765,10 +733,7 @@ impl<T: InvokeUiSession> Session<T> {
         let platform_code: u32 = platform_code as _;
         let position_code: KeyCode = position_code as _;
 
-        #[cfg(not(target_os = "windows"))]
-        let key = rdev::key_from_code(position_code) as rdev::Key;
         // Windows requires special handling
-        #[cfg(target_os = "windows")]
         let key = rdev::get_win_key(platform_code, position_code);
 
         let event_type = if down_or_up {
@@ -783,7 +748,6 @@ impl<T: InvokeUiSession> Session<T> {
             position_code: position_code as _,
             event_type,
             usb_hid: 0,
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
             extra_data: 0,
         };
         keyboard::client::process_event_with_session(
@@ -853,31 +817,14 @@ impl<T: InvokeUiSession> Session<T> {
     ) {
         let key = rdev::usb_hid_key_from_code(usb_hid as _);
 
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        let position_code: KeyCode = 0;
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        let platform_code: KeyCode = 0;
 
-        #[cfg(target_os = "windows")]
         let platform_code: u32 = rdev::win_code_from_key(key).unwrap_or(0);
-        #[cfg(target_os = "windows")]
         let position_code: KeyCode = rdev::win_scancode_from_key(key).unwrap_or(0) as _;
 
-        #[cfg(not(any(target_os = "windows", target_os = "android", target_os = "ios")))]
-        let position_code: KeyCode = rdev::code_from_key(key).unwrap_or(0) as _;
-        #[cfg(not(any(
-            target_os = "windows",
-            target_os = "android",
-            target_os = "ios",
-            target_os = "linux"
-        )))]
-        let platform_code: u32 = position_code as _;
         // For translate mode.
         // We need to set the platform code (keysym) if is AltGr.
         // https://github.com/rustdesk/rustdesk/blob/07cf1b4db5ef2f925efd3b16b87c33ce03c94809/src/keyboard.rs#L1029
         // https://github.com/flutter/flutter/issues/153811
-        #[cfg(target_os = "linux")]
-        let platform_code: u32 = position_code as _;
 
         let event_type = if down_or_up {
             KeyPress(key)
@@ -899,11 +846,7 @@ impl<T: InvokeUiSession> Session<T> {
             platform_code,
             position_code: position_code as _,
             event_type,
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            usb_hid: usb_hid as _,
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             usb_hid: 0,
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
             extra_data: 0,
         };
         keyboard::client::process_event_with_session(
@@ -1014,14 +957,12 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     #[inline]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn is_scroll_reverse_mode(&self) -> bool {
         self.lc.read().unwrap().reverse_mouse_wheel.eq("Y")
     }
 
     #[inline]
     fn get_scroll_xy(&self, xy: (i32, i32)) -> (i32, i32) {
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if self.is_scroll_reverse_mode() {
             return (-xy.0, -xy.1);
         }
@@ -1040,7 +981,6 @@ impl<T: InvokeUiSession> Session<T> {
     ) {
         #[allow(unused_mut)]
         let mut command = command;
-        #[cfg(windows)]
         {
             if !command && crate::platform::windows::get_win_key_state() {
                 command = true;
@@ -1236,11 +1176,7 @@ impl<T: InvokeUiSession> Session<T> {
         self.send(Data::ElevateWithLogon(username, password));
     }
 
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    pub fn switch_sides(&self) {}
 
-    #[cfg(feature = "flutter")]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     #[tokio::main(flavor = "current_thread")]
     pub async fn switch_sides(&self) {
         match crate::ipc::connect(1000, "").await {
@@ -1434,18 +1370,15 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn job_progress(&self, id: i32, file_num: i32, speed: f64, finished_size: f64);
     fn on_rgba(&self, display: usize, rgba: &mut scrap::ImageRgb);
     fn msgbox(&self, msgtype: &str, title: &str, text: &str, link: &str, retry: bool);
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    fn clipboard(&self, content: String);
     fn cancel_msgbox(&self, tag: &str);
     fn switch_back(&self, id: &str);
     fn portable_service_running(&self, running: bool);
     fn get_rgba(&self, display: usize) -> *const u8;
     fn next_rgba(&self, display: usize);
-    #[cfg(all(feature = "vram", feature = "flutter"))]
+    #[cfg(feature = "vram")]
     fn on_texture(&self, display: usize, texture: *mut c_void);
     fn set_multiple_windows_session(&self, sessions: Vec<WindowsSession>);
     fn set_current_display(&self, disp_idx: i32);
-    #[cfg(feature = "flutter")]
     fn is_multi_ui_session(&self) -> bool;
     fn update_empty_dirs(&self, _res: ReadEmptyDirsResponse) {}
     fn handle_screenshot_resp(&self, sid: String, msg: String);
@@ -1533,7 +1466,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
             );
         }
         self.on_connected(self.lc.read().unwrap().conn_type);
-        #[cfg(windows)]
         {
             let mut path = std::env::temp_dir();
             path.push(self.get_id());

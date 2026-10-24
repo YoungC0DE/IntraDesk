@@ -9,7 +9,6 @@ use std::{
 use serde_json::{json, Map, Value};
 
 use base::{config::keys, message_proto::*};
-#[cfg(not(target_os = "ios"))]
 use hbb_common::whoami;
 use hbb_common::{
     anyhow::{anyhow, Context},
@@ -105,14 +104,6 @@ impl Drop for SimpleCallOnReturn {
 }
 
 pub fn global_init() -> bool {
-    #[cfg(all(target_os = "linux", feature = "drm"))]
-    crate::platform::linux::dispatch_wayland_display_probe();
-    #[cfg(target_os = "linux")]
-    {
-        if !crate::platform::linux::is_x11() {
-            crate::server::wayland::init();
-        }
-    }
     true
 }
 
@@ -151,17 +142,7 @@ pub fn cursor_content_id(width: i32, height: i32, hotx: i32, hoty: i32, colors: 
     hasher.digest() & ((1 << 53) - 1)
 }
 
-#[inline]
-#[cfg(feature = "unix-file-copy-paste")]
-pub fn is_support_file_copy_paste(ver: &str) -> bool {
-    is_support_file_copy_paste_num(hbb_common::get_version_number(ver))
-}
 
-#[inline]
-#[cfg(feature = "unix-file-copy-paste")]
-pub fn is_support_file_copy_paste_num(ver: i64) -> bool {
-    ver >= hbb_common::get_version_number("1.3.8")
-}
 
 pub fn is_support_file_paste_if_macos(ver: &str) -> bool {
     hbb_common::get_version_number(ver) >= hbb_common::get_version_number("1.3.9")
@@ -209,67 +190,13 @@ pub fn is_server() -> bool {
 
 #[inline]
 pub fn need_fs_cm_send_files() -> bool {
-    #[cfg(windows)]
     {
         is_server()
     }
-    #[cfg(not(windows))]
-    {
-        false
-    }
 }
 
-/// Android is scoped-storage only: the peer may never touch anything outside the app
-/// workspace (`Config::get_home()`, i.e. the app-specific external files directory).
-///
-/// Every peer supplied path must be validated with this before it reaches the
-/// filesystem, for reads, writes, renames, creations and deletions alike. The path is
-/// resolved to its canonical form (of the deepest existing ancestor, so paths that are
-/// about to be created are handled too) so symlinks cannot escape the workspace.
-///
-/// Only the `ReadDir` protocol action treats an empty path as the home directory.
-/// Callers must opt in to that protocol-specific behavior with `allow_empty`.
-#[cfg(target_os = "android")]
-pub fn is_peer_path_allowed(path: &str, allow_empty: bool) -> bool {
-    use std::path::{Component, Path, PathBuf};
-
-    // Canonicalize the deepest existing ancestor and re-append the missing tail.
-    fn resolve(path: &Path) -> Option<PathBuf> {
-        let mut tail: Vec<std::ffi::OsString> = Vec::new();
-        let mut base = path.to_path_buf();
-        loop {
-            if let Ok(mut resolved) = base.canonicalize() {
-                while let Some(component) = tail.pop() {
-                    resolved.push(component);
-                }
-                return Some(resolved);
-            }
-            tail.push(base.file_name()?.to_os_string());
-            if !base.pop() {
-                return None;
-            }
-        }
-    }
-
-    if path.is_empty() {
-        return allow_empty;
-    }
-    let path = Path::new(path);
-    // `..` is never needed by the protocol and would defeat the prefix check below.
-    if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
-        return false;
-    }
-    let home = Config::get_home();
-    let home = home.canonicalize().unwrap_or(home);
-    if home.as_os_str().is_empty() {
-        return false;
-    }
-    // `Path::starts_with` compares whole components, and is true for equal paths.
-    resolve(path).map_or(false, |target| target.starts_with(&home))
-}
 
 #[inline]
-#[cfg(not(target_os = "android"))]
 pub fn is_peer_path_allowed(_path: &str, _allow_empty: bool) -> bool {
     true
 }
@@ -614,7 +541,6 @@ pub fn test_nat_type() {
         }
         IS_RUNNING.store(true, Ordering::SeqCst);
 
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         crate::ipc::get_socks_ws();
         let is_direct = Config::get_socks().is_none() && !config::use_ws();
         if !is_direct {
@@ -701,9 +627,6 @@ async fn test_nat_type_() -> ResultType<bool> {
 }
 
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let (mut a, mut b) = get_rendezvous_server_(ms_timeout);
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let (mut a, mut b) = get_rendezvous_server_(ms_timeout).await;
     let mut b: Vec<String> = b
         .drain(..)
@@ -719,29 +642,14 @@ pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, boo
     (a, b, c)
 }
 
-#[inline]
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn get_rendezvous_server_(_ms_timeout: u64) -> (String, Vec<String>) {
-    (
-        Config::get_rendezvous_server(),
-        Config::get_rendezvous_servers(),
-    )
-}
 
 #[inline]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn get_rendezvous_server_(ms_timeout: u64) -> (String, Vec<String>) {
     crate::ipc::get_rendezvous_server(ms_timeout).await
 }
 
-#[inline]
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub async fn get_nat_type(_ms_timeout: u64) -> i32 {
-    Config::get_nat_type()
-}
 
 #[inline]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub async fn get_nat_type(ms_timeout: u64) -> i32 {
     crate::ipc::get_nat_type(ms_timeout).await
 }
@@ -780,9 +688,6 @@ pub fn test_rendezvous_server() {
 }
 
 pub fn refresh_rendezvous_server() {
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    test_rendezvous_server();
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     std::thread::spawn(|| {
         if crate::ipc::test_rendezvous_server().is_err() {
             test_rendezvous_server();
@@ -791,14 +696,6 @@ pub fn refresh_rendezvous_server() {
 }
 
 pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::process::Child> {
-    #[cfg(target_os = "linux")]
-    if let Ok(appdir) = std::env::var("APPDIR") {
-        let appimage_cmd = std::path::Path::new(&appdir).join("AppRun");
-        if appimage_cmd.exists() {
-            log::info!("path: {:?}", appimage_cmd);
-            return std::process::Command::new(appimage_cmd).args(&args).spawn();
-        }
-    }
     let cmd = std::env::current_exe()?;
     let result = std::process::Command::new(cmd).args(&args).spawn();
     if let Err(err) = result.as_ref() {
@@ -810,16 +707,12 @@ pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::p
 #[inline]
 pub fn username() -> String {
     // fix bug of whoami
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     return whoami::username().trim_end_matches('\0').to_owned();
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    return DEVICE_NAME.lock().unwrap().clone();
 }
 
 // Exactly the implementation of "whoami::hostname()".
 // This wrapper is to suppress warnings.
 #[inline(always)]
-#[cfg(not(target_os = "ios"))]
 pub fn whoami_hostname() -> String {
     let mut hostname = whoami::fallible::hostname().unwrap_or_else(|_| "localhost".to_string());
     hostname.make_ascii_lowercase();
@@ -828,19 +721,12 @@ pub fn whoami_hostname() -> String {
 
 #[inline]
 pub fn hostname() -> String {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         #[allow(unused_mut)]
         let mut name = whoami_hostname();
         // some time, there is .local, some time not, so remove it for osx
-        #[cfg(target_os = "macos")]
-        if name.ends_with(".local") {
-            name = name.trim_end_matches(".local").to_owned();
-        }
         name
     }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    return DEVICE_NAME.lock().unwrap().clone();
 }
 
 #[inline]
@@ -865,14 +751,10 @@ pub fn get_sysinfo() -> serde_json::Value {
     let num_pcpus = num_cpus::get_physical();
     let mut os = system.distribution_id();
     os = format!("{} / {}", os, system.long_os_version().unwrap_or_default());
-    #[cfg(windows)]
     {
         os = format!("{os} - {}", system.os_version().unwrap_or_default());
     }
     let hostname = hostname(); // sys.hostname() return localhost on android in my test
-    #[cfg(any(target_os = "android", target_os = "ios"))]
-    let out;
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let mut out;
     out = json!({
         "cpu": format!("{cpu}{num_cpus}/{num_pcpus} cores"),
@@ -880,7 +762,6 @@ pub fn get_sysinfo() -> serde_json::Value {
         "os": os,
         "hostname": hostname,
     });
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let username = crate::platform::get_active_username();
         if !username.is_empty() && (!cfg!(windows) || username != "SYSTEM") {
@@ -943,14 +824,6 @@ pub fn get_uri_prefix() -> String {
     format!("{}://", get_app_name().to_lowercase())
 }
 
-#[cfg(target_os = "macos")]
-pub fn get_full_name() -> String {
-    format!(
-        "{}.{}",
-        hbb_common::config::ORG.read().unwrap(),
-        hbb_common::config::APP_NAME.read().unwrap(),
-    )
-}
 
 pub fn get_custom_rendezvous_server(custom: String) -> String {
     if !custom.is_empty() {
@@ -1128,7 +1001,6 @@ pub fn make_empty_dirs_response_to_json(res: &ReadEmptyDirsResponse) -> String {
 /// 1. Try to send the url scheme from ipc.
 /// 2. If failed to send the url scheme, we open a new main window to handle this url scheme.
 pub fn handle_url_scheme(url: String) {
-    #[cfg(not(target_os = "ios"))]
     if let Err(err) = crate::ipc::send_url_scheme(url.clone()) {
         log::debug!("Send the url to the existing flutter process failed, {}. Let's open a new program to handle this.", err);
         let _ = crate::run_me(vec![url]);
@@ -1148,9 +1020,6 @@ pub fn decode64<T: AsRef<[u8]>>(input: T) -> Result<Vec<u8>, base64::DecodeError
 }
 
 pub async fn get_key(sync: bool) -> String {
-    #[cfg(target_os = "ios")]
-    let mut key = Config::get_option("key");
-    #[cfg(not(target_os = "ios"))]
     let mut key = if sync {
         Config::get_option("key")
     } else {
@@ -1201,7 +1070,7 @@ pub async fn get_next_nonkeyexchange_msg(
     None
 }
 
-#[cfg(all(target_os = "windows", not(target_pointer_width = "64")))]
+#[cfg(not(target_pointer_width = "64"))]
 pub fn check_process(arg: &str, same_session_id: bool) -> bool {
     let mut path = std::env::current_exe().unwrap_or_default();
     if let Ok(linked) = path.read_link() {
@@ -1228,14 +1097,8 @@ pub fn check_process(arg: &str, same_session_id: bool) -> bool {
 }
 
 #[allow(unused_mut)]
-#[cfg(not(all(target_os = "windows", not(target_pointer_width = "64"))))]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(not(target_pointer_width = "64")))]
 pub fn check_process(arg: &str, mut same_uid: bool) -> bool {
-    #[cfg(target_os = "macos")]
-    if !crate::platform::is_root() && !same_uid {
-        log::warn!("Can not get other process's command line arguments on macos without root");
-        same_uid = true;
-    }
     use hbb_common::sysinfo::System;
     let mut sys = System::new();
     sys.refresh_processes();
@@ -1498,8 +1361,6 @@ pub fn load_custom_client() {
     else {
         return;
     };
-    #[cfg(target_os = "macos")]
-    let path = path.join("../Resources");
     let path = path.join("custom.txt");
     if path.is_file() {
         let Ok(data) = std::fs::read_to_string(&path) else {
@@ -1568,20 +1429,8 @@ fn read_custom_client_advanced_settings(
     }
 }
 
-#[inline]
-#[cfg(target_os = "macos")]
-pub fn get_dst_align_rgba() -> usize {
-    // https://developer.apple.com/forums/thread/712709
-    // Memory alignment should be multiple of 64.
-    if crate::ui_interface::use_texture_render() {
-        64
-    } else {
-        1
-    }
-}
 
 #[inline]
-#[cfg(not(target_os = "macos"))]
 pub fn get_dst_align_rgba() -> usize {
     1
 }

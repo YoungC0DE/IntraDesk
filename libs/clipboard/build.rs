@@ -1,4 +1,3 @@
-#[cfg(target_os = "windows")]
 fn build_c_impl() {
     let mut build = cc::Build::new();
 
@@ -30,6 +29,5 @@ fn build_c_impl() {
 }
 
 fn main() {
-    #[cfg(target_os = "windows")]
     build_c_impl();
 }

@@ -1,4 +1,3 @@
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::clipboard::{update_clipboard, ClipboardSide};
 use base::message_proto::*;
 use hbb_common::ResultType;
@@ -77,7 +76,6 @@ impl Screenshot {
                 std::fs::write(p, data)?;
             }
             ScreenshotAction::CopyToClipboard => {
-                #[cfg(not(any(target_os = "android", target_os = "ios")))]
                 {
                     let clips = vec![Clipboard {
                         compress: false,

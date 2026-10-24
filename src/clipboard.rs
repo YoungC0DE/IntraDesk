@@ -1,7 +1,4 @@
-#[cfg(not(target_os = "android"))]
 use arboard::{ClipboardData, ClipboardFormat};
-#[cfg(target_os = "linux")]
-use arboard::{LinuxClipboardKind, SetExtLinux};
 use hbb_common::{bail, log, ResultType};
 use base::message_proto::*;
 use std::{
@@ -10,14 +7,11 @@ use std::{
 };
 
 pub const CLIPBOARD_NAME: &'static str = "clipboard";
-#[cfg(feature = "unix-file-copy-paste")]
-pub const FILE_CLIPBOARD_NAME: &'static str = "file-clipboard";
 pub const CLIPBOARD_INTERVAL: u64 = 333;
 
 pub const OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS: &str =
     "allow-sync-clipboard-between-sessions";
 
-#[cfg(all(feature = "flutter", not(any(target_os = "android", target_os = "ios"))))]
 pub fn is_sync_clipboard_between_sessions_enabled() -> bool {
     hbb_common::config::option2bool(
         OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS,
@@ -31,7 +25,6 @@ const RUSTDESK_CLIPBOARD_OWNER_FORMAT: &'static str = "dyn.com.rustdesk.owner";
 // Add special format for Excel XML Spreadsheet
 const CLIPBOARD_FORMAT_EXCEL_XML_SPREADSHEET: &'static str = "XML Spreadsheet";
 
-#[cfg(not(target_os = "android"))]
 lazy_static::lazy_static! {
     static ref ARBOARD_MTX: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
     // For updating in server and getting content in cm.
@@ -41,12 +34,9 @@ lazy_static::lazy_static! {
     static ref CLIPBOARD_CTX: Arc<Mutex<Option<ClipboardContext>>> = Arc::new(Mutex::new(None));
 }
 
-#[cfg(not(target_os = "android"))]
 const CLIPBOARD_GET_MAX_RETRY: usize = 3;
-#[cfg(not(target_os = "android"))]
 const CLIPBOARD_GET_RETRY_INTERVAL_DUR: Duration = Duration::from_millis(33);
 
-#[cfg(not(target_os = "android"))]
 fn valid_rgba_dimensions(width: i32, height: i32, data_len: usize) -> Option<(usize, usize)> {
     let width = usize::try_from(width).ok()?;
     let height = usize::try_from(height).ok()?;
@@ -57,7 +47,6 @@ fn valid_rgba_dimensions(width: i32, height: i32, data_len: usize) -> Option<(us
     (data_len == expected_len).then_some((width, height))
 }
 
-#[cfg(not(target_os = "android"))]
 const SUPPORTED_FORMATS: &[ClipboardFormat] = &[
     ClipboardFormat::Text,
     ClipboardFormat::Html,
@@ -65,13 +54,10 @@ const SUPPORTED_FORMATS: &[ClipboardFormat] = &[
     ClipboardFormat::ImageRgba,
     ClipboardFormat::ImagePng,
     ClipboardFormat::ImageSvg,
-    #[cfg(feature = "unix-file-copy-paste")]
-    ClipboardFormat::FileUrl,
     ClipboardFormat::Special(CLIPBOARD_FORMAT_EXCEL_XML_SPREADSHEET),
     ClipboardFormat::Special(RUSTDESK_CLIPBOARD_OWNER_FORMAT),
 ];
 
-#[cfg(not(target_os = "android"))]
 pub fn check_clipboard(
     ctx: &mut Option<ClipboardContext>,
     side: ClipboardSide,
@@ -81,17 +67,7 @@ pub fn check_clipboard(
     Some(msg)
 }
 
-#[cfg(target_os = "linux")]
-pub fn peek_clipboard(
-    ctx: &mut Option<ClipboardContext>,
-    side: ClipboardSide,
-    force: bool,
-) -> Option<Message> {
-    let (msg, _) = read_clipboard_message(ctx, side, force)?;
-    Some(msg)
-}
 
-#[cfg(not(target_os = "android"))]
 fn read_clipboard_message(
     ctx: &mut Option<ClipboardContext>,
     side: ClipboardSide,
@@ -117,105 +93,11 @@ fn read_clipboard_message(
     None
 }
 
-#[cfg(all(feature = "unix-file-copy-paste", target_os = "macos"))]
-pub fn is_file_url_set_by_rustdesk(url: &Vec<String>) -> bool {
-    if url.len() != 1 {
-        return false;
-    }
-    url.iter()
-        .next()
-        .map(|s| {
-            for prefix in &["file:///tmp/.rustdesk_", "//tmp/.rustdesk_"] {
-                if s.starts_with(prefix) {
-                    return s[prefix.len()..].parse::<uuid::Uuid>().is_ok();
-                }
-            }
-            false
-        })
-        .unwrap_or(false)
-}
 
-#[cfg(feature = "unix-file-copy-paste")]
-pub fn check_clipboard_files(
-    ctx: &mut Option<ClipboardContext>,
-    side: ClipboardSide,
-    force: bool,
-) -> Option<Vec<String>> {
-    if ctx.is_none() {
-        *ctx = ClipboardContext::new().ok();
-    }
-    let ctx2 = ctx.as_mut()?;
-    match ctx2.get_files(side, force) {
-        Ok(Some(urls)) => {
-            if !urls.is_empty() {
-                return Some(urls);
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to get clipboard file urls. {}", e);
-        }
-        _ => {}
-    }
-    None
-}
 
-#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
-pub fn update_clipboard_files(files: Vec<String>, side: ClipboardSide) {
-    if !files.is_empty() {
-        std::thread::spawn(move || {
-            do_update_clipboard_(vec![ClipboardData::FileUrl(files)], side);
-        });
-    }
-}
 
-#[cfg(feature = "unix-file-copy-paste")]
-pub fn try_empty_clipboard_files(_side: ClipboardSide, _conn_id: i32) {
-    std::thread::spawn(move || {
-        if let Err(e) = try_empty_clipboard_files_sync(_side, _conn_id) {
-            log::error!("Failed to empty clipboard files: {}", e);
-        }
-    });
-}
 
-#[cfg(feature = "unix-file-copy-paste")]
-pub fn try_empty_clipboard_files_sync(_side: ClipboardSide, _conn_id: i32) -> ResultType<()> {
-    let mut ctx = CLIPBOARD_CTX.lock().unwrap();
-    if ctx.is_none() {
-        match ClipboardContext::new() {
-            Ok(x) => {
-                *ctx = Some(x);
-            }
-            Err(e) => {
-                log::error!("Failed to create clipboard context: {}", e);
-                bail!("Failed to create clipboard context: {}", e);
-            }
-        }
-    }
-    #[allow(unused_mut)]
-    if let Some(mut ctx) = ctx.as_mut() {
-        #[cfg(target_os = "linux")]
-        {
-            use clipboard::platform::unix;
-            if unix::fuse::empty_local_files(_side == ClipboardSide::Client, _conn_id) {
-                ctx.try_empty_clipboard_files(_side);
-            }
-        }
-        #[cfg(target_os = "macos")]
-        {
-            ctx.try_empty_clipboard_files(_side);
-            // No need to make sure the context is enabled.
-            clipboard::ContextSend::proc(|context| -> ResultType<()> {
-                if !context.empty_clipboard(_conn_id)? {
-                    bail!("Failed to empty clipboard files for conn_id {}", _conn_id);
-                }
-                Ok(())
-            })?;
-        }
-    }
-    Ok(())
-}
 
-#[cfg(target_os = "windows")]
 pub fn try_empty_clipboard_files(side: ClipboardSide, conn_id: i32) {
     log::debug!("try to empty {} cliprdr for conn_id {}", side, conn_id);
     let _ = clipboard::ContextSend::proc(|context| -> ResultType<()> {
@@ -224,7 +106,6 @@ pub fn try_empty_clipboard_files(side: ClipboardSide, conn_id: i32) {
     });
 }
 
-#[cfg(target_os = "windows")]
 pub fn check_clipboard_cm() -> ResultType<MultiClipboards> {
     let mut ctx = CLIPBOARD_CTX.lock().unwrap();
     if ctx.is_none() {
@@ -246,7 +127,6 @@ pub fn check_clipboard_cm() -> ResultType<MultiClipboards> {
     }
 }
 
-#[cfg(not(target_os = "android"))]
 fn update_clipboard_(multi_clipboards: Vec<Clipboard>, side: ClipboardSide) {
     let to_update_data = proto::from_multi_clipboards(multi_clipboards);
     if to_update_data.is_empty() {
@@ -255,7 +135,6 @@ fn update_clipboard_(multi_clipboards: Vec<Clipboard>, side: ClipboardSide) {
     do_update_clipboard_(to_update_data, side);
 }
 
-#[cfg(not(target_os = "android"))]
 fn do_update_clipboard_(mut to_update_data: Vec<ClipboardData>, side: ClipboardSide) {
     let mut ctx = CLIPBOARD_CTX.lock().unwrap();
     if ctx.is_none() {
@@ -279,7 +158,6 @@ fn do_update_clipboard_(mut to_update_data: Vec<ClipboardData>, side: ClipboardS
     }
 }
 
-#[cfg(not(target_os = "android"))]
 fn append_owner_marker(mut data: Vec<ClipboardData>, side: ClipboardSide) -> Vec<ClipboardData> {
     data.push(ClipboardData::Special((
         RUSTDESK_CLIPBOARD_OWNER_FORMAT.to_owned(),
@@ -288,63 +166,23 @@ fn append_owner_marker(mut data: Vec<ClipboardData>, side: ClipboardSide) -> Vec
     data
 }
 
-#[cfg(target_os = "linux")]
-pub fn set_text_clipboard_with_owner_sync(text: &str, side: ClipboardSide) -> ResultType<()> {
-    let mut ctx = CLIPBOARD_CTX.lock().unwrap();
-    if ctx.is_none() {
-        *ctx = Some(ClipboardContext::new()?);
-    }
-    let clipboard_ctx = match ctx.as_mut() {
-        Some(ctx) => ctx,
-        None => bail!("Failed to create clipboard context"),
-    };
-    let data = append_owner_marker(vec![ClipboardData::Text(text.to_owned())], side);
-    clipboard_ctx.set_with_owner_marker_for_linux(&data)
-}
 
-#[cfg(not(target_os = "android"))]
 pub fn update_clipboard(multi_clipboards: Vec<Clipboard>, side: ClipboardSide) {
     std::thread::spawn(move || {
         update_clipboard_(multi_clipboards, side);
     });
 }
 
-#[cfg(not(target_os = "android"))]
 pub struct ClipboardContext {
     inner: arboard::Clipboard,
 }
 
-#[cfg(not(target_os = "android"))]
 #[allow(unreachable_code)]
 impl ClipboardContext {
     pub fn new() -> ResultType<ClipboardContext> {
         let board;
-        #[cfg(not(target_os = "linux"))]
         {
             board = arboard::Clipboard::new()?;
-        }
-        #[cfg(target_os = "linux")]
-        {
-            let mut i = 1;
-            loop {
-                // Try 5 times to create clipboard
-                // Arboard::new() connect to X server or Wayland compositor, which should be OK most times
-                // But sometimes, the connection may fail, so we retry here.
-                match arboard::Clipboard::new() {
-                    Ok(x) => {
-                        board = x;
-                        break;
-                    }
-                    Err(e) => {
-                        if i == 5 {
-                            return Err(e.into());
-                        } else {
-                            std::thread::sleep(std::time::Duration::from_millis(30 * i));
-                        }
-                    }
-                }
-                i += 1;
-            }
         }
 
         Ok(ClipboardContext { inner: board })
@@ -387,12 +225,6 @@ impl ClipboardContext {
         let data = self.get_formats_filter(SUPPORTED_FORMATS, side, force)?;
         // We have a separate service named `file-clipboard` to handle file copy-paste.
         // We need to read the file urls because file copy may set the other clipboard formats such as text.
-        #[cfg(feature = "unix-file-copy-paste")]
-        {
-            if data.iter().any(|c| matches!(c, ClipboardData::FileUrl(_))) {
-                return Ok(vec![]);
-            }
-        }
         Ok(data)
     }
 
@@ -427,25 +259,6 @@ impl ClipboardContext {
             .collect())
     }
 
-    #[cfg(feature = "unix-file-copy-paste")]
-    pub fn get_files(
-        &mut self,
-        side: ClipboardSide,
-        force: bool,
-    ) -> ResultType<Option<Vec<String>>> {
-        let data = self.get_formats_filter(
-            &[
-                ClipboardFormat::FileUrl,
-                ClipboardFormat::Special(RUSTDESK_CLIPBOARD_OWNER_FORMAT),
-            ],
-            side,
-            force,
-        )?;
-        Ok(data.into_iter().find_map(|c| match c {
-            ClipboardData::FileUrl(urls) => Some(urls),
-            _ => None,
-        }))
-    }
 
     fn set(&mut self, data: &[ClipboardData]) -> ResultType<()> {
         let _lock = ARBOARD_MTX.lock().unwrap();
@@ -453,91 +266,9 @@ impl ClipboardContext {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
-    fn set_with_owner_marker_for_linux(&mut self, data: &[ClipboardData]) -> ResultType<()> {
-        let _lock = ARBOARD_MTX.lock().unwrap();
-        self.inner
-            .set()
-            .clipboard(LinuxClipboardKind::Clipboard)
-            .formats(data)?;
-        if let Err(e) = self
-            .inner
-            .set()
-            .clipboard(LinuxClipboardKind::Primary)
-            .formats(data)
-        {
-            log::warn!("Failed to set PRIMARY clipboard with owner marker: {}", e);
-        }
-        Ok(())
-    }
 
-    #[cfg(all(feature = "unix-file-copy-paste", target_os = "macos"))]
-    fn get_file_urls_set_by_rustdesk(
-        data: Vec<ClipboardData>,
-        _side: ClipboardSide,
-    ) -> Vec<String> {
-        for item in data.into_iter() {
-            if let ClipboardData::FileUrl(urls) = item {
-                if is_file_url_set_by_rustdesk(&urls) {
-                    return urls;
-                }
-            }
-        }
-        vec![]
-    }
 
-    #[cfg(all(feature = "unix-file-copy-paste", target_os = "linux"))]
-    fn get_file_urls_set_by_rustdesk(data: Vec<ClipboardData>, side: ClipboardSide) -> Vec<String> {
-        let exclude_path =
-            clipboard::platform::unix::fuse::get_exclude_paths(side == ClipboardSide::Client);
-        data.into_iter()
-            .filter_map(|c| match c {
-                ClipboardData::FileUrl(urls) => Some(
-                    urls.into_iter()
-                        .filter(|s| s.starts_with(&*exclude_path))
-                        .collect::<Vec<_>>(),
-                ),
-                _ => None,
-            })
-            .flatten()
-            .collect::<Vec<_>>()
-    }
 
-    #[cfg(feature = "unix-file-copy-paste")]
-    fn try_empty_clipboard_files(&mut self, side: ClipboardSide) {
-        let _lock = ARBOARD_MTX.lock().unwrap();
-        if let Ok(data) = self.get_formats(&[ClipboardFormat::FileUrl]) {
-            let urls = Self::get_file_urls_set_by_rustdesk(data, side);
-            if !urls.is_empty() {
-                // FIXME:
-                // The host-side clear file clipboard `let _ = self.inner.clear();`,
-                // does not work on KDE Plasma for the installed version.
-
-                // Don't use `base::platform::linux::is_kde()` here.
-                // It's not correct in the server process.
-                #[cfg(target_os = "linux")]
-                let is_kde_x11 = base::platform::linux::is_kde_session()
-                    && crate::platform::linux::is_x11();
-                #[cfg(target_os = "macos")]
-                let is_kde_x11 = false;
-                let clear_holder_text = if is_kde_x11 {
-                    "RustDesk placeholder to clear the file clipboard"
-                } else {
-                    ""
-                }
-                .to_string();
-                self.inner
-                    .set_formats(&[
-                        ClipboardData::Text(clear_holder_text),
-                        ClipboardData::Special((
-                            RUSTDESK_CLIPBOARD_OWNER_FORMAT.to_owned(),
-                            side.get_owner_data(),
-                        )),
-                    ])
-                    .ok();
-            }
-        }
-    }
 }
 
 pub fn is_support_multi_clipboard(peer_version: &str, peer_platform: &str) -> bool {
@@ -555,18 +286,12 @@ pub fn is_support_multi_clipboard(peer_version: &str, peer_platform: &str) -> bo
     true
 }
 
-#[cfg(not(target_os = "android"))]
 pub fn get_current_clipboard_msg(
     peer_version: &str,
     peer_platform: &str,
     side: ClipboardSide,
 ) -> Option<Message> {
     // Clipboard changes can be skipped while synchronization is disabled.
-    #[cfg(target_os = "linux")]
-    if !clipboard_listener::is_ready() {
-        log::error!("Cannot read initial clipboard before the listener is ready");
-        return None;
-    }
     let ctx = match ClipboardContext::new() {
         Ok(ctx) => ctx,
         Err(err) => {
@@ -630,7 +355,6 @@ impl std::fmt::Display for ClipboardSide {
 
 pub use proto::get_msg_if_not_support_multi_clip;
 mod proto {
-    #[cfg(not(target_os = "android"))]
     use arboard::ClipboardData;
     use hbb_common::{
         compress::{compress as compress_func, decompress},
@@ -653,7 +377,6 @@ mod proto {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     fn image_to_proto(a: arboard::ImageData) -> Clipboard {
         match &a {
             arboard::ImageData::Rgba(rgba) => {
@@ -714,7 +437,6 @@ mod proto {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     fn clipboard_data_to_proto(data: ClipboardData) -> Option<Clipboard> {
         let d = match data {
             ClipboardData::Text(s) => plain_to_proto(s, ClipboardFormat::Text),
@@ -727,7 +449,6 @@ mod proto {
         Some(d)
     }
 
-    #[cfg(not(target_os = "android"))]
     pub fn create_multi_clipboards(vec_data: Vec<ClipboardData>) -> MultiClipboards {
         MultiClipboards {
             clipboards: vec_data
@@ -738,7 +459,6 @@ mod proto {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     fn from_clipboard(clipboard: Clipboard) -> Option<ClipboardData> {
         let data = if clipboard.compress {
             decompress(&clipboard.content)
@@ -771,7 +491,6 @@ mod proto {
         }
     }
 
-    #[cfg(not(target_os = "android"))]
     pub fn from_multi_clipboards(multi_clipboards: Vec<Clipboard>) -> Vec<ClipboardData> {
         multi_clipboards
             .into_iter()
@@ -800,7 +519,7 @@ mod proto {
             })
     }
 
-    #[cfg(all(test, not(target_os = "android")))]
+    #[cfg(test)]
     mod tests {
         use super::{from_clipboard, special_to_proto};
         use arboard::ClipboardData;
@@ -824,7 +543,7 @@ mod proto {
     }
 }
 
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod rgba_tests {
     use super::valid_rgba_dimensions;
 
@@ -840,60 +559,14 @@ mod rgba_tests {
     }
 }
 
-#[cfg(target_os = "android")]
-pub fn handle_msg_clipboard(mut cb: Clipboard) {
-    use hbb_common::protobuf::Message;
 
-    if cb.compress {
-        cb.content = bytes::Bytes::from(hbb_common::compress::decompress(&cb.content));
-    }
-    let multi_clips = MultiClipboards {
-        clipboards: vec![cb],
-        ..Default::default()
-    };
-    if let Ok(bytes) = multi_clips.write_to_bytes() {
-        let _ = scrap::android::ffi::call_clipboard_manager_update_clipboard(&bytes);
-    }
-}
 
-#[cfg(target_os = "android")]
-pub fn handle_msg_multi_clipboards(mut mcb: MultiClipboards) {
-    use hbb_common::protobuf::Message;
-
-    for cb in mcb.clipboards.iter_mut() {
-        if cb.compress {
-            cb.content = bytes::Bytes::from(hbb_common::compress::decompress(&cb.content));
-        }
-    }
-    if let Ok(bytes) = mcb.write_to_bytes() {
-        let _ = scrap::android::ffi::call_clipboard_manager_update_clipboard(&bytes);
-    }
-}
-
-#[cfg(target_os = "android")]
-pub fn get_clipboards_msg(client: bool) -> Option<Message> {
-    let mut clipboards = scrap::android::ffi::get_clipboards(client)?;
-    let mut msg = Message::new();
-    for c in &mut clipboards.clipboards {
-        let compressed = hbb_common::compress::compress(&c.content);
-        let compress = compressed.len() < c.content.len();
-        if compress {
-            c.content = compressed.into();
-        }
-        c.compress = compress;
-    }
-    msg.set_multi_clipboards(clipboards);
-    Some(msg)
-}
 
 // We need this mod to notify multiple subscribers when the clipboard changes.
 // Because only one clipboard master(listener) can trigger the clipboard change event multiple listeners are created on Linux(x11).
 // https://github.com/rustdesk-org/clipboard-master/blob/4fb62e5b62fb6350d82b571ec7ba94b3cd466695/src/master/x11.rs#L226
-#[cfg(not(target_os = "android"))]
 pub mod clipboard_listener {
     use clipboard_master::{CallbackResult, ClipboardHandler, Master, Shutdown};
-    #[cfg(target_os = "linux")]
-    use hbb_common::tokio::sync::watch;
     use hbb_common::{bail, log, ResultType};
     use std::{
         collections::HashMap,
@@ -912,8 +585,6 @@ pub mod clipboard_listener {
 
     pub enum ClipboardEvent {
         Changed,
-        #[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
-        InitialSelection,
         Stop,
         StopWithError(io::Error),
     }
@@ -922,51 +593,13 @@ pub mod clipboard_listener {
         CLIPBOARD_GENERATION.load(Ordering::SeqCst)
     }
 
-    #[cfg(target_os = "linux")]
-    pub fn is_ready() -> bool {
-        let listener = CLIPBOARD_LISTENER.lock().unwrap();
-        let ready = listener
-            .ready
-            .as_ref()
-            .map(|ready| *ready.borrow())
-            .unwrap_or(false);
-        ready
-            && listener
-                .handle
-                .as_ref()
-                .map(|(_, h)| !h.is_finished())
-                .unwrap_or(false)
-    }
 
-    #[cfg(target_os = "linux")]
-    pub async fn wait_for_ready() -> ResultType<()> {
-        let Some(mut ready) = CLIPBOARD_LISTENER.lock().unwrap().ready.clone() else {
-            bail!("Clipboard listener has not started");
-        };
-        let is_ready = *ready.borrow_and_update();
-        if !is_ready {
-            ready.changed().await?;
-        }
-        Ok(())
-    }
 
     struct Handler {
         subscribers: Arc<Mutex<HashMap<String, Sender<ClipboardEvent>>>>,
-        #[cfg(target_os = "linux")]
-        ready: Option<watch::Sender<bool>>,
     }
 
     impl ClipboardHandler for Handler {
-        #[cfg(target_os = "linux")]
-        fn on_clipboard_ready(&mut self) {
-            // A restart must invalidate older snapshots, including on X11 or an empty selection.
-            CLIPBOARD_GENERATION.fetch_add(1, Ordering::SeqCst);
-            if let Some(tx) = self.ready.take() {
-                if let Err(err) = tx.send(true) {
-                    log::debug!("Failed to report clipboard listener readiness: {}", err);
-                }
-            }
-        }
 
         fn on_clipboard_change(&mut self) -> CallbackResult {
             // Empty or unsupported contents still invalidate an initial snapshot.
@@ -980,12 +613,6 @@ pub mod clipboard_listener {
 
         fn on_clipboard_initial_selection(&mut self) -> CallbackResult {
             // Only client file sync consumes this event; text initial sync is per session.
-            #[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
-            for tx in self.subscribers.lock().unwrap().values() {
-                if let Err(err) = tx.send(ClipboardEvent::InitialSelection) {
-                    log::debug!("Failed to notify initial clipboard selection: {}", err);
-                }
-            }
             CallbackResult::Next
         }
 
@@ -999,11 +626,6 @@ pub mod clipboard_listener {
                 )))
                 .ok();
             }
-            #[cfg(target_os = "linux")]
-            if self.ready.is_some() {
-                // Subscribers must receive the error before a failed startup stops.
-                return CallbackResult::StopWithError(error);
-            }
             CallbackResult::Next
         }
     }
@@ -1012,8 +634,6 @@ pub mod clipboard_listener {
     pub struct ClipboardListener {
         subscribers: Arc<Mutex<HashMap<String, Sender<ClipboardEvent>>>>,
         handle: Option<(Shutdown, JoinHandle<()>)>,
-        #[cfg(target_os = "linux")]
-        ready: Option<watch::Receiver<bool>>,
     }
 
     pub fn subscribe(name: String, tx: Sender<ClipboardEvent>) -> ResultType<()> {
@@ -1028,12 +648,8 @@ pub mod clipboard_listener {
         cleanup_stale_listener(&mut listener_lock);
         if listener_lock.handle.is_none() {
             log::info!("Start clipboard listener thread");
-            #[cfg(target_os = "linux")]
-            let (tx_ready, rx_ready) = watch::channel(false);
             let handler = Handler {
                 subscribers: listener_lock.subscribers.clone(),
-                #[cfg(target_os = "linux")]
-                ready: Some(tx_ready),
             };
             let (tx_start_res, rx_start_res) = channel();
             let h = start_clipboard_master_thread(handler, tx_start_res);
@@ -1048,11 +664,6 @@ pub mod clipboard_listener {
                 }
             };
             listener_lock.handle = Some((shutdown, h));
-            #[cfg(target_os = "linux")]
-            {
-                // Initial-sync tasks await backend readiness without blocking the connection loop.
-                listener_lock.ready = Some(rx_ready);
-            }
             log::info!("Clipboard listener thread started");
         }
 

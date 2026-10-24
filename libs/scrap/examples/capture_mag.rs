@@ -2,25 +2,20 @@ extern crate repng;
 extern crate scrap;
 
 use scrap::Display;
-#[cfg(windows)]
 use scrap::{CapturerMag, TraitCapturer};
-#[cfg(windows)]
 use std::fs::File;
 
 fn main() {
     let n = Display::all().unwrap().len();
     for _i in 0..n {
-        #[cfg(windows)]
         record(_i);
     }
 }
 
-#[cfg(windows)]
 fn get_display(i: usize) -> Display {
     Display::all().unwrap().remove(i)
 }
 
-#[cfg(windows)]
 fn record(i: usize) {
     use std::time::Duration;
 

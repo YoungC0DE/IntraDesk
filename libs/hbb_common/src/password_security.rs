@@ -228,7 +228,6 @@ pub fn symmetric_crypt(data: &[u8], encrypt: bool) -> Result<Vec<u8>, ()> {
         Ok(output)
     } else {
         let res = open_secretbox_payload(data, &key);
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if res.is_err() {
             // Fallback: try pk if uuid decryption failed (in case encryption used pk due to machine_uid failure)
             if let Some(key_pair) = Config::get_existing_key_pair() {
@@ -573,7 +572,6 @@ mod test {
 
     // Test decryption fallback when data was encrypted with key_pair but decryption tries machine_uid first
     #[test]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn test_decrypt_with_pk_fallback() {
         use sodiumoxide::crypto::secretbox;
         use std::convert::TryInto;
@@ -606,7 +604,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn test_decrypt_v1_with_pk_fallback() {
         use super::*;
         use sodiumoxide::base64::{encode, Variant};

@@ -266,7 +266,6 @@ async fn download_does_not_publish_or_remove_unreceived_staging_files() {
 }
 
 #[test]
-#[cfg(windows)]
 fn download_rejects_windows_streams_and_ambiguous_components() {
     let dir = DownloadDir::new();
     for name in ["nested/file:stream", "nested/.. /outside", "nested/file."] {
@@ -279,15 +278,12 @@ fn download_rejects_windows_streams_and_ambiguous_components() {
 }
 
 #[tokio::test]
-#[cfg_attr(windows, ignore = "requires symlink privilege")]
+#[ignore = "requires symlink privilege"]
 async fn download_refuses_symlink_destination_directory() {
     let dir = DownloadDir::new();
     let outside = dir.0.join("outside");
     let link = dir.0.join("file.txt");
     std::fs::create_dir_all(&outside).unwrap();
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(&outside, &link).unwrap();
-    #[cfg(windows)]
     std::os::windows::fs::symlink_dir(&outside, &link).unwrap();
     let mut job = dir.job_with_files(vec![FileEntry {
         name: "child.txt".into(),
@@ -300,16 +296,13 @@ async fn download_refuses_symlink_destination_directory() {
 }
 
 #[tokio::test]
-#[cfg_attr(windows, ignore = "requires symlink privilege")]
+#[ignore = "requires symlink privilege"]
 async fn download_refuses_linked_target_and_staging_files() {
     for suffix in ["", ".download", ".digest"] {
         let dir = DownloadDir::new();
         let outside = dir.0.join("outside.txt");
         let link = dir.0.join(format!("file.txt{suffix}"));
         std::fs::write(&outside, b"original").unwrap();
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&outside, &link).unwrap();
-        #[cfg(windows)]
         std::os::windows::fs::symlink_file(&outside, &link).unwrap();
         let mut job = dir.job();
         assert!(job.write(block()).await.is_err());

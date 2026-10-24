@@ -1,24 +1,18 @@
 use crate::client::translate;
-#[cfg(windows)]
 use crate::ipc::Data;
-#[cfg(windows)]
 use hbb_common::tokio;
 use hbb_common::{allow_err, log};
 use base::config::keys;
 use std::sync::{Arc, Mutex};
-#[cfg(windows)]
 use std::time::Duration;
 
 pub fn start_tray() {
     if crate::ui_interface::get_builtin_option(keys::OPTION_HIDE_TRAY) == "Y" {
-        #[cfg(not(target_os = "macos"))]
         {
             return;
         }
     }
 
-    #[cfg(target_os = "linux")]
-    crate::server::check_zombie();
 
     allow_err!(make_tray());
 }
@@ -34,18 +28,12 @@ fn make_tray() -> hbb_common::ResultType<()> {
 
     // Duplicated tray icons kept piling up through the blind spots of
     // `check_process("--tray", ..)`. https://github.com/rustdesk/rustdesk/issues/15689
-    #[cfg(windows)]
     if !crate::platform::windows::try_lock_tray_single_instance() {
         log::info!("Another tray process is already running in this session, exit");
         return Ok(());
     }
 
     let icon;
-    #[cfg(target_os = "macos")]
-    {
-        icon = include_bytes!("../res/mac-tray-dark-x2.png"); // use as template, so color is not important
-    }
-    #[cfg(not(target_os = "macos"))]
     {
         icon = include_bytes!("../res/tray-icon.ico");
     }
@@ -61,7 +49,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
     let icon = tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height)
         .context("Failed to open icon")?;
 
-    let mut event_loop = EventLoopBuilder::new().build();
+    let event_loop = EventLoopBuilder::new().build();
 
     let tray_menu = Menu::new();
     let open_i = MenuItem::new(translate("Open".to_owned()), true, None);
@@ -86,13 +74,9 @@ fn make_tray() -> hbb_common::ResultType<()> {
 
     let menu_channel = MenuEvent::receiver();
     let tray_channel = TrayEvent::receiver();
-    #[cfg(windows)]
     let (ipc_sender, ipc_receiver) = std::sync::mpsc::channel::<Data>();
 
     let open_func = move || {
-        #[cfg(target_os = "macos")]
-        crate::platform::macos::handle_application_should_open_untitled_file();
-        #[cfg(target_os = "windows")]
         {
             // Do not use "start uni link" way, it may not work on some Windows, and pop out error
             // dialog, I found on one user's desktop, but no idea why, Windows is shit.
@@ -100,28 +84,12 @@ fn make_tray() -> hbb_common::ResultType<()> {
             // `allow_multiple_instances` in `flutter/windows/runner/main.cpp` allows only one instance without args.
             crate::run_me::<&str>(vec![]).ok();
         }
-        #[cfg(target_os = "linux")]
-        {
-            // Do not use "xdg-open", it won't read the config.
-            if crate::dbus::invoke_new_connection(crate::get_uri_prefix()).is_err() {
-                if let Ok(task) = crate::run_me::<&str>(vec![]) {
-                    crate::server::CHILD_PROCESS.lock().unwrap().push(task);
-                }
-            }
-        }
     };
 
-    #[cfg(windows)]
     std::thread::spawn(move || {
         start_query_session_count(ipc_sender.clone());
     });
-    #[cfg(windows)]
     let mut last_click = std::time::Instant::now();
-    #[cfg(target_os = "macos")]
-    {
-        use tao::platform::macos::EventLoopExtMacOS;
-        event_loop.set_activation_policy(tao::platform::macos::ActivationPolicy::Accessory);
-    }
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(
             std::time::Instant::now() + std::time::Duration::from_millis(100),
@@ -140,11 +108,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
                 .with_menu(Box::new(tray_menu.clone()))
                 .with_tooltip(tooltip(0))
                 .with_icon(icon.clone());
-            #[cfg(target_os = "macos")]
-            {
-                builder = builder.with_icon_as_template(true);
-            }
-            #[cfg(target_os = "windows")]
             {
                 // Required since tray-icon 0.17
                 // Fixes #15215, #15222, #15410
@@ -160,13 +123,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
 
             // We have to request a redraw here to have the icon actually show up.
             // Tao only exposes a redraw method on the Window so we use core-foundation directly.
-            #[cfg(target_os = "macos")]
-            unsafe {
-                use core_foundation::runloop::{CFRunLoopGetMain, CFRunLoopWakeUp};
-
-                let rl = CFRunLoopGetMain();
-                CFRunLoopWakeUp(rl);
-            }
         }
 
         if let Ok(event) = menu_channel.try_recv() {
@@ -176,7 +132,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
         }
 
         if let Ok(_event) = tray_channel.try_recv() {
-            #[cfg(target_os = "windows")]
             match _event {
                 TrayEvent::Click {
                     button,
@@ -197,7 +152,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
             }
         }
 
-        #[cfg(windows)]
         if let Ok(data) = ipc_receiver.try_recv() {
             match data {
                 Data::ControlledSessionCount(count) => {
@@ -213,7 +167,6 @@ fn make_tray() -> hbb_common::ResultType<()> {
     });
 }
 
-#[cfg(windows)]
 #[tokio::main(flavor = "current_thread")]
 async fn start_query_session_count(sender: std::sync::mpsc::Sender<Data>) {
     let mut last_count = 0;
@@ -254,12 +207,7 @@ fn load_icon_from_asset() -> Option<image::DynamicImage> {
     else {
         return None;
     };
-    #[cfg(target_os = "macos")]
-    let path = path.join("../Frameworks/App.framework/Resources/flutter_assets/assets/icon.png");
-    #[cfg(windows)]
     let path = path.join(r"data\flutter_assets\assets\icon.png");
-    #[cfg(target_os = "linux")]
-    let path = path.join(r"data/flutter_assets/assets/icon.png");
     if path.exists() {
         if let Ok(image) = image::open(path) {
             return Some(image);

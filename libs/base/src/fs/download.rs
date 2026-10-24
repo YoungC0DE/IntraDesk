@@ -58,7 +58,6 @@ fn validate_component(name: &str) -> ResultType<()> {
     if name.is_empty() || name == "." || name.contains('/') {
         bail!("invalid download file name: {name}");
     }
-    #[cfg(windows)]
     if name.contains(['\\', ':', '<', '>', '"', '|', '?', '*'])
         || name.ends_with('.')
         || name.ends_with(' ')
@@ -77,7 +76,6 @@ pub(super) fn validated_target(base: &PathBuf, name: &str) -> ResultType<PathBuf
         .and_then(|name| name.to_str())
         .ok_or_else(|| anyhow!("invalid download destination"))?;
     validate_component(leaf)?;
-    #[cfg(windows)]
     for component in name.split(['/', '\\']).filter(|part| !part.is_empty()) {
         validate_component(component)?;
     }
@@ -117,9 +115,6 @@ async fn validate_resume_file(file: &tokio::fs::File) -> ResultType<()> {
     if !metadata.is_file() {
         bail!("download resume staging path is not a regular file");
     }
-    #[cfg(unix)]
-    let links = std::os::unix::fs::MetadataExt::nlink(&metadata);
-    #[cfg(windows)]
     let links = {
         use std::{mem::MaybeUninit, os::windows::io::AsRawHandle};
         use winapi::{

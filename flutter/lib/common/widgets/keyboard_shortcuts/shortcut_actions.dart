@@ -25,12 +25,11 @@ class KeyboardShortcutActionSubgroup extends KeyboardShortcutActionGroupChild {
   const KeyboardShortcutActionSubgroup(this.titleKey, this.entries);
 }
 
-/// A top-level group ("Display", "Keyboard", "Chat", …). `children` is an
-/// *ordered* mix of direct entries and subgroups, so layouts like
-/// "subgroups first → direct items → trailing subgroup" — exactly the
-/// shape `_DisplayMenu` uses (Privacy mode lives after the cursor / display
-/// toggles direct items) — are first-class instead of needing a wrapper
-/// "Display Settings" subgroup just to insert the items.
+/// A top-level group ("Monitor", "Display", …). `children` is an *ordered*
+/// mix of direct entries and subgroups, so layouts like "subgroups first →
+/// direct items" — the shape `_DisplayMenu` uses — are first-class instead
+/// of needing a wrapper "Display Settings" subgroup just to insert the
+/// items.
 class KeyboardShortcutActionGroup {
   final String titleKey;
   final List<KeyboardShortcutActionGroupChild> children;
@@ -40,10 +39,10 @@ class KeyboardShortcutActionGroup {
 /// Canonical action group definitions used by both the desktop and mobile
 /// configuration pages. The order of groups, subgroups, and entries here
 /// is the order the user sees in the UI, and mirrors the corresponding
-/// toolbar submenu (`_DisplayMenu` / `_KeyboardMenu` in
+/// toolbar submenu (`_ControlMenu` / `_DisplayMenu` in
 /// `desktop/widgets/remote_toolbar.dart`) child order — modulo entries
 /// without shortcut counterparts (e.g. `_screenAdjustor.adjustWindow`,
-/// `scrollStyle`, `_ResolutionsMenu`, `localKeyboardType`).
+/// `_ResolutionsMenu`).
 final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
   KeyboardShortcutActionGroup('Monitor', [
     KeyboardShortcutActionEntry(
@@ -55,20 +54,15 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
   ]),
   KeyboardShortcutActionGroup('Control Actions', [
     KeyboardShortcutActionEntry(
-        kShortcutActionSendClipboardKeystrokes, 'Send clipboard keystrokes'),
-    KeyboardShortcutActionEntry(kShortcutActionResetCanvas, 'Reset canvas'),
-    KeyboardShortcutActionEntry(
         kShortcutActionSendCtrlAltDel, 'Insert Ctrl + Alt + Del'),
     KeyboardShortcutActionEntry(
         kShortcutActionRestartRemote, 'Restart remote device'),
     KeyboardShortcutActionEntry(kShortcutActionInsertLock, 'Insert Lock'),
     KeyboardShortcutActionEntry(kShortcutActionSwitchSides, 'Switch Sides'),
     KeyboardShortcutActionEntry(kShortcutActionRefresh, 'Refresh'),
-    KeyboardShortcutActionEntry(kShortcutActionScreenshot, 'Take screenshot'),
   ]),
-  // Display: subgroups (View Mode → Image Quality → Codec → Virtual display)
-  // first, then the direct items (cursor toggles + display toggles) —
-  // matching `_DisplayMenu.menuChildrenGetter` exactly. Rebalancing this order should also rebalance the toolbar.
+  // Display: subgroups (View Mode → Image Quality) first, then the direct
+  // items (display toggles) — matching `_DisplayMenu.menuChildrenGetter` exactly. Rebalancing this order should also rebalance the toolbar.
   KeyboardShortcutActionGroup('Display', [
     KeyboardShortcutActionSubgroup('View Mode', [
       KeyboardShortcutActionEntry(
@@ -86,57 +80,12 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
       KeyboardShortcutActionEntry(
           kShortcutActionImageQualityLow, 'Optimize reaction time'),
     ]),
-    KeyboardShortcutActionSubgroup('Codec', [
-      KeyboardShortcutActionEntry(kShortcutActionCodecAuto, 'Auto'),
-      KeyboardShortcutActionEntry(kShortcutActionCodecVp8, 'VP8'),
-      KeyboardShortcutActionEntry(kShortcutActionCodecVp9, 'VP9'),
-      KeyboardShortcutActionEntry(kShortcutActionCodecAv1, 'AV1'),
-      KeyboardShortcutActionEntry(kShortcutActionCodecH264, 'H264'),
-      KeyboardShortcutActionEntry(kShortcutActionCodecH265, 'H265'),
-    ]),
-    // Direct items: cursorToggles + display toggles, in toolbar order.
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleShowRemoteCursor, 'Show remote cursor'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleFollowRemoteCursor, 'Follow remote cursor'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleFollowRemoteWindow, 'Follow remote window focus'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleZoomCursor, 'Zoom cursor'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleQualityMonitor, 'Show quality monitor'),
+    // Direct items: display toggles, in toolbar order.
     KeyboardShortcutActionEntry(kShortcutActionToggleMute, 'Mute'),
     KeyboardShortcutActionEntry(
         kShortcutActionToggleEnableFileCopyPaste, 'Enable file copy and paste'),
     KeyboardShortcutActionEntry(
         kShortcutActionToggleDisableClipboard, 'Disable clipboard'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleLockAfterSessionEnd, 'Lock after session end'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleTrueColor, 'True color (4:4:4)'),
-  ]),
-  // Keyboard: Keyboard mode subgroup first, then direct items
-  // (inputSource → viewMode → showMyCursor → toolbarKeyboardToggles),
-  // matching `_KeyboardMenu.menuChildrenGetter`.
-  KeyboardShortcutActionGroup('Keyboard', [
-    KeyboardShortcutActionSubgroup('Keyboard mode', [
-      KeyboardShortcutActionEntry(
-          kShortcutActionKeyboardModeLegacy, 'Legacy mode'),
-      KeyboardShortcutActionEntry(kShortcutActionKeyboardModeMap, 'Map mode'),
-      KeyboardShortcutActionEntry(
-          kShortcutActionKeyboardModeTranslate, 'Translate mode'),
-    ]),
-    KeyboardShortcutActionEntry(kShortcutActionToggleViewOnly, 'View Mode'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleShowMyCursor, 'Show my cursor'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleSwapCtrlCmd, 'Swap control-command key'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleRelativeMouseMode, 'Relative mouse mode'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleReverseMouseWheel, 'Reverse mouse wheel'),
-    KeyboardShortcutActionEntry(
-        kShortcutActionToggleSwapLeftRightMouse, 'swap-left-right-mouse'),
   ]),
   // "Other" collects single-icon toolbar buttons that have no dropdown
   // (Pin, Close), plus actions with no toolbar entry at all (Fullscreen —
@@ -199,13 +148,6 @@ List<KeyboardShortcutActionGroup> filterKeyboardShortcutActionGroupsForPlatform(
         id == kShortcutActionToggleFullscreen) {
       return false;
     }
-    if (!cap.includeScreenshotShortcut && id == kShortcutActionScreenshot) {
-      return false;
-    }
-    if (!cap.includeRelativeMouseModeShortcut &&
-        id == kShortcutActionToggleRelativeMouseMode) {
-      return false;
-    }
     if (!cap.includeTabShortcuts && isSwitchTabShortcutAction(id)) return false;
     if (!cap.includeToolbarShortcut && id == kShortcutActionToggleToolbar) {
       return false;
@@ -214,9 +156,6 @@ List<KeyboardShortcutActionGroup> filterKeyboardShortcutActionGroupsForPlatform(
       return false;
     }
     if (!cap.includeSwitchSidesShortcut && id == kShortcutActionSwitchSides) {
-      return false;
-    }
-    if (!cap.includeResetCanvasShortcut && id == kShortcutActionResetCanvas) {
       return false;
     }
     if (!cap.includePinToolbarShortcut && id == kShortcutActionPinToolbar) {

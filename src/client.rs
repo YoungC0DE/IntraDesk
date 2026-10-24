@@ -74,7 +74,6 @@ mod audio_state_tests;
 pub mod file_trait;
 pub mod helper;
 pub mod io_loop;
-pub mod screenshot;
 
 pub const MILLI1: Duration = Duration::from_millis(1);
 pub const SEC30: Duration = Duration::from_secs(30);
@@ -1061,61 +1060,6 @@ impl LoginConfigHandler {
         self.save_config(config);
     }
 
-    /// Save reverse mouse wheel ("", "Y") to the current config.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The reverse mouse wheel ("", "Y").
-    pub fn save_reverse_mouse_wheel(&mut self, value: String) {
-        let mut config = self.load_config();
-        config.reverse_mouse_wheel = value;
-        self.save_config(config);
-    }
-
-    /// Save "displays_as_individual_windows" ("", "Y") to the current config.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The "displays_as_individual_windows" value ("", "Y").
-    pub fn save_displays_as_individual_windows(&mut self, value: String) {
-        let mut config = self.load_config();
-        config.displays_as_individual_windows = value;
-        self.save_config(config);
-    }
-
-    /// Save "use_all_my_displays_for_the_remote_session" ("", "Y") to the current config.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The "use_all_my_displays_for_the_remote_session" value ("", "Y").
-    pub fn save_use_all_my_displays_for_the_remote_session(&mut self, value: String) {
-        let mut config = self.load_config();
-        config.use_all_my_displays_for_the_remote_session = value;
-        self.save_config(config);
-    }
-
-    /// Save scroll style to the current config.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The scroll style to be saved.
-    pub fn save_scroll_style(&mut self, value: String) {
-        let mut config = self.load_config();
-        config.scroll_style = value;
-        self.save_config(config);
-    }
-
-    /// Save edge scroll edge thickness to the current config.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The edge thickness to be saved.
-    pub fn save_edge_scroll_edge_thickness(&mut self, value: i32) {
-        let mut config = self.load_config();
-        config.edge_scroll_edge_thickness = value;
-        self.save_config(config);
-    }
-
     /// Set a ui config of flutter for handler's [`PeerConfig`].
     ///
     /// # Arguments
@@ -1158,31 +1102,7 @@ impl LoginConfigHandler {
     pub fn toggle_option(&mut self, name: String) -> Option<Message> {
         let mut option = OptionMessage::default();
         let mut config = self.load_config();
-        if name == "show-remote-cursor" {
-            config.show_remote_cursor.v = !config.show_remote_cursor.v;
-            option.show_remote_cursor = (if config.show_remote_cursor.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            })
-            .into();
-        } else if name == "follow-remote-cursor" {
-            config.follow_remote_cursor.v = !config.follow_remote_cursor.v;
-            option.follow_remote_cursor = (if config.follow_remote_cursor.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            })
-            .into();
-        } else if name == "follow-remote-window" {
-            config.follow_remote_window.v = !config.follow_remote_window.v;
-            option.follow_remote_window = (if config.follow_remote_window.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            })
-            .into();
-        } else if name == "disable-audio" {
+        if name == "disable-audio" {
             config.disable_audio.v = !config.disable_audio.v;
             option.disable_audio = (if config.disable_audio.v {
                 BoolOption::Yes
@@ -1198,14 +1118,6 @@ impl LoginConfigHandler {
                 BoolOption::No
             })
             .into();
-        } else if name == "lock-after-session-end" {
-            config.lock_after_session_end.v = !config.lock_after_session_end.v;
-            option.lock_after_session_end = (if config.lock_after_session_end.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            })
-            .into();
         } else if name == "enable-file-copy-paste" {
             config.enable_file_copy_paste.v = !config.enable_file_copy_paste.v;
             option.enable_file_transfer = (if config.enable_file_copy_paste.v {
@@ -1213,44 +1125,6 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-            .into();
-        } else if name == "show-quality-monitor" {
-            config.show_quality_monitor.v = !config.show_quality_monitor.v;
-        } else if name == "allow_swap_key" {
-            config.allow_swap_key.v = !config.allow_swap_key.v;
-        } else if name == "view-only" {
-            config.view_only.v = !config.view_only.v;
-            let f = |b: bool| {
-                if b {
-                    BoolOption::Yes.into()
-                } else {
-                    BoolOption::No.into()
-                }
-            };
-            if config.view_only.v {
-                option.disable_keyboard = f(true);
-                option.disable_clipboard = f(true);
-                option.show_remote_cursor = f(true);
-                option.enable_file_transfer = f(false);
-                option.lock_after_session_end = f(false);
-            } else {
-                option.disable_keyboard = f(false);
-                option.disable_clipboard = f(self.get_toggle_option("disable-clipboard"));
-                option.show_remote_cursor = f(self.get_toggle_option("show-remote-cursor"));
-                option.enable_file_transfer = f(self.config.enable_file_copy_paste.v);
-                option.lock_after_session_end = f(self.config.lock_after_session_end.v);
-                if config.show_my_cursor.v {
-                    config.show_my_cursor.v = false;
-                    option.show_my_cursor = BoolOption::No.into();
-                }
-            }
-        } else if name == "show-my-cursor" {
-            config.show_my_cursor.v = !config.show_my_cursor.v;
-            option.show_my_cursor = if config.show_my_cursor.v {
-                BoolOption::Yes
-            } else {
-                BoolOption::No
-            }
             .into();
         } else {
             let is_set = self
@@ -1317,9 +1191,6 @@ impl LoginConfigHandler {
         }
         if view_only || self.get_toggle_option("show-remote-cursor") {
             msg.show_remote_cursor = BoolOption::Yes.into();
-        }
-        if view_only && self.get_toggle_option("show-my-cursor") {
-            msg.show_my_cursor = BoolOption::Yes.into();
         }
         if self.get_toggle_option("follow-remote-cursor") {
             msg.follow_remote_cursor = BoolOption::Yes.into();
@@ -1401,8 +1272,6 @@ impl LoginConfigHandler {
             self.config.allow_swap_key.v
         } else if name == "view-only" {
             self.config.view_only.v
-        } else if name == "show-my-cursor" {
-            self.config.show_my_cursor.v
         } else if name == "follow-remote-cursor" {
             self.config.follow_remote_cursor.v
         } else if name == "follow-remote-window" {
@@ -1472,12 +1341,6 @@ impl LoginConfigHandler {
         config.image_quality = value;
         self.save_config(config);
         res
-    }
-
-    pub fn save_trackpad_speed(&mut self, speed: i32) {
-        let mut config = self.load_config();
-        config.trackpad_speed = speed;
-        self.save_config(config);
     }
 
     /// Create a [`Message`] for saving custom fps.
@@ -2618,7 +2481,6 @@ pub enum Data {
     ContinueInsecureConnection,
     ResetDecoder(Option<usize>),
     RenameFile((i32, String, String, bool)),
-    TakeScreenshot((i32, String)),
 }
 
 /// Asks whether to go on with a peer whose key differs from the pinned one; the password is not

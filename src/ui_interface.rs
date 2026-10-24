@@ -151,16 +151,6 @@ pub fn set_local_flutter_option(key: String, value: String) {
 }
 
 #[inline]
-pub fn get_kb_layout_type() -> String {
-    LocalConfig::get_kb_layout_type()
-}
-
-#[inline]
-pub fn set_kb_layout_type(kb_layout_type: String) {
-    LocalConfig::set_kb_layout_type(kb_layout_type);
-}
-
-#[inline]
 pub fn peer_has_password(id: String) -> bool {
     !PeerConfig::load(&id).password.is_empty()
 }

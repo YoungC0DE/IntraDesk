@@ -1264,17 +1264,11 @@ pub fn keycode_to_rdev_key(keycode: u32) -> Key {
 }
 
 pub mod input_source {
-    use hbb_common::SessionID;
-
-    use crate::ui_interface::{get_local_option, set_local_option};
+    use crate::ui_interface::get_local_option;
 
     pub const CONFIG_OPTION_INPUT_SOURCE: &str = "input-source";
     // rdev grab mode
     pub const CONFIG_INPUT_SOURCE_1: &str = "Input source 1";
-    pub const CONFIG_INPUT_SOURCE_1_TIP: &str = "input_source_1_tip";
-    // flutter grab mode
-    pub const CONFIG_INPUT_SOURCE_2: &str = "Input source 2";
-    pub const CONFIG_INPUT_SOURCE_2_TIP: &str = "input_source_2_tip";
 
     pub const CONFIG_INPUT_SOURCE_DEFAULT: &str = CONFIG_INPUT_SOURCE_1;
 
@@ -1286,24 +1280,6 @@ pub mod input_source {
         super::client::start_grab_loop();
     }
 
-    pub fn change_input_source(session_id: SessionID, input_source: String) {
-        let cur_input_source = get_cur_session_input_source();
-        if cur_input_source == input_source {
-            return;
-        }
-        if input_source == CONFIG_INPUT_SOURCE_1 {
-            // It is ok to start grab loop multiple times.
-            super::client::start_grab_loop();
-            super::IS_RDEV_ENABLED.store(true, super::Ordering::SeqCst);
-            crate::flutter_ffi::session_enter_or_leave(session_id, true);
-        } else if input_source == CONFIG_INPUT_SOURCE_2 {
-            // No need to stop grab loop.
-            crate::flutter_ffi::session_enter_or_leave(session_id, false);
-            super::IS_RDEV_ENABLED.store(false, super::Ordering::SeqCst);
-        }
-        set_local_option(CONFIG_OPTION_INPUT_SOURCE.to_string(), input_source);
-    }
-
     #[inline]
     pub fn get_cur_session_input_source() -> String {
         let input_source = get_local_option(CONFIG_OPTION_INPUT_SOURCE.to_string());
@@ -1312,19 +1288,5 @@ pub mod input_source {
         } else {
             input_source
         }
-    }
-
-    #[inline]
-    pub fn get_supported_input_source() -> Vec<(String, String)> {
-        vec![
-            (
-                CONFIG_INPUT_SOURCE_1.to_string(),
-                CONFIG_INPUT_SOURCE_1_TIP.to_string(),
-            ),
-            (
-                CONFIG_INPUT_SOURCE_2.to_string(),
-                CONFIG_INPUT_SOURCE_2_TIP.to_string(),
-            ),
-        ]
     }
 }

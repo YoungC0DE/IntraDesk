@@ -3,7 +3,5 @@
   {"action": "toggle_fullscreen",         "mods": ["primary", "alt", "shift"], "key": "enter"},
   {"action": "switch_display_next",       "mods": ["primary", "alt", "shift"], "key": "arrow_right"},
   {"action": "switch_display_prev",       "mods": ["primary", "alt", "shift"], "key": "arrow_left"},
-  {"action": "screenshot",                "mods": ["primary", "alt", "shift"], "key": "p"},
-  {"action": "toggle_show_remote_cursor", "mods": ["primary", "alt", "shift"], "key": "m"},
   {"action": "toggle_mute",               "mods": ["primary", "alt", "shift"], "key": "s"}
 ]

@@ -149,7 +149,6 @@ const String kOptionHideHelpCards = "hide-help-cards";
 const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 
 const String kOptionToggleViewOnly = "view-only";
-const String kOptionToggleShowMyCursor = "show-my-cursor";
 
 const String kOptionDisableFloatingWindow = "disable-floating-window";
 

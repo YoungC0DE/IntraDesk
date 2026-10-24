@@ -203,10 +203,6 @@ impl<T: InvokeUiSession> Session<T> {
             .eq(&ConnType::DEFAULT_CONN)
     }
 
-    pub fn is_multi_ui_session(&self) -> bool {
-        self.ui_handler.is_multi_ui_session()
-    }
-
     pub fn get_view_style(&self) -> String {
         self.lc.read().unwrap().view_style.clone()
     }
@@ -285,10 +281,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.write().unwrap().save_keyboard_mode(value);
     }
 
-    pub fn get_reverse_mouse_wheel(&self) -> String {
-        self.lc.read().unwrap().reverse_mouse_wheel.clone()
-    }
-
     pub fn get_displays_as_individual_windows(&self) -> String {
         self.lc
             .read()
@@ -305,37 +297,8 @@ impl<T: InvokeUiSession> Session<T> {
             .clone()
     }
 
-    pub fn save_reverse_mouse_wheel(&self, value: String) {
-        self.lc.write().unwrap().save_reverse_mouse_wheel(value);
-    }
-
-    pub fn save_displays_as_individual_windows(&self, value: String) {
-        self.lc
-            .write()
-            .unwrap()
-            .save_displays_as_individual_windows(value);
-    }
-
-    pub fn save_use_all_my_displays_for_the_remote_session(&self, value: String) {
-        self.lc
-            .write()
-            .unwrap()
-            .save_use_all_my_displays_for_the_remote_session(value);
-    }
-
     pub fn save_view_style(&self, value: String) {
         self.lc.write().unwrap().save_view_style(value);
-    }
-
-    pub fn save_scroll_style(&self, value: String) {
-        self.lc.write().unwrap().save_scroll_style(value);
-    }
-
-    pub fn save_edge_scroll_edge_thickness(&self, value: i32) {
-        self.lc
-            .write()
-            .unwrap()
-            .save_edge_scroll_edge_thickness(value);
     }
 
     pub fn save_flutter_option(&self, k: String, v: String) {
@@ -382,14 +345,6 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    pub fn is_screenshot_supported(&self) -> bool {
-        crate::common::is_support_screenshot_num(self.lc.read().unwrap().version)
-    }
-
-    pub fn take_screenshot(&self, display: i32, sid: String) {
-        self.send(Data::TakeScreenshot((display, sid)));
-    }
-
     pub fn save_custom_image_quality(&self, custom_image_quality: i32) {
         let msg = self
             .lc
@@ -414,10 +369,6 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    pub fn save_trackpad_speed(&self, trackpad_speed: i32) {
-        self.lc.write().unwrap().save_trackpad_speed(trackpad_speed);
-    }
-
     pub fn set_custom_fps(&self, custom_fps: i32) {
         let msg = self.lc.write().unwrap().set_custom_fps(custom_fps, true);
         self.send(Data::Message(msg));
@@ -425,27 +376,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn get_remember(&self) -> bool {
         self.lc.read().unwrap().remember
-    }
-
-    pub fn alternative_codecs(&self) -> (bool, bool, bool, bool) {
-        let luid = self.lc.read().unwrap().adapter_luid;
-        let mark_unsupported = self.lc.read().unwrap().mark_unsupported.clone();
-        let decoder = scrap::codec::Decoder::supported_decodings(
-            None,
-            use_texture_render(),
-            luid,
-            &mark_unsupported,
-        );
-        let mut vp8 = decoder.ability_vp8 > 0;
-        let mut av1 = decoder.ability_av1 > 0;
-        let mut h264 = decoder.ability_h264 > 0;
-        let mut h265 = decoder.ability_h265 > 0;
-        let enc = &self.lc.read().unwrap().supported_encoding;
-        vp8 = vp8 && enc.vp8;
-        av1 = av1 && enc.av1;
-        h264 = h264 && enc.h264;
-        h265 = h265 && enc.h265;
-        (vp8, av1, h264, h265)
     }
 
     pub fn update_supported_decodings(&self) {
@@ -671,14 +601,6 @@ impl<T: InvokeUiSession> Session<T> {
                 self._input_key(key.clone(), down, press, alt, ctrl, shift, command);
             }
         }
-    }
-
-    pub fn input_string(&self, value: &str) {
-        let mut key_event = KeyEvent::new();
-        key_event.set_seq(value.to_owned());
-        let mut msg_out = Message::new();
-        msg_out.set_key_event(key_event);
-        self.send(Data::Message(msg_out));
     }
 
 
@@ -1359,7 +1281,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_current_display(&self, disp_idx: i32);
     fn is_multi_ui_session(&self) -> bool;
     fn update_empty_dirs(&self, _res: ReadEmptyDirsResponse) {}
-    fn handle_screenshot_resp(&self, sid: String, msg: String);
 }
 
 impl<T: InvokeUiSession> Deref for Session<T> {

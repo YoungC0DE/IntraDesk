@@ -4385,7 +4385,6 @@ dependencies = [
  "parity-tokio-ipc",
  "qrcode-generator",
  "rdev",
- "repng",
  "ringbuf",
  "rubato",
  "samplerate",

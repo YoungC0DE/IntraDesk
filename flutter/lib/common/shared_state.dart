@@ -112,29 +112,6 @@ class ShowRemoteCursorState {
   static RxBool find(String id) => Get.find<RxBool>(tag: tag(id));
 }
 
-class ShowRemoteCursorLockState {
-  static String tag(String id) => 'show_remote_cursor_lock_$id';
-
-  static void init(String id) {
-    final key = tag(id);
-    if (!Get.isRegistered<RxBool>(tag: key)) {
-      final RxBool state = false.obs;
-      Get.put<RxBool>(state, tag: key);
-    } else {
-      Get.find<RxBool>(tag: key).value = false;
-    }
-  }
-
-  static void delete(String id) {
-    final key = tag(id);
-    if (Get.isRegistered<RxBool>(tag: key)) {
-      Get.delete<RxBool>(tag: key);
-    }
-  }
-
-  static RxBool find(String id) => Get.find<RxBool>(tag: tag(id));
-}
-
 class KeyboardEnabledState {
   static String tag(String id) => 'keyboard_enabled_$id';
 
@@ -257,7 +234,6 @@ initSharedStates(String id) {
   CurrentDisplayState.init(id);
   KeyboardEnabledState.init(id);
   ShowRemoteCursorState.init(id);
-  ShowRemoteCursorLockState.init(id);
   RemoteCursorMovedState.init(id);
   FingerprintState.init(id);
   PeerBoolOption.init(id, kOptionZoomCursor, () => false);
@@ -267,7 +243,6 @@ initSharedStates(String id) {
 removeSharedStates(String id) {
   CurrentDisplayState.delete(id);
   ShowRemoteCursorState.delete(id);
-  ShowRemoteCursorLockState.delete(id);
   KeyboardEnabledState.delete(id);
   RemoteCursorMovedState.delete(id);
   FingerprintState.delete(id);

@@ -167,11 +167,11 @@ void main() {
 
   test('an action becomes available without reopening its menu', () async {
     var calls = 0;
-    model.registerRefresher(['screenshot'], () {
-      model.register('screenshot', () => calls++);
+    model.registerRefresher(['insert_lock'], () {
+      model.register('insert_lock', () => calls++);
     });
 
-    model.onTriggered('screenshot');
+    model.onTriggered('insert_lock');
     await pumpEventQueue();
 
     expect(calls, 1);

@@ -10,26 +10,20 @@ import 'package:flutter_hbb/models/shortcut_model.dart';
 
 ShortcutPlatformCapabilities capabilities({
   bool includeFullscreenShortcut = true,
-  bool includeScreenshotShortcut = true,
-  bool includeRelativeMouseModeShortcut = true,
   bool includeTabShortcuts = true,
   bool includeToolbarShortcut = true,
   bool includeCloseTabShortcut = true,
   bool includeSwitchSidesShortcut = true,
-  bool includeResetCanvasShortcut = true,
   bool includePinToolbarShortcut = true,
   bool includeViewModeShortcut = true,
   Set<String> excludedActions = const {},
 }) {
   return ShortcutPlatformCapabilities(
     includeFullscreenShortcut: includeFullscreenShortcut,
-    includeScreenshotShortcut: includeScreenshotShortcut,
-    includeRelativeMouseModeShortcut: includeRelativeMouseModeShortcut,
     includeTabShortcuts: includeTabShortcuts,
     includeToolbarShortcut: includeToolbarShortcut,
     includeCloseTabShortcut: includeCloseTabShortcut,
     includeSwitchSidesShortcut: includeSwitchSidesShortcut,
-    includeResetCanvasShortcut: includeResetCanvasShortcut,
     includePinToolbarShortcut: includePinToolbarShortcut,
     includeViewModeShortcut: includeViewModeShortcut,
     excludedActions: excludedActions,
@@ -62,7 +56,7 @@ void main() {
 
     final bindings = shortcutBindingMapsFrom([
       {
-        'action': kShortcutActionScreenshot,
+        'action': kShortcutActionInsertLock,
         'mods': ['primary'],
         'key': 'p',
       },
@@ -77,14 +71,14 @@ void main() {
 
     expect(bindings, hasLength(2));
     expect(bindings.map((binding) => binding['action']), [
-      kShortcutActionScreenshot,
+      kShortcutActionInsertLock,
       kShortcutActionToggleMute,
     ]);
   });
 
   test('shortcutBindingMapsFrom ignores malformed binding fields', () {
     final valid = {
-      'action': kShortcutActionScreenshot,
+      'action': kShortcutActionInsertLock,
       'mods': ['primary', 'ctrl', 'alt', 'shift'],
       'key': 'p',
     };
@@ -114,11 +108,11 @@ void main() {
   test('shortcutBindingMapsFrom preserves unbound and unknown bindings', () {
     expect(
       shortcutBindingMapsFrom([
-        {'action': kShortcutActionScreenshot, 'mods': [], 'key': ''},
+        {'action': kShortcutActionInsertLock, 'mods': [], 'key': ''},
         {'action': 'future_action', 'mods': ['ctrl'], 'key': 'future_key'},
       ]),
       [
-        {'action': kShortcutActionScreenshot, 'mods': [], 'key': ''},
+        {'action': kShortcutActionInsertLock, 'mods': [], 'key': ''},
         {'action': 'future_action', 'mods': ['ctrl'], 'key': 'future_key'},
       ],
     );
@@ -127,7 +121,7 @@ void main() {
   test('platform filtering ignores malformed binding fields', () {
     final filtered = filterDefaultBindingsForPlatform([
       {'action': 1, 'mods': ['primary'], 'key': 'p'},
-      {'action': kShortcutActionScreenshot, 'mods': ['primary'], 'key': 1},
+      {'action': kShortcutActionInsertLock, 'mods': ['primary'], 'key': 1},
       {'action': kShortcutActionToggleMute, 'mods': ['alt'], 'key': 's'},
       {
         'action': kShortcutActionToggleFullscreen,
@@ -167,19 +161,9 @@ void main() {
         'key': 'arrow_right',
       },
       {
-        'action': kShortcutActionScreenshot,
-        'mods': ['primary', 'alt', 'shift'],
-        'key': 'p',
-      },
-      {
         'action': kShortcutActionSwitchTabNext,
         'mods': ['primary', 'alt', 'shift'],
         'key': 'right_bracket',
-      },
-      {
-        'action': kShortcutActionToggleRelativeMouseMode,
-        'mods': ['primary', 'alt', 'shift'],
-        'key': 'g',
       },
     ];
 
@@ -187,13 +171,10 @@ void main() {
       defaults,
       capabilities(
         includeFullscreenShortcut: false,
-        includeScreenshotShortcut: false,
-        includeRelativeMouseModeShortcut: false,
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        includeResetCanvasShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),
@@ -212,15 +193,10 @@ void main() {
     final groups = filterKeyboardShortcutActionGroupsForPlatform(
       capabilities(
         includeFullscreenShortcut: false,
-        includeScreenshotShortcut: false,
-        includeRelativeMouseModeShortcut: false,
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        // Reset Canvas is intentionally still included here — it has
-        // non-desktop platforms (mobile).
-        includeResetCanvasShortcut: true,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),
@@ -228,8 +204,6 @@ void main() {
     final ids = idSet(groups);
     // Desktop-only actions are stripped.
     expect(ids, isNot(contains(kShortcutActionToggleFullscreen)));
-    expect(ids, isNot(contains(kShortcutActionToggleRelativeMouseMode)));
-    expect(ids, isNot(contains(kShortcutActionScreenshot)));
     expect(ids, isNot(contains(kShortcutActionToggleToolbar)));
     expect(ids, isNot(contains(kShortcutActionCloseTab)));
     expect(ids, isNot(contains(kShortcutActionSwitchSides)));
@@ -243,7 +217,6 @@ void main() {
     expect(ids, contains(kShortcutActionInsertLock));
     expect(ids, contains(kShortcutActionRestartRemote));
     expect(ids, contains(kShortcutActionSwitchDisplayNext));
-    expect(ids, contains(kShortcutActionResetCanvas));
     expect(ids, contains(kShortcutActionToggleMute));
   });
 
@@ -255,29 +228,18 @@ void main() {
     expect(idSet(groups), equals(idSet(kKeyboardShortcutActionGroups)));
   });
 
-  test('Wayland hides relative mouse mode but keeps screenshot', () {
-    final ids = idSet(filterKeyboardShortcutActionGroupsForPlatform(
-      capabilities(includeRelativeMouseModeShortcut: false),
-    ));
-    expect(ids, isNot(contains(kShortcutActionToggleRelativeMouseMode)));
-    expect(ids, contains(kShortcutActionScreenshot));
-  });
-
   test('filterKeyboardShortcutActionGroupsForPlatform drops empty groups', () {
     // With every capability flag off, groups whose items are all behind
-    // those flags get dropped. Display / Keyboard parent groups still carry
-    // cross-platform direct items so they survive even when the gated
+    // those flags get dropped. The Display parent group still carries
+    // cross-platform direct items so it survives even when the gated
     // subgroups thin out.
     final groups = filterKeyboardShortcutActionGroupsForPlatform(
       capabilities(
         includeFullscreenShortcut: false,
-        includeScreenshotShortcut: false,
-        includeRelativeMouseModeShortcut: false,
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
         includeSwitchSidesShortcut: false,
-        includeResetCanvasShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),
@@ -287,7 +249,6 @@ void main() {
     expect(titles, isNot(contains('Other')));
     // Parent groups with cross-platform direct items survive.
     expect(titles, contains('Display'));
-    expect(titles, contains('Keyboard'));
     // The "View Mode" subgroup under Display is gated by includeViewModeShortcut,
     // so it must be absent from Display's surviving children.
     final displayChildren =
@@ -358,14 +319,14 @@ void main() {
       'enabled': true,
       'pass_through': false,
       'bindings': [
-        {'action': 'screenshot', 'mods': ['primary'], 'key': 'p'},
+        {'action': 'insert_lock', 'mods': ['primary'], 'key': 'p'},
         'not a binding',
       ],
     }));
     expect(config.enabled, isTrue);
     expect(config.passThrough, isFalse);
     expect(config.bindings, [
-      {'action': 'screenshot', 'mods': ['primary'], 'key': 'p'},
+      {'action': 'insert_lock', 'mods': ['primary'], 'key': 'p'},
     ]);
 
     for (final raw in ['', 'not json', '[]', '{"bindings": "x"}']) {
@@ -376,40 +337,11 @@ void main() {
     }
   });
 
-  test('Wayland active config preserves stored bindings and flags', () {
-    const relative = {
-      'action': kShortcutActionToggleRelativeMouseMode,
-      'mods': ['primary'],
-      'key': 'r',
-    };
-    const mute = {
-      'action': kShortcutActionToggleMute,
-      'mods': ['primary'],
-      'key': 'm',
-    };
-    for (final flags in [(true, false), (false, false), (true, true)]) {
-      final stored = ShortcutConfig.parse(jsonEncode({
-        'enabled': flags.$1,
-        'pass_through': flags.$2,
-        'bindings': [relative, mute],
-      }));
-      final active = stored.forPlatform(
-          capabilities(includeRelativeMouseModeShortcut: false));
-      expect(active.bindings, [mute]);
-      expect(active.enabled, flags.$1);
-      expect(active.passThrough, flags.$2);
-      expect(stored.bindings, [relative, mute]);
-      expect(stored.forPlatform(capabilities()).bindings, [relative, mute]);
-    }
-  });
-
   test('active saved bindings follow Settings capabilities without reseeding', () {
     final actions = [
       kShortcutActionSwitchDisplayAll,
-      kShortcutActionKeyboardModeMap,
-      kShortcutActionToggleShowMyCursor,
-      kShortcutActionToggleZoomCursor,
-      kShortcutActionResetCanvas,
+      kShortcutActionToggleEnableFileCopyPaste,
+      kShortcutActionPinToolbar,
       kShortcutActionToggleMute,
       kShortcutActionSendCtrlAltDel,
     ];
@@ -421,12 +353,10 @@ void main() {
       ],
     }));
     final cap = capabilities(
-      includeResetCanvasShortcut: false,
+      includePinToolbarShortcut: false,
       excludedActions: {
         kShortcutActionSwitchDisplayAll,
-        kShortcutActionKeyboardModeMap,
-        kShortcutActionToggleShowMyCursor,
-        kShortcutActionToggleZoomCursor,
+        kShortcutActionToggleEnableFileCopyPaste,
       },
     );
     expect(saved.forPlatform(cap).bindings.map((b) => b['action']),

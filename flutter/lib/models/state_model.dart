@@ -117,11 +117,6 @@ class StateGlobal {
     return _inputSource;
   }
 
-  setInputSource(SessionID sessionId, String v) async {
-    await bind.mainSetInputSource(sessionId: sessionId, value: v);
-    _inputSource = bind.mainGetInputSource();
-  }
-
   StateGlobal._() {
   }
 

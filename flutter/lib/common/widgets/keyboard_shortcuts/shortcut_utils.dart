@@ -109,26 +109,20 @@ String? shortcutKeyNameForEvent(KeyEvent e) => physicalKeyName(e.physicalKey);
 /// action the user has no UI to manage.
 class ShortcutPlatformCapabilities {
   final bool includeFullscreenShortcut;
-  final bool includeScreenshotShortcut;
-  final bool includeRelativeMouseModeShortcut;
   final bool includeTabShortcuts;
   final bool includeToolbarShortcut;
   final bool includeCloseTabShortcut;
   final bool includeSwitchSidesShortcut;
-  final bool includeResetCanvasShortcut;
   final bool includePinToolbarShortcut;
   final bool includeViewModeShortcut;
   final Set<String> excludedActions;
 
   const ShortcutPlatformCapabilities({
     required this.includeFullscreenShortcut,
-    required this.includeScreenshotShortcut,
-    required this.includeRelativeMouseModeShortcut,
     required this.includeTabShortcuts,
     required this.includeToolbarShortcut,
     required this.includeCloseTabShortcut,
     required this.includeSwitchSidesShortcut,
-    required this.includeResetCanvasShortcut,
     required this.includePinToolbarShortcut,
     required this.includeViewModeShortcut,
     this.excludedActions = const {},
@@ -156,13 +150,6 @@ List<Map<String, dynamic>> filterDefaultBindingsForPlatform(
         action == kShortcutActionToggleFullscreen) {
       continue;
     }
-    if (!cap.includeScreenshotShortcut && action == kShortcutActionScreenshot) {
-      continue;
-    }
-    if (!cap.includeRelativeMouseModeShortcut &&
-        action == kShortcutActionToggleRelativeMouseMode) {
-      continue;
-    }
     if (!cap.includeTabShortcuts && isSwitchTabShortcutAction(action)) {
       continue;
     }
@@ -175,10 +162,6 @@ List<Map<String, dynamic>> filterDefaultBindingsForPlatform(
     }
     if (!cap.includeSwitchSidesShortcut &&
         action == kShortcutActionSwitchSides) {
-      continue;
-    }
-    if (!cap.includeResetCanvasShortcut &&
-        action == kShortcutActionResetCanvas) {
       continue;
     }
     if (!cap.includePinToolbarShortcut && action == kShortcutActionPinToolbar) {

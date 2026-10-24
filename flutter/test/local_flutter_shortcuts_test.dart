@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_hbb/common/widgets/keyboard_shortcuts/shortcut_constants.dart';
@@ -72,11 +71,8 @@ RawKeyEvent rawP({required bool down, bool repeat = false, bool ctrl = false}) {
 
 void main() {
   for (final action in [
-    kShortcutActionToggleViewOnly,
-    kShortcutActionToggleShowMyCursor,
     kShortcutActionToggleMute,
     ...kShortcutActionsRunOnKeyUp,
-    kShortcutActionSendClipboardKeystrokes,
   ]) {
     test('forwarded W retains correct ownership across $action', () async {
       final events = <String>['W down'];
@@ -90,14 +86,12 @@ void main() {
       expect(dispatcher.tryDispatch(down(PhysicalKeyboardKey.keyP),
           match: () => action), isTrue);
       await pumpEventQueue();
-      if (kShortcutActionsRunOnKeyUp.contains(action) ||
-          (!kIsWeb && action == kShortcutActionSendClipboardKeystrokes)) {
+      if (kShortcutActionsRunOnKeyUp.contains(action)) {
         expect(events, ['W down']);
         expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyP)), isTrue);
         await pumpEventQueue();
       }
-      if (action == kShortcutActionToggleMute ||
-          (kIsWeb && action == kShortcutActionSendClipboardKeystrokes)) {
+      if (action == kShortcutActionToggleMute) {
         expect(events, ['W down', action]);
       } else {
         expect(events, ['W down', 'W up']);
@@ -108,10 +102,7 @@ void main() {
     });
   }
 
-  for (final action in [
-    kShortcutActionToggleViewOnly,
-    if (!kIsWeb) kShortcutActionSendClipboardKeystrokes,
-  ]) {
+  for (final action in kShortcutActionsRunOnKeyUp) {
     test('$action cleanup skips released keys and cancels after session close',
         () async {
       final events = <String>[];
@@ -143,8 +134,8 @@ void main() {
     final dispatcher = _ShortcutHarness(
       match: (event) => modifiersPressed
           ? event.physicalKey == PhysicalKeyboardKey.keyP
-              ? 'screenshot'
-              : 'chat'
+              ? 'insert_lock'
+              : 'refresh'
           : null,
       releaseModifiers: () async {},
       onTriggered: actions.add,
@@ -158,14 +149,14 @@ void main() {
     expect(dispatcher.tryDispatch(down(PhysicalKeyboardKey.keyP)), isFalse);
     expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyC)), isTrue);
     await Future<void>.value();
-    expect(actions, ['screenshot', 'chat']);
+    expect(actions, ['insert_lock', 'refresh']);
   });
 
   test('binding changes do not forward a previously consumed key', () async {
     var enabled = true;
     final actions = <String>[];
     final dispatcher = _ShortcutHarness(
-      match: (_) => enabled ? 'screenshot' : null,
+      match: (_) => enabled ? 'insert_lock' : null,
       releaseModifiers: () async {},
       onTriggered: actions.add,
     );
@@ -178,7 +169,7 @@ void main() {
     expect(dispatcher.tryDispatch(repeat(PhysicalKeyboardKey.keyP)), isFalse);
     expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyP)), isFalse);
     await Future<void>.value();
-    expect(actions, ['screenshot']);
+    expect(actions, ['insert_lock']);
   });
 
   test('unmatched key stays forwarded when modifiers change during repeat',
@@ -186,7 +177,7 @@ void main() {
     var modifiersPressed = false;
     final actions = <String>[];
     final dispatcher = _ShortcutHarness(
-      match: (_) => modifiersPressed ? 'screenshot' : null,
+      match: (_) => modifiersPressed ? 'insert_lock' : null,
       releaseModifiers: () async {},
       onTriggered: actions.add,
     );
@@ -202,7 +193,7 @@ void main() {
   test('auto-repeat cannot trigger an action again', () async {
     final actions = <String>[];
     final dispatcher = _ShortcutHarness(
-      match: (_) => 'screenshot',
+      match: (_) => 'insert_lock',
       releaseModifiers: () async {},
       onTriggered: actions.add,
     );
@@ -213,7 +204,7 @@ void main() {
     expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyP)), isTrue);
     expect(dispatcher.tryDispatch(down(PhysicalKeyboardKey.keyP)), isTrue);
     await Future<void>.value();
-    expect(actions, ['screenshot', 'screenshot']);
+    expect(actions, ['insert_lock', 'insert_lock']);
   });
 
   test('releases remote modifiers before running the action', () async {
@@ -221,7 +212,7 @@ void main() {
     final actions = <String>[];
     var releases = 0;
     final dispatcher = _ShortcutHarness(
-      match: (_) => 'screenshot',
+      match: (_) => 'insert_lock',
       releaseModifiers: () {
         releases++;
         return released.future;
@@ -237,98 +228,8 @@ void main() {
     expect(releases, 1);
     released.complete();
     await Future<void>.value();
-    expect(actions, ['screenshot']);
+    expect(actions, ['insert_lock']);
   });
-
-  test('native clipboard prompt can be repeated immediately after cancelling',
-      () async {
-    var dialogOpen = false;
-    var prompts = 0;
-    final dispatcher = _ShortcutHarness(
-      match: (_) => kShortcutActionSendClipboardKeystrokes,
-      releaseModifiers: () async {},
-      onTriggered: (_) {
-        dialogOpen = true;
-        prompts++;
-      },
-    );
-    bool route(KeyEvent event) => !dialogOpen && dispatcher.tryDispatch(event);
-
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      expect(route(down(PhysicalKeyboardKey.keyV)), isTrue);
-      await Future<void>.value();
-      expect(dialogOpen, isFalse,
-          reason: 'the local dialog must not consume the trigger release');
-      expect(route(repeat(PhysicalKeyboardKey.keyV)), isTrue);
-      expect(route(up(PhysicalKeyboardKey.keyV)), isTrue);
-      await Future<void>.value();
-      expect(dialogOpen, isTrue);
-      expect(prompts, attempt);
-      dialogOpen = false;
-    }
-  }, skip: kIsWeb);
-
-  test('native clipboard waits for outstanding remote modifier releases',
-      () async {
-    final released = Completer<void>();
-    final actions = <String>[];
-    final dispatcher = _ShortcutHarness(
-      match: (_) => kShortcutActionSendClipboardKeystrokes,
-      releaseModifiers: () => released.future,
-      onTriggered: actions.add,
-    );
-    expect(dispatcher.tryDispatch(down(PhysicalKeyboardKey.keyV)), isTrue);
-    expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyV)), isTrue);
-    await Future<void>.value();
-    expect(actions, isEmpty,
-        reason: 'clipboard input must follow the remote modifier releases');
-    released.complete();
-    await Future<void>.value();
-    expect(actions, [kShortcutActionSendClipboardKeystrokes]);
-  }, skip: kIsWeb);
-
-  test('Web clipboard still runs on key down for browser activation', () async {
-    final actions = <String>[];
-    final dispatcher = _ShortcutHarness(
-      match: (_) => kShortcutActionSendClipboardKeystrokes,
-      releaseModifiers: () async {},
-      onTriggered: actions.add,
-    );
-    expect(dispatcher.tryDispatch(down(PhysicalKeyboardKey.keyV)), isTrue);
-    await Future<void>.value();
-    expect(actions, [kShortcutActionSendClipboardKeystrokes]);
-    expect(dispatcher.tryDispatch(up(PhysicalKeyboardKey.keyV)), isTrue);
-    expect(actions, [kShortcutActionSendClipboardKeystrokes]);
-  }, skip: !kIsWeb);
-
-  test('closing a clipboard owner preserves another session release', () async {
-    final closingRelease = Completer<void>();
-    final nextRelease = Completer<void>();
-    final actions = <String>[];
-    final closing = _ShortcutHarness(
-      match: (_) => kShortcutActionSendClipboardKeystrokes,
-      releaseModifiers: () => closingRelease.future,
-      onTriggered: (_) => actions.add('closing'),
-    );
-    final next = _ShortcutHarness(
-      match: (_) => kShortcutActionSendClipboardKeystrokes,
-      releaseModifiers: () => nextRelease.future,
-      onTriggered: (_) => actions.add('next'),
-    );
-
-    expect(closing.tryDispatch(down(PhysicalKeyboardKey.keyV)), isTrue);
-    expect(next.tryDispatch(down(PhysicalKeyboardKey.keyC)), isTrue);
-    closing.clear();
-    expect(next.tryDispatch(up(PhysicalKeyboardKey.keyC)), isTrue);
-    closingRelease.complete();
-    await Future<void>.value();
-    expect(actions, isEmpty,
-        reason: 'the live session still awaits its own modifier release');
-    expect(next.tryDispatch(up(PhysicalKeyboardKey.keyV)), isTrue);
-    nextRelease.complete();
-    await Future<void>.value();
-    expect(actions, ['next']);
-  }, skip: kIsWeb);
 
   test('closing the session drops its pending action but keeps the fired key',
       () async {
@@ -413,7 +314,7 @@ void main() {
       RawKeyboard.instance.handleRawKeyEvent(event);
       return dispatcher.tryDispatchRaw(
         event,
-        match: () => event.isControlPressed ? 'screenshot' : null,
+        match: () => event.isControlPressed ? 'insert_lock' : null,
         releaseModifiers: () async {},
       );
     }
@@ -425,7 +326,7 @@ void main() {
     expect(dispatch(rawP(down: true, repeat: true, ctrl: true)), isFalse);
     expect(dispatch(rawP(down: false, ctrl: true)), isFalse);
     await Future<void>.value();
-    expect(actions, ['screenshot']);
+    expect(actions, ['insert_lock']);
   });
 
   test('shortcut key ownership follows focus to another session', () {
@@ -452,8 +353,8 @@ void main() {
     final first = dispatcherFor((_) {});
     final second = dispatcherFor((_) {});
     first.tryDispatch(down(PhysicalKeyboardKey.keyP),
-        match: () => 'screenshot');
-    second.tryDispatch(down(PhysicalKeyboardKey.keyC), match: () => 'chat');
+        match: () => 'insert_lock');
+    second.tryDispatch(down(PhysicalKeyboardKey.keyC), match: () => 'refresh');
 
     second.clear();
     expect(second.tryDispatch(repeat(PhysicalKeyboardKey.keyP)), isTrue);

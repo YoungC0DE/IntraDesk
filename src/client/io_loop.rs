@@ -869,15 +869,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
             },
-            Data::TakeScreenshot((display, sid)) => {
-                let mut msg = Message::new();
-                msg.set_screenshot_request(ScreenshotRequest {
-                    display,
-                    sid,
-                    ..Default::default()
-                });
-                allow_err!(peer.send(&msg).await);
-            }
             _ => {}
         }
         true
@@ -1635,11 +1626,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::PeerInfo(pi)) => {
                     self.handler.set_displays(&pi.displays);
                     self.handler.set_platform_additions(&pi.platform_additions);
-                }
-                Some(message::Union::ScreenshotResponse(response)) => {
-                    crate::client::screenshot::set_screenshot(response.data);
-                    self.handler
-                        .handle_screenshot_resp(response.sid, response.msg);
                 }
                 _ => {}
             }

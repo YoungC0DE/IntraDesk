@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
@@ -1094,87 +1093,6 @@ void showRestartRemoteDevice(PeerInfo pi, String id, SessionID sessionId,
   if (res == true) bind.sessionRestartRemoteDevice(sessionId: sessionId);
 }
 
-showSetOSPassword(
-  SessionID sessionId,
-  bool login,
-  OverlayDialogManager dialogManager,
-  String? osPassword,
-  Function()? closeCallback,
-) async {
-  final controller = TextEditingController();
-  osPassword ??=
-      await bind.sessionGetOption(sessionId: sessionId, arg: 'os-password') ??
-          '';
-  var autoLogin =
-      await bind.sessionGetOption(sessionId: sessionId, arg: 'auto-login') !=
-          '';
-  controller.text = osPassword;
-  dialogManager.show((setState, close, context) {
-    closeWithCallback([dynamic]) {
-      close();
-      if (closeCallback != null) closeCallback();
-    }
-
-    submit() {
-      var text = controller.text.trim();
-      bind.sessionPeerOption(
-          sessionId: sessionId, name: 'os-password', value: text);
-      bind.sessionPeerOption(
-          sessionId: sessionId,
-          name: 'auto-login',
-          value: autoLogin ? 'Y' : '');
-      if (text != '' && login) {
-        bind.sessionInputOsPassword(sessionId: sessionId, value: text);
-      }
-      closeWithCallback();
-    }
-
-    return CustomAlertDialog(
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.password_rounded, color: MyTheme.accent),
-          Text(translate('OS Password')).paddingOnly(left: 10),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          PasswordWidget(controller: controller),
-          CheckboxListTile(
-            contentPadding: const EdgeInsets.all(0),
-            dense: true,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: Text(
-              translate('Auto Login'),
-            ),
-            value: autoLogin,
-            onChanged: (v) {
-              if (v == null) return;
-              setState(() => autoLogin = v);
-            },
-          ),
-        ],
-      ),
-      actions: [
-        dialogButton(
-          "Cancel",
-          icon: Icon(Icons.close_rounded),
-          onPressed: closeWithCallback,
-          isOutline: true,
-        ),
-        dialogButton(
-          "OK",
-          icon: Icon(Icons.done_rounded),
-          onPressed: submit,
-        ),
-      ],
-      onSubmit: submit,
-      onCancel: closeWithCallback,
-    );
-  });
-}
-
 void showConfirmSwitchSidesDialog(
     SessionID sessionId, String id, OverlayDialogManager dialogManager) async {
   dialogManager.show((setState, close, context) {
@@ -1260,112 +1178,6 @@ customImageQualityDialog(SessionID sessionId, String id, FFI ffi) async {
       showFps: !hideFps,
       showMoreQuality: !hideMoreQuality);
   msgBoxCommon(ffi.dialogManager, 'Custom Image Quality', content, [btnClose]);
-}
-
-int? _validateTrackpadSpeed(String text) {
-  final speed = int.tryParse(text);
-  if (speed == null || speed < kMinTrackpadSpeed || speed > kMaxTrackpadSpeed) {
-    BotToast.showText(
-      text:
-          '${translate('Invalid format')}: $kMinTrackpadSpeed-$kMaxTrackpadSpeed',
-      contentColor: Colors.red,
-    );
-    return null;
-  }
-  return speed;
-}
-
-Future<void> _saveTrackpadSpeed({
-  required SessionID sessionId,
-  required FFI ffi,
-  required int initSpeed,
-  required int speed,
-}) async {
-  if (speed == initSpeed) {
-    return;
-  }
-  await bind.sessionSetTrackpadSpeed(sessionId: sessionId, value: speed);
-  await ffi.inputModel.updateTrackpadSpeed();
-}
-
-void _showTrackpadSpeedSaveError(Object error, StackTrace stackTrace) {
-  debugPrint('Failed to save trackpad speed: $error');
-  debugPrintStack(stackTrace: stackTrace);
-  BotToast.showText(
-    text: translate('Failed'),
-    contentColor: Colors.red,
-  );
-}
-
-List<Widget> _trackpadSpeedDialogActions({
-  required bool isSubmitting,
-  required VoidCallback close,
-  required VoidCallback submit,
-}) {
-  return [
-    dialogButton(
-      'Cancel',
-      icon: Icon(Icons.close_rounded),
-      onPressed: isSubmitting ? null : close,
-      isOutline: true,
-    ),
-    dialogButton(
-      'OK',
-      icon: Icon(Icons.done_rounded),
-      onPressed: isSubmitting ? null : submit,
-    ),
-  ];
-}
-
-void trackpadSpeedDialog(SessionID sessionId, FFI ffi) {
-  final initSpeed = ffi.inputModel.trackpadSpeed;
-  final curSpeed = SimpleWrapper(initSpeed);
-  var speedText = initSpeed.toString();
-  var isSubmitting = false;
-  ffi.dialogManager.show((setState, close, context) {
-    Future<void> submit([String? submittedText]) async {
-      if (isSubmitting) {
-        return;
-      }
-      speedText = submittedText ?? speedText;
-      final speed = _validateTrackpadSpeed(speedText);
-      if (speed == null) {
-        return;
-      }
-      setState(() => isSubmitting = true);
-      try {
-        await _saveTrackpadSpeed(
-          sessionId: sessionId,
-          ffi: ffi,
-          initSpeed: initSpeed,
-          speed: speed,
-        );
-        close();
-      } catch (error, stackTrace) {
-        _showTrackpadSpeedSaveError(error, stackTrace);
-        setState(() => isSubmitting = false);
-      }
-    }
-
-    return CustomAlertDialog(
-      title: Text(
-        translate('Trackpad speed'),
-        style: TextStyle(fontSize: 21),
-      ),
-      content: TrackpadSpeedWidget(
-        value: curSpeed,
-        onTextChanged: (text) => speedText = text,
-        onTextSubmitted: submit,
-      ),
-      actions: _trackpadSpeedDialogActions(
-        isSubmitting: isSubmitting,
-        close: close,
-        submit: submit,
-      ),
-      onSubmit: isSubmitting ? null : submit,
-      onCancel: isSubmitting ? null : close,
-    );
-  });
 }
 
 void deleteConfirmDialog(Function onSubmit, String title) async {

@@ -17,8 +17,6 @@ class LocalFlutterShortcutDispatcher {
   // session that fired them. See [kShortcutActionsRunOnKeyUp].
   static final _keyUpActions =
       <PhysicalKeyboardKey, (LocalFlutterShortcutDispatcher, String)>{};
-  static final _clipboardModifierReleases =
-      <PhysicalKeyboardKey, (LocalFlutterShortcutDispatcher, Future<void>)>{};
   final _releasedModifiers = <PhysicalKeyboardKey>{};
   final _forwardedKeyReleases =
       <PhysicalKeyboardKey, Future<void> Function()>{};
@@ -31,8 +29,6 @@ class LocalFlutterShortcutDispatcher {
   /// stay owned until their release, whichever session receives it.
   void clear() {
     _keyUpActions.removeWhere((_, pending) => identical(pending.$1, this));
-    _clipboardModifierReleases
-        .removeWhere((_, pending) => identical(pending.$1, this));
     _releasedModifiers.clear();
     _forwardedKeyReleases.clear();
     _viewOnlyShortcutPending = false;
@@ -43,7 +39,6 @@ class LocalFlutterShortcutDispatcher {
   static void resetFiredKeys() {
     _firedKeys.clear();
     _keyUpActions.clear();
-    _clipboardModifierReleases.clear();
   }
 
   void recordReleasedModifiers(Iterable<PhysicalKeyboardKey> keys) {
@@ -137,11 +132,9 @@ class LocalFlutterShortcutDispatcher {
     if (up) {
       if (!_firedKeys.remove(key)) return false;
       final pending = _keyUpActions.remove(key);
-      final release = _clipboardModifierReleases.remove(key)?.$2;
       if (pending != null) {
         final (owner, action) = pending;
-        unawaited(
-            owner._trigger(action, release == null ? null : () => release));
+        unawaited(owner._trigger(action, null));
       }
       return true;
     }
@@ -158,26 +151,15 @@ class LocalFlutterShortcutDispatcher {
     if (viewOnly) _viewOnlyShortcutPending = true;
     // macOS browsers can omit letter keyups while Cmd is held. Like the JS
     // input source, dispatch on keydown there; remote cleanup still runs first.
-    // Web clipboard reads also need the key-down's browser user activation.
     final runOnKeyUp =
         !(kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) &&
-            (kShortcutActionsRunOnKeyUp.contains(action) ||
-                (!kIsWeb && action == kShortcutActionSendClipboardKeystrokes));
+            kShortcutActionsRunOnKeyUp.contains(action);
     if (runOnKeyUp) {
       _keyUpActions[key] = (this, action);
     } else {
       _keyUpActions.remove(key);
     }
-    if (runOnKeyUp &&
-        action == kShortcutActionSendClipboardKeystrokes &&
-        releaseModifiers != null) {
-      // The release can precede completion of the asynchronous FFI calls.
-      final release = Future<void>.sync(releaseModifiers);
-      _clipboardModifierReleases[key] = (this, release);
-      unawaited(_trigger(null, () => release));
-    } else {
-      unawaited(_trigger(runOnKeyUp ? null : action, releaseModifiers));
-    }
+    unawaited(_trigger(runOnKeyUp ? null : action, releaseModifiers));
     return true;
   }
 
@@ -189,16 +171,9 @@ class LocalFlutterShortcutDispatcher {
     try {
       if (releaseModifiers != null) await releaseModifiers();
       if (action == null || generation != _generation) return;
-      if ((action == kShortcutActionToggleViewOnly ||
-              action == kShortcutActionToggleShowMyCursor ||
-              action == kShortcutActionKeyboardModeMap ||
-              action == kShortcutActionKeyboardModeTranslate ||
-              action == kShortcutActionKeyboardModeLegacy ||
-              kShortcutActionsRunOnKeyUp.contains(action) ||
-              (!kIsWeb && action == kShortcutActionSendClipboardKeystrokes)) &&
+      if (kShortcutActionsRunOnKeyUp.contains(action) &&
           _forwardedKeyReleases.isNotEmpty) {
-        // Focus changes and view-only can keep physical keyups from the peer.
-        // Mode changes can encode later keyups differently from their keydowns.
+        // Focus changes can keep physical keyups from the peer.
         final releases = _forwardedKeyReleases.values.toList();
         _forwardedKeyReleases.clear();
         await Future.wait(releases.map((release) => Future<void>.sync(release)));

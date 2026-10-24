@@ -71,7 +71,7 @@ class ShortcutModel {
   /// arrives for this session.
   ///
   /// The matcher has already consumed the chord. With no handler the action
-  /// is unavailable in this session (e.g. screenshot on a peer without
+  /// is unavailable in this session (e.g. Ctrl+Alt+Del on a peer without
   /// support), and the chord is a deliberate no-op: a bound chord always
   /// belongs to RustDesk and is never forwarded to the remote.
   void onTriggered(String actionId) {
@@ -183,24 +183,17 @@ class ShortcutModel {
   ///   * Fullscreen / Toolbar / Pin: rendered wherever the
   ///     desktop layout applies (native desktop + Web). Native mobile is
   ///     permanently full-screen and doesn't have a desktop-style toolbar.
-  ///   * Screenshot / Switch Sides: native desktop only. The Web bridge
-  ///     throws UnimplementedError for `sessionTakeScreenshot`; mobile
-  ///     toolbars don't surface either action.
+  ///   * Switch Sides: native desktop only; mobile toolbars don't surface
+  ///     it.
   ///   * Tab navigation / Close Tab: only native desktop ships
   ///     `DesktopTabController`; Web's `RemotePage` is invoked without one.
-  ///   * Reset Canvas: only the mobile toolbar builds the menu entry
-  ///     (`isDefaultConn && isMobile` in `toolbarControls`).
   static ShortcutPlatformCapabilities currentPlatformCapabilities() {
     return ShortcutPlatformCapabilities(
       includeFullscreenShortcut: true,
-      includeScreenshotShortcut: true,
-      includeRelativeMouseModeShortcut:
-          true,
       includeTabShortcuts: true,
       includeToolbarShortcut: true,
       includeCloseTabShortcut: true,
       includeSwitchSidesShortcut: true,
-      includeResetCanvasShortcut: false,
       includePinToolbarShortcut: true,
       includeViewModeShortcut: true,
       excludedActions: Set.unmodifiable({
@@ -250,8 +243,7 @@ class ShortcutConfig {
 }
 
 /// Register the default-bound shortcut actions that aren't already wired by
-/// `toolbarControls(...)` (which handles things like Ctrl+Alt+Shift+Del and the
-/// screenshot action). Called once per session from the desktop / mobile
+/// `toolbarControls(...)` (which handles things like Ctrl+Alt+Shift+Del). Called once per session from the desktop / mobile
 /// remote page, after the toolbar registrations have run.
 ///
 /// We register unconditionally — even when shortcuts are master-disabled —
@@ -387,101 +379,4 @@ void registerSessionShortcutActions(
       toolbarState.switchPin();
     });
   }
-
-  // ── Inline _KeyboardMenu items + actions with no toolbar TToggleMenu/TRadioMenu ─
-  // The toolbar's TToggleMenu / TRadioMenu helpers (toolbarDisplayToggle,
-  // toolbarCursor, toolbarKeyboardToggles, toolbarCodec,
-  // toolbarViewStyle, toolbarImageQuality) auto-register their tagged entries
-  // from the bottom of each helper. The handlers below cover what those
-  // helpers DON'T own:
-  //   * Show my cursor / Keyboard mode (Map/Translate/Legacy) / View Only
-  //     (desktop) — built as widgets directly in `_KeyboardMenu`, not as
-  //     TToggleMenu lists. (Mobile View Only IS in toolbarDisplayToggle and
-  //     auto-registers; the desktop session-start handler below registers
-  //     first and the helper's auto-register on mobile takes over after its
-  //     unawaited future resolves.)
-  //   * Toggle Input Source — cycle action; the toolbar exposes per-source
-  //     radios but no single "cycle to next source" entry.
-
-  // Show my cursor — toolbar (`_KeyboardMenu.showMyCursor`) pushes the new
-  // value into FfiModel.setShowMyCursor and auto-enables view-only when the
-  // toggle goes on, so the user can never control the remote with their own
-  // cursor visible.
-  ffi.shortcutModel.register(kShortcutActionToggleShowMyCursor, () async {
-    await bind.sessionToggleOption(
-        sessionId: sessionId, value: kOptionToggleShowMyCursor);
-    final showMyCursor = await bind.sessionGetToggleOption(
-            sessionId: sessionId, arg: kOptionToggleShowMyCursor) ??
-        false;
-    ffi.ffiModel.setShowMyCursor(showMyCursor);
-    if (showMyCursor && !ffi.ffiModel.viewOnly) {
-      await bind.sessionToggleOption(
-          sessionId: sessionId, value: kOptionToggleViewOnly);
-      final viewOnly = await bind.sessionGetToggleOption(
-              sessionId: sessionId, arg: kOptionToggleViewOnly) ??
-          false;
-      ffi.ffiModel.setViewOnly(ffi.id, viewOnly);
-    }
-  });
-
-  // Keyboard mode (Map / Translate / Legacy). Mirrors the radio buttons in
-  // `_KeyboardMenu.keyboardMode()` (built as RdoMenuButton, not TRadioMenu).
-  void registerKeyboardMode(String actionId, String mode) {
-    ffi.shortcutModel.register(actionId, () async {
-      if (!ffi.ffiModel.keyboard ||
-          ffi.ffiModel.viewOnly ||
-          !bind.sessionIsKeyboardModeSupported(
-              sessionId: sessionId, mode: mode) ||
-          (ffi.ffiModel.pi.isWayland && mode != kKeyMapMode)) {
-        return;
-      }
-      if (isInputSourceFlutter) {
-        final modeOnly = bind.sessionIsKeyboardModeSupported(
-                sessionId: sessionId, mode: kKeyMapMode)
-            ? kKeyMapMode
-            : kKeyLegacyMode;
-        if (mode != modeOnly) return;
-      }
-      await bind.sessionSetKeyboardMode(sessionId: sessionId, value: mode);
-      await ffi.inputModel.updateKeyboardMode();
-    });
-  }
-
-  registerKeyboardMode(kShortcutActionKeyboardModeMap, kKeyMapMode);
-  registerKeyboardMode(kShortcutActionKeyboardModeTranslate, kKeyTranslateMode);
-  registerKeyboardMode(kShortcutActionKeyboardModeLegacy, kKeyLegacyMode);
-
-  // View Only — desktop toolbar exposes this inline in `_KeyboardMenu.viewMode`
-  // (mobile is in toolbarDisplayToggle and goes through helper auto-register).
-  // Mirrors the desktop callback: toggle + sync FfiModel.viewOnly +
-  // FfiModel.showMyCursor (the toolbar keeps these in step).
-  ffi.shortcutModel.register(kShortcutActionToggleViewOnly, () async {
-    await bind.sessionToggleOption(
-        sessionId: sessionId, value: kOptionToggleViewOnly);
-    final viewOnly = await bind.sessionGetToggleOption(
-            sessionId: sessionId, arg: kOptionToggleViewOnly) ??
-        false;
-    ffi.ffiModel.setViewOnly(ffi.id, viewOnly);
-    final showMyCursor = await bind.sessionGetToggleOption(
-            sessionId: sessionId, arg: kOptionToggleShowMyCursor) ??
-        false;
-    ffi.ffiModel.setShowMyCursor(showMyCursor);
-  });
-
-  // Toggle Reverse mouse wheel — read current 'Y'/'N' (falling back to user
-  // default), flip, write back.
-  ffi.shortcutModel.register(kShortcutActionToggleReverseMouseWheel, () async {
-    if (!ffi.ffiModel.keyboard || ffi.ffiModel.viewOnly) return;
-    var cur = bind.sessionGetReverseMouseWheelSync(sessionId: sessionId) ?? '';
-    if (cur == '') {
-      cur = bind.mainGetUserDefaultOption(key: kKeyReverseMouseWheel);
-    }
-    final next = cur == 'Y' ? 'N' : 'Y';
-    await bind.sessionSetReverseMouseWheel(sessionId: sessionId, value: next);
-  });
-
-  // Toggle Relative mouse mode (gaming mode). Desktop only.
-  ffi.shortcutModel.register(kShortcutActionToggleRelativeMouseMode, () {
-    ffi.inputModel.toggleRelativeMouseMode();
-  });
 }

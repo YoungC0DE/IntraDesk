@@ -1,4 +1,4 @@
-use crate::keyboard::input_source::{change_input_source, get_cur_session_input_source};
+use crate::keyboard::input_source::get_cur_session_input_source;
 use crate::{
     client::file_trait::FileManager,
     common::{make_fd_to_json, make_vec_fd_to_json},
@@ -248,27 +248,6 @@ pub fn session_refresh(session_id: SessionID, display: usize) {
     }
 }
 
-pub fn session_take_screenshot(session_id: SessionID, display: usize) {
-    if let Some(s) = sessions::get_session_by_session_id(&session_id) {
-        s.take_screenshot(display as _, session_id.to_string());
-    }
-}
-
-pub fn session_handle_screenshot(
-    #[allow(unused_variables)] session_id: SessionID,
-    action: String,
-) -> String {
-    crate::client::screenshot::handle_screenshot(action)
-}
-
-pub fn session_is_multi_ui_session(session_id: SessionID) -> SyncReturn<bool> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        SyncReturn(session.is_multi_ui_session())
-    } else {
-        SyncReturn(false)
-    }
-}
-
 pub fn session_reconnect(session_id: SessionID) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.reconnect();
@@ -280,13 +259,10 @@ pub fn session_toggle_option(session_id: SessionID, value: String) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         log::warn!("toggle option {}", &value);
         session.toggle_option(value.clone());
-        if value == "view-only" && session.get_toggle_option(value.clone()) {
-            crate::keyboard::shortcuts::enter_view_only(&session_id);
-        }
         try_sync_peer_option(&session, &session_id, &value, None);
     }
     if sessions::get_session_by_session_id(&session_id).is_some()
-        && (value == "disable-clipboard" || value == "view-only")
+        && value == "disable-clipboard"
     {
         crate::flutter::update_text_clipboard_required();
     }
@@ -319,14 +295,6 @@ pub fn set_local_flutter_option(k: String, v: String) {
     ui_interface::set_local_flutter_option(k, v);
 }
 
-pub fn get_local_kb_layout_type() -> SyncReturn<String> {
-    SyncReturn(ui_interface::get_kb_layout_type())
-}
-
-pub fn set_local_kb_layout_type(kb_layout_type: String) {
-    ui_interface::set_kb_layout_type(kb_layout_type)
-}
-
 pub fn session_get_view_style(session_id: SessionID) -> Option<String> {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         Some(session.get_view_style())
@@ -349,23 +317,11 @@ pub fn session_get_scroll_style(session_id: SessionID) -> Option<String> {
     }
 }
 
-pub fn session_set_scroll_style(session_id: SessionID, value: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_scroll_style(value);
-    }
-}
-
 pub fn session_get_edge_scroll_edge_thickness(session_id: SessionID) -> Option<i32> {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         Some(session.get_edge_scroll_edge_thickness())
     } else {
         None
-    }
-}
-
-pub fn session_set_edge_scroll_edge_thickness(session_id: SessionID, value: i32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_edge_scroll_edge_thickness(value);
     }
 }
 
@@ -403,21 +359,6 @@ pub fn session_set_keyboard_mode(session_id: SessionID, value: String) {
     }
 }
 
-pub fn session_get_reverse_mouse_wheel_sync(session_id: SessionID) -> SyncReturn<Option<String>> {
-    let res = if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        Some(session.get_reverse_mouse_wheel())
-    } else {
-        None
-    };
-    SyncReturn(res)
-}
-
-pub fn session_set_reverse_mouse_wheel(session_id: SessionID, value: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_reverse_mouse_wheel(value);
-    }
-}
-
 pub fn session_get_displays_as_individual_windows(
     session_id: SessionID,
 ) -> SyncReturn<Option<String>> {
@@ -425,12 +366,6 @@ pub fn session_get_displays_as_individual_windows(
         SyncReturn(Some(session.get_displays_as_individual_windows()))
     } else {
         SyncReturn(None)
-    }
-}
-
-pub fn session_set_displays_as_individual_windows(session_id: SessionID, value: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_displays_as_individual_windows(value);
     }
 }
 
@@ -443,15 +378,6 @@ pub fn session_get_use_all_my_displays_for_the_remote_session(
         ))
     } else {
         SyncReturn(None)
-    }
-}
-
-pub fn session_set_use_all_my_displays_for_the_remote_session(
-    session_id: SessionID,
-    value: String,
-) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_use_all_my_displays_for_the_remote_session(value);
     }
 }
 
@@ -488,12 +414,6 @@ pub fn session_get_trackpad_speed(session_id: SessionID) -> Option<i32> {
         Some(session.get_trackpad_speed())
     } else {
         None
-    }
-}
-
-pub fn session_set_trackpad_speed(session_id: SessionID, value: i32) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.save_trackpad_speed(value);
     }
 }
 
@@ -596,13 +516,6 @@ pub fn session_input_key(
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         // #[cfg(any(target_os = "android", target_os = "ios"))]
         session.input_key(&name, down, press, alt, ctrl, shift, command);
-    }
-}
-
-pub fn session_input_string(session_id: SessionID, value: String) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        // #[cfg(any(target_os = "android", target_os = "ios"))]
-        session.input_string(&value);
     }
 }
 
@@ -1011,15 +924,6 @@ pub fn main_handle_wayland_screencast_restore_token(_key: String, _value: String
 pub fn main_get_input_source() -> SyncReturn<String> {
     let input_source = get_cur_session_input_source();
     SyncReturn(input_source)
-}
-
-pub fn main_set_input_source(session_id: SessionID, value: String) {
-    {
-        change_input_source(session_id, value);
-        if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-            try_sync_peer_option(&session, &session_id, "input_source", None);
-        }
-    }
 }
 
 /// Set cursor position (for pointer lock re-centering).
@@ -1579,22 +1483,6 @@ pub fn session_get_conn_session_id(session_id: SessionID) -> SyncReturn<String> 
     }
 }
 
-pub fn session_alternative_codecs(session_id: SessionID) -> String {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        let (vp8, av1, h264, h265) = session.alternative_codecs();
-        let msg = HashMap::from([("vp8", vp8), ("av1", av1), ("h264", h264), ("h265", h265)]);
-        serde_json::ser::to_string(&msg).unwrap_or("".to_owned())
-    } else {
-        String::new()
-    }
-}
-
-pub fn session_change_prefer_codec(session_id: SessionID) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.update_supported_decodings();
-    }
-}
-
 pub fn session_on_waiting_for_image_dialog_show(session_id: SessionID) {
     super::flutter::session_on_waiting_for_image_dialog_show(session_id);
 }
@@ -1891,15 +1779,6 @@ pub fn is_selinux_enforcing() -> SyncReturn<bool> {
     }
 }
 
-pub fn main_supported_input_source() -> SyncReturn<String> {
-    {
-        SyncReturn(
-            serde_json::to_string(&crate::keyboard::input_source::get_supported_input_source())
-                .unwrap_or_default(),
-        )
-    }
-}
-
 pub fn main_generate2fa() -> String {
     generate2fa()
 }
@@ -1993,31 +1872,6 @@ pub fn session_set_common(session_id: SessionID, key: String, value: String) {
             s.continue_insecure_connection(value == "Y");
             return;
         }
-    }
-}
-
-pub fn session_get_common_sync(
-    session_id: SessionID,
-    key: String,
-    param: String,
-) -> SyncReturn<Option<String>> {
-    SyncReturn(session_get_common(session_id, key, param))
-}
-
-pub fn session_get_common(
-    session_id: SessionID,
-    key: String,
-    #[allow(unused_variables)] param: String,
-) -> Option<String> {
-    if let Some(s) = sessions::get_session_by_session_id(&session_id) {
-        let v = if key == "is_screenshot_supported" {
-            s.is_screenshot_supported().to_string()
-        } else {
-            "".to_owned()
-        };
-        Some(v)
-    } else {
-        None
     }
 }
 

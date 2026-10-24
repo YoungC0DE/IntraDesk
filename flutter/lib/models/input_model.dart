@@ -455,7 +455,6 @@ class InputModel {
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
   String get peerVersion => parent.target?.ffiModel.pi.version ?? '';
   bool get isViewOnly => parent.target!.ffiModel.viewOnly;
-  bool get showMyCursor => parent.target!.ffiModel.showMyCursor;
   double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
   int get trackpadSpeed => _trackpadSpeed;
   bool get useEdgeScroll =>
@@ -1438,7 +1437,7 @@ class InputModel {
 
   void onPointHoverImage(PointerHoverEvent e) {
     _stopFling = true;
-    if (isViewOnly && !showMyCursor) return;
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     // May fix https://github.com/rustdesk/rustdesk/issues/13009
@@ -1637,7 +1636,7 @@ class InputModel {
     _queryOtherWindowCoords = true;
     _remoteWindowCoords = [];
     _windowRect = null;
-    if (isViewOnly && !showMyCursor) return;
+    if (isViewOnly) return;
 
     // Track mouse down events for duplicate detection on iOS.
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -1675,7 +1674,7 @@ class InputModel {
 
   void onPointUpImage(PointerUpEvent e) {
     _queryOtherWindowCoords = false;
-    if (isViewOnly && !showMyCursor) return;
+    if (isViewOnly) return;
 
     if (_relativeMouse.enabled.value) {
       _relativeMouse.updatePointerRegionTopLeftGlobal(e);
@@ -1696,7 +1695,7 @@ class InputModel {
   }
 
   void onPointMoveImage(PointerMoveEvent e) {
-    if (isViewOnly && !showMyCursor) return;
+    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     if (_relativeMouse.enabled.value) {
@@ -1888,11 +1887,6 @@ class InputModel {
   }
 
   bool _checkPeerControlProtected(double x, double y) {
-    if (isViewOnly && showMyCursor) {
-      lastMousePos = ui.Offset(x, y);
-      return false;
-    }
-
     final cursorModel = parent.target!.cursorModel;
     if (cursorModel.isPeerControlProtected) {
       lastMousePos = ui.Offset(x, y);

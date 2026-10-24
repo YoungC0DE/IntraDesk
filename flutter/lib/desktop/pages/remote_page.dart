@@ -21,7 +21,6 @@ import '../../models/shortcut_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
 import '../widgets/remote_toolbar.dart';
-import '../widgets/kb_layout_type_chooser.dart';
 import '../widgets/tabbar_widget.dart';
 import 'macos_full_screen_focus_recovery.dart';
 
@@ -117,9 +116,6 @@ class _RemotePageState extends State<RemotePage>
   Function(bool)? _onEnterOrLeaveImage4Toolbar;
 
   late FFI _ffi;
-  Worker? _waylandKeyboardModeWorker;
-  bool _waylandKeyboardModeNormalized = false;
-  bool _waylandKeyboardModeNormalizing = false;
 
   SessionID get sessionId => _ffi.sessionId;
 
@@ -141,8 +137,6 @@ class _RemotePageState extends State<RemotePage>
     Get.put<FFI>(_ffi, tag: widget.id);
     _ffi.imageModel.addCallbackOnFirstImage((String peerId) {
       _ffi.canvasModel.activateLocalCursor();
-      showKBLayoutTypeChooserIfNeeded(
-          _ffi.ffiModel.pi.platform, _ffi.dialogManager);
       // Seed shortcut action callbacks once the session is ready, so that
       // global keyboard shortcuts work even if the user never opens the
       // toolbar menu. The returned list is intentionally discarded — the
@@ -203,48 +197,6 @@ class _RemotePageState extends State<RemotePage>
     // Register callback to cancel debounce timer when relative mouse mode is disabled
     _ffi.inputModel.onRelativeMouseModeDisabled =
         _cancelPointerLockCenterDebounceTimer;
-
-    _waylandKeyboardModeWorker = ever(_ffi.ffiModel.pi.isSet, (bool isSet) {
-      if (isSet) {
-        unawaited(_normalizeWaylandKeyboardModeIfNeeded());
-      }
-    });
-    if (_ffi.ffiModel.pi.isSet.value) {
-      unawaited(_normalizeWaylandKeyboardModeIfNeeded());
-    }
-  }
-
-  Future<void> _normalizeWaylandKeyboardModeIfNeeded() async {
-    if (!mounted ||
-        _waylandKeyboardModeNormalized ||
-        _waylandKeyboardModeNormalizing) {
-      return;
-    }
-    _waylandKeyboardModeNormalizing = true;
-    try {
-      final pi = _ffi.ffiModel.pi;
-      if (pi.platform != kPeerPlatformLinux || !pi.isWayland) return;
-      final mapSupported = bind.sessionIsKeyboardModeSupported(
-          sessionId: sessionId, mode: kKeyMapMode);
-      if (!mapSupported) return;
-      final current = await bind.sessionGetKeyboardMode(sessionId: sessionId);
-      if (!mounted) return;
-      if (current == kKeyMapMode) {
-        _waylandKeyboardModeNormalized = true;
-        return;
-      }
-      await bind.sessionSetKeyboardMode(
-          sessionId: sessionId, value: kKeyMapMode);
-      if (!mounted) return;
-      await _ffi.inputModel.updateKeyboardMode();
-      if (!mounted) return;
-      _waylandKeyboardModeNormalized = true;
-    } catch (e, st) {
-      debugPrint('Failed to normalize Wayland keyboard mode: $e');
-      debugPrintStack(stackTrace: st);
-    } finally {
-      _waylandKeyboardModeNormalizing = false;
-    }
   }
 
   /// Cancel the pointer lock center debounce timer
@@ -537,7 +489,6 @@ class _RemotePageState extends State<RemotePage>
 
     _pointerLockCenterDebounceTimer?.cancel();
     _pointerLockCenterDebounceTimer = null;
-    _waylandKeyboardModeWorker?.dispose();
     // Clear callback reference to prevent memory leaks and stale references
     _ffi.inputModel.onRelativeMouseModeDisabled = null;
     // Relative mouse mode cleanup is centralized in FFI.close(closeSession: ...).
@@ -551,9 +502,6 @@ class _RemotePageState extends State<RemotePage>
     _ffi.imageModel.disposeImage();
     _ffi.cursorModel.disposeImages();
     _rawKeyFocusNode.dispose();
-    if (closeSession) {
-      clearWaylandKeyboardPromptSuppressedForConnection(sessionId.toString());
-    }
     await _ffi.close(closeSession: closeSession);
     _timer?.cancel();
     _ffi.dialogManager.dismissAll();

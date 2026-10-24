@@ -27,7 +27,6 @@ import 'package:image/image.dart' as img2;
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:vector_math/vector_math.dart' show Vector2;
 
 import '../common.dart';
@@ -102,7 +101,6 @@ class FfiModel with ChangeNotifier {
   var _reconnects = 1;
   DateTime? _offlineReconnectStartTime;
   bool _viewOnly = false;
-  bool _showMyCursor = false;
   WeakReference<FFI> parent;
   late final SessionID sessionId;
 
@@ -110,8 +108,6 @@ class FfiModel with ChangeNotifier {
   Timer? waitForImageTimer;
   RxBool waitForFirstImage = true.obs;
   bool isRefreshing = false;
-
-  Timer? timerScreenshot;
 
   Rect? get rect => _rect;
   bool get isOriginalResolutionSet =>
@@ -136,7 +132,6 @@ class FfiModel with ChangeNotifier {
   bool get isPeerWindows => _pi.platform == kPeerPlatformWindows;
 
   bool get viewOnly => _viewOnly;
-  bool get showMyCursor => _showMyCursor;
 
   FfiModel(this.parent) {
     clear();
@@ -221,7 +216,6 @@ class FfiModel with ChangeNotifier {
     resetRestartReconnectState();
     clearPermissions();
     waitForImageTimer?.cancel();
-    timerScreenshot?.cancel();
   }
 
   setConnectionType(String peerId, bool secure) {
@@ -336,8 +330,6 @@ class FfiModel with ChangeNotifier {
         handleFollowCurrentDisplay(evt, sessionId, peerId);
       } else if (name == 'use_texture_render') {
         _handleUseTextureRender(evt, sessionId, peerId);
-      } else if (name == 'screenshot') {
-        _handleScreenshot(evt, sessionId, peerId);
       } else if (name == 'exit_relative_mouse_mode') {
         // Handle exit shortcut from rdev grab loop (Ctrl+Alt on Win/Linux, Cmd+G on macOS)
         parent.target?.inputModel.exitRelativeMouseModeWithKeyRelease();
@@ -350,74 +342,6 @@ class FfiModel with ChangeNotifier {
         debugPrint('Event is not handled in the fixed branch: $name');
       }
     };
-  }
-
-  _handleScreenshot(
-      Map<String, dynamic> evt, SessionID sessionId, String peerId) {
-    timerScreenshot?.cancel();
-    timerScreenshot = null;
-    final msg = evt['msg'] ?? '';
-    final msgBoxType = 'custom-nook-nocancel-hasclose';
-    final msgBoxTitle = 'Take screenshot';
-    final dialogManager = parent.target!.dialogManager;
-    if (msg.isNotEmpty) {
-      msgBox(sessionId, msgBoxType, msgBoxTitle, msg, '', dialogManager);
-    } else {
-      final msgBoxText = 'screenshot-action-tip';
-
-      close() {
-        dialogManager.dismissAll();
-      }
-
-      saveAs() {
-        close();
-        Future.delayed(Duration.zero, () async {
-          final ts = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-          String? outputFile = await FilePicker.platform.saveFile(
-            dialogTitle: '${translate('Save as')}...',
-            fileName: 'screenshot_$ts.png',
-            allowedExtensions: ['png'],
-            type: FileType.custom,
-          );
-          if (outputFile == null) {
-            bind.sessionHandleScreenshot(sessionId: sessionId, action: '2');
-          } else {
-            final res = await bind.sessionHandleScreenshot(
-                sessionId: sessionId, action: '0:$outputFile');
-            if (res.isNotEmpty) {
-              msgBox(sessionId, 'custom-nook-nocancel-hasclose-error',
-                  'Take screenshot', res, '', dialogManager);
-            }
-          }
-        });
-      }
-
-      copyToClipboard() {
-        bind.sessionHandleScreenshot(sessionId: sessionId, action: '1');
-        close();
-      }
-
-      cancel() {
-        bind.sessionHandleScreenshot(sessionId: sessionId, action: '2');
-        close();
-      }
-
-      final List<Widget> buttons = [
-        dialogButton('${translate('Save as')}...', onPressed: saveAs),
-        dialogButton('Copy to clipboard', onPressed: copyToClipboard),
-        dialogButton('Cancel', onPressed: cancel),
-      ];
-      dialogManager.dismissAll();
-      dialogManager.show(
-        (setState, close, context) => CustomAlertDialog(
-          title: null,
-          content: SelectionArea(
-              child: msgboxContent(msgBoxType, msgBoxTitle, msgBoxText)),
-          actions: buttons,
-        ),
-        tag: '$msgBoxType-$msgBoxTitle-$msgBoxTitle',
-      );
-    }
   }
 
   _handleUseTextureRender(
@@ -938,8 +862,6 @@ class FfiModel with ChangeNotifier {
           peerId,
           bind.sessionGetToggleOptionSync(
               sessionId: sessionId, arg: kOptionToggleViewOnly));
-      setShowMyCursor(bind.sessionGetToggleOptionSync(
-          sessionId: sessionId, arg: kOptionToggleShowMyCursor));
     }
     if (connType == ConnType.defaultConn) {
       final platformAdditions = evt['platform_additions'];
@@ -1261,13 +1183,6 @@ class FfiModel with ChangeNotifier {
     }
     if (_viewOnly != value) {
       _viewOnly = value;
-      notifyListeners();
-    }
-  }
-
-  void setShowMyCursor(bool value) {
-    if (_showMyCursor != value) {
-      _showMyCursor = value;
       notifyListeners();
     }
   }
@@ -1881,11 +1796,6 @@ class CanvasModel with ChangeNotifier {
     if (savedValue != null) {
       _edgeScrollEdgeThickness = savedValue;
     }
-  }
-
-  void updateEdgeScrollEdgeThickness(int newThickness) {
-    _edgeScrollEdgeThickness = newThickness;
-    notifyListeners();
   }
 
   void update(double x, double y, double scale) {

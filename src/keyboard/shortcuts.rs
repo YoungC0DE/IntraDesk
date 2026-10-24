@@ -22,49 +22,24 @@ pub mod action_id {
     pub const SWITCH_DISPLAY_NEXT: &str  = "switch_display_next";
     pub const SWITCH_DISPLAY_PREV: &str  = "switch_display_prev";
     pub const SWITCH_DISPLAY_ALL: &str   = "switch_display_all";
-    pub const SCREENSHOT: &str           = "screenshot";
     pub const INSERT_LOCK: &str          = "insert_lock";
     pub const REFRESH: &str              = "refresh";
     pub const SWITCH_SIDES: &str         = "switch_sides";
     pub const CLOSE_TAB: &str            = "close_tab";
     pub const TOGGLE_TOOLBAR: &str       = "toggle_toolbar";
     pub const RESTART_REMOTE: &str       = "restart_remote";
-    pub const RESET_CANVAS: &str         = "reset_canvas";
     pub const TOGGLE_MUTE: &str          = "toggle_mute";
     pub const PIN_TOOLBAR: &str          = "pin_toolbar";
     pub const VIEW_MODE_ORIGINAL: &str   = "view_mode_original";
     pub const VIEW_MODE_ADAPTIVE: &str   = "view_mode_adaptive";
-    pub const TOGGLE_QUALITY_MONITOR: &str    = "toggle_quality_monitor";
-    pub const TOGGLE_SHOW_REMOTE_CURSOR: &str = "toggle_show_remote_cursor";
-    pub const TOGGLE_SHOW_MY_CURSOR: &str     = "toggle_show_my_cursor";
     pub const TOGGLE_DISABLE_CLIPBOARD: &str  = "toggle_disable_clipboard";
-    pub const KEYBOARD_MODE_MAP: &str         = "keyboard_mode_map";
-    pub const KEYBOARD_MODE_TRANSLATE: &str   = "keyboard_mode_translate";
-    pub const KEYBOARD_MODE_LEGACY: &str      = "keyboard_mode_legacy";
-    pub const CODEC_AUTO: &str                = "codec_auto";
-    pub const CODEC_VP8: &str                 = "codec_vp8";
-    pub const CODEC_VP9: &str                 = "codec_vp9";
-    pub const CODEC_AV1: &str                 = "codec_av1";
-    pub const CODEC_H264: &str                = "codec_h264";
-    pub const CODEC_H265: &str                = "codec_h265";
-    pub const TOGGLE_RELATIVE_MOUSE_MODE: &str = "toggle_relative_mouse_mode";
-    pub const TOGGLE_FOLLOW_REMOTE_CURSOR: &str = "toggle_follow_remote_cursor";
-    pub const TOGGLE_FOLLOW_REMOTE_WINDOW: &str = "toggle_follow_remote_window";
-    pub const TOGGLE_ZOOM_CURSOR: &str        = "toggle_zoom_cursor";
-    pub const TOGGLE_REVERSE_MOUSE_WHEEL: &str = "toggle_reverse_mouse_wheel";
-    pub const TOGGLE_SWAP_LEFT_RIGHT_MOUSE: &str = "toggle_swap_left_right_mouse";
-    pub const TOGGLE_LOCK_AFTER_SESSION_END: &str = "toggle_lock_after_session_end";
-    pub const TOGGLE_TRUE_COLOR: &str         = "toggle_true_color";
-    pub const TOGGLE_SWAP_CTRL_CMD: &str      = "toggle_swap_ctrl_cmd";
     pub const TOGGLE_ENABLE_FILE_COPY_PASTE: &str = "toggle_enable_file_copy_paste";
     pub const VIEW_MODE_CUSTOM: &str          = "view_mode_custom";
     pub const IMAGE_QUALITY_BEST: &str        = "image_quality_best";
     pub const IMAGE_QUALITY_BALANCED: &str    = "image_quality_balanced";
     pub const IMAGE_QUALITY_LOW: &str         = "image_quality_low";
-    pub const SEND_CLIPBOARD_KEYSTROKES: &str = "send_clipboard_keystrokes";
     pub const SWITCH_TAB_NEXT: &str           = "switch_tab_next";
     pub const SWITCH_TAB_PREV: &str           = "switch_tab_prev";
-    pub const TOGGLE_VIEW_ONLY: &str          = "toggle_view_only";
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,15 +74,13 @@ pub struct Bindings {
 
 pub fn default_bindings() -> Vec<Binding> {
     let prefix = || vec![Modifier::Primary, Modifier::Alt, Modifier::Shift];
-    // Defaults align with AnyDesk's M/S/I/C/Delete/Arrow/Digit conventions
-    // where applicable; "P" for screenshot also matches AnyDesk.
+    // Defaults align with AnyDesk's S/Delete/Arrow conventions where
+    // applicable.
     vec![
         Binding { action: action_id::SEND_CTRL_ALT_DEL.into(),         mods: prefix(), key: "delete".into() },
         Binding { action: action_id::TOGGLE_FULLSCREEN.into(),         mods: prefix(), key: "enter".into() },
         Binding { action: action_id::SWITCH_DISPLAY_NEXT.into(),       mods: prefix(), key: "arrow_right".into() },
         Binding { action: action_id::SWITCH_DISPLAY_PREV.into(),       mods: prefix(), key: "arrow_left".into() },
-        Binding { action: action_id::SCREENSHOT.into(),                mods: prefix(), key: "p".into() },
-        Binding { action: action_id::TOGGLE_SHOW_REMOTE_CURSOR.into(), mods: prefix(), key: "m".into() },
         Binding { action: action_id::TOGGLE_MUTE.into(),               mods: prefix(), key: "s".into() },
     ]
 }
@@ -239,11 +212,10 @@ pub fn event_to_key_name(event: &rdev::Event) -> Option<String> {
 /// written.
 pub fn reload_from_config() {
     let raw = hbb_common::config::LocalConfig::get_option(LOCAL_CONFIG_KEY);
-    let is_wayland = false;
-    reload_from_raw(&raw, std::env::consts::OS, is_wayland);
+    reload_from_raw(&raw, std::env::consts::OS);
 }
 
-fn reload_from_raw(raw: &str, platform: &str, is_wayland: bool) {
+fn reload_from_raw(raw: &str, platform: &str) {
     let mut parsed: Bindings = if raw.is_empty() {
         Bindings::default()
     } else {
@@ -256,8 +228,8 @@ fn reload_from_raw(raw: &str, platform: &str, is_wayland: bool) {
         }
     };
     // Match the controller capabilities in ShortcutModel, preserving storage
-    // for a later return to another platform or display server.
-    parsed.bindings.retain(|b| action_available_on_platform(&b.action, platform, is_wayland));
+    // for a later return to another platform.
+    parsed.bindings.retain(|b| action_available_on_platform(&b.action, platform));
     match CACHE.write() {
         Ok(mut w) => {
             *w = Arc::new(parsed);
@@ -269,17 +241,13 @@ fn reload_from_raw(raw: &str, platform: &str, is_wayland: bool) {
     }
 }
 
-fn action_available_on_platform(action: &str, platform: &str, is_wayland: bool) -> bool {
+fn action_available_on_platform(action: &str, platform: &str) -> bool {
     let mobile = matches!(platform, "android" | "ios");
     match action {
-        action_id::TOGGLE_RELATIVE_MOUSE_MODE => !mobile && !is_wayland,
-        action_id::TOGGLE_FULLSCREEN | action_id::SCREENSHOT | action_id::SWITCH_TAB_NEXT
+        action_id::TOGGLE_FULLSCREEN | action_id::SWITCH_TAB_NEXT
         | action_id::SWITCH_TAB_PREV | action_id::CLOSE_TAB | action_id::SWITCH_SIDES
         | action_id::TOGGLE_TOOLBAR | action_id::PIN_TOOLBAR | action_id::SWITCH_DISPLAY_ALL
-        | action_id::TOGGLE_ENABLE_FILE_COPY_PASTE | action_id::KEYBOARD_MODE_MAP
-        | action_id::KEYBOARD_MODE_TRANSLATE | action_id::KEYBOARD_MODE_LEGACY
-        | action_id::TOGGLE_SHOW_MY_CURSOR | action_id::TOGGLE_ZOOM_CURSOR => !mobile,
-        action_id::RESET_CANVAS => mobile,
+        | action_id::TOGGLE_ENABLE_FILE_COPY_PASTE => !mobile,
         _ => true,
     }
 }
@@ -300,7 +268,7 @@ pub fn current() -> Arc<Bindings> {
 /// action id, or `None` if no binding fires.
 ///
 /// A bound chord belongs to RustDesk: it is consumed even when the action is
-/// unavailable in the current session (e.g. screenshot on a peer that does not
+/// unavailable in the current session (e.g. Ctrl+Alt+Del on a peer that does not
 /// support it), and the Flutter side then does nothing. It is never forwarded
 /// to the remote, so what a chord does depends on the binding alone, not on
 /// session state the user cannot see.
@@ -367,9 +335,7 @@ const RELEASE_ACTION_IDS: &[&str] = &[
 ];
 
 pub fn runs_on_release(action_id: &str) -> bool {
-    // A clipboard consent dialog can consume the trigger release. Web keeps
-    // this action on key-down for browser clipboard user activation.
-    action_id == action_id::SEND_CLIPBOARD_KEYSTROKES || RELEASE_ACTION_IDS.contains(&action_id)
+    RELEASE_ACTION_IDS.contains(&action_id)
 }
 
 /// Forget the modifiers a session released on its remote and the actions it
@@ -406,17 +372,6 @@ pub(super) fn release_modifier_on_leave(key: rdev::Key) -> bool {
     drop(released);
     super::MODIFIERS_STATE.lock().unwrap().insert(key, false);
     true
-}
-
-pub fn enter_view_only(session_id: &hbb_common::SessionID) {
-    if super::IS_RDEV_ENABLED.load(std::sync::atomic::Ordering::SeqCst) {
-        return;
-    }
-    // The Flutter input source stops routing key events here, so the release
-    // of a fired key can no longer reach this matcher.
-    FIRED_KEYS.lock().unwrap().clear();
-    RELEASE_ACTIONS.lock().unwrap().clear();
-    clear_session_state(session_id);
 }
 
 pub fn transfer_released_modifiers(from: &hbb_common::SessionID, to: &hbb_common::SessionID) {
@@ -498,10 +453,7 @@ pub fn try_dispatch(
     let peer = peer();
     if runs_on_release(&action_id)
         || matches!(action_id.as_str(),
-            action_id::TOGGLE_VIEW_ONLY | action_id::TOGGLE_SHOW_MY_CURSOR
-            | action_id::INSERT_LOCK | action_id::SEND_CTRL_ALT_DEL
-            | action_id::KEYBOARD_MODE_MAP | action_id::KEYBOARD_MODE_TRANSLATE
-            | action_id::KEYBOARD_MODE_LEGACY)
+            action_id::INSERT_LOCK | action_id::SEND_CTRL_ALT_DEL)
     {
         release_remote_non_modifiers(keyboard_mode, &peer, &send);
     }
@@ -735,7 +687,7 @@ mod tests {
             bindings: default_bindings(),
         };
         let result = match_normalized(
-            "p",
+            "s",
             &[Modifier::Primary, Modifier::Alt, Modifier::Shift],
             &bindings,
         );
@@ -745,22 +697,22 @@ mod tests {
     #[test]
     fn match_returns_none_when_disabled() {
         let bindings = Bindings { enabled: false, pass_through: false, bindings: default_bindings() };
-        let result = match_normalized("p", &[Modifier::Primary, Modifier::Alt, Modifier::Shift], &bindings);
+        let result = match_normalized("s", &[Modifier::Primary, Modifier::Alt, Modifier::Shift], &bindings);
         assert_eq!(result, None);
     }
 
     #[test]
-    fn match_screenshot_when_enabled() {
+    fn match_mute_when_enabled() {
         let bindings = Bindings { enabled: true, pass_through: false, bindings: default_bindings() };
-        let result = match_normalized("p", &[Modifier::Primary, Modifier::Alt, Modifier::Shift], &bindings);
-        assert_eq!(result, Some(action_id::SCREENSHOT));
+        let result = match_normalized("s", &[Modifier::Primary, Modifier::Alt, Modifier::Shift], &bindings);
+        assert_eq!(result, Some(action_id::TOGGLE_MUTE));
     }
 
     #[test]
     fn match_returns_none_when_modifiers_partial() {
         let bindings = Bindings { enabled: true, pass_through: false, bindings: default_bindings() };
         // missing Shift
-        let result = match_normalized("p", &[Modifier::Primary, Modifier::Alt], &bindings);
+        let result = match_normalized("s", &[Modifier::Primary, Modifier::Alt], &bindings);
         assert_eq!(result, None);
     }
 
@@ -825,7 +777,7 @@ mod tests {
     #[test]
     fn match_refuses_zero_modifier_bindings() {
         // Defense-in-depth: a hand-edited config with empty `mods` must NOT
-        // turn every plain "P" press into a screenshot shortcut, which would
+        // turn every plain "P" press into a mute shortcut, which would
         // swallow all typing in the remote session. The recording dialog
         // already refuses to save such bindings, but the matcher must hold
         // the line independently.
@@ -833,7 +785,7 @@ mod tests {
             enabled: true,
             pass_through: false,
             bindings: vec![Binding {
-                action: "screenshot".into(),
+                action: "toggle_mute".into(),
                 mods: vec![],
                 key: "p".into(),
             }],
@@ -876,59 +828,33 @@ mod tests {
     fn reload_handles_missing_and_invalid_json() {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // empty (no value set) → defaults
-        reload_from_raw("", "windows", false);
+        reload_from_raw("", "windows");
         let b = current();
         assert!(!b.enabled);
         assert!(b.bindings.is_empty());
 
         // invalid JSON → defaults (no panic)
-        reload_from_raw("not json", "windows", false);
+        reload_from_raw("not json", "windows");
         let b = current();
         assert!(!b.enabled);
     }
 
     #[test]
-    fn wayland_binding_is_inactive_and_returns_on_x11() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let raw = r#"{
-            "enabled": true, "pass_through": false, "bindings": [
-                {"action":"toggle_relative_mouse_mode","mods":["primary"],"key":"r"},
-                {"action":"toggle_mute","mods":["primary"],"key":"m"}
-            ]
-        }"#;
-        reload_from_raw(raw, "linux", false);
-        let original = current();
-        for is_wayland in [true, false] {
-            reload_from_raw(raw, "linux", is_wayland);
-            let active = current();
-            assert!(active.enabled);
-            assert!(!active.pass_through);
-            assert_eq!(
-                match_normalized("r", &[Modifier::Primary], &active),
-                if is_wayland { None } else { Some(action_id::TOGGLE_RELATIVE_MOUSE_MODE) },
-            );
-            assert_eq!(match_normalized("m", &[Modifier::Primary], &active), Some(action_id::TOGGLE_MUTE));
-        }
-        assert_eq!(match_normalized("r", &[Modifier::Primary], &original), Some(action_id::TOGGLE_RELATIVE_MOUSE_MODE));
-    }
-
-    #[test]
     fn active_cache_omits_platform_hidden_saved_actions() {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let actions = [action_id::SWITCH_DISPLAY_ALL, action_id::KEYBOARD_MODE_MAP,
-            action_id::TOGGLE_SHOW_MY_CURSOR, action_id::TOGGLE_ZOOM_CURSOR,
-            action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL];
+        let actions = [action_id::SWITCH_DISPLAY_ALL, action_id::TOGGLE_ENABLE_FILE_COPY_PASTE,
+            action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL];
         let saved = Bindings { enabled: true, pass_through: false,
             bindings: actions.iter().map(|action| Binding {
                 action: (*action).into(), mods: vec![Modifier::Primary], key: "m".into(),
             }).collect() };
         let raw = serde_json::to_string(&saved).unwrap();
         for (platform, expected) in [
-            ("android", vec![action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
-            ("ios", vec![action_id::RESET_CANVAS, action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
-            ("macos", actions.iter().copied().filter(|a| *a != action_id::RESET_CANVAS).collect()),
+            ("android", vec![action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
+            ("ios", vec![action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
+            ("macos", actions.to_vec()),
         ] {
-            reload_from_raw(&raw, platform, false);
+            reload_from_raw(&raw, platform);
             let active = current();
             assert_eq!(active.bindings.iter().map(|b| b.action.as_str()).collect::<Vec<_>>(), expected, "{platform}");
         }
@@ -966,21 +892,21 @@ mod tests {
             hit
         };
 
-        assert!(dispatch(&make_press(Key::KeyP)));
+        assert!(dispatch(&make_press(Key::KeyS)));
         {
             let state = super::super::MODIFIERS_STATE.lock().unwrap();
             for k in chord {
                 assert_eq!(state.get(&k), Some(&true), "{k:?} must stay held locally");
             }
         }
-        assert!(dispatch(&make_press(Key::KeyM)), "second chord key fires");
-        assert!(dispatch(&make_press(Key::KeyP)), "P repeat is consumed");
-        assert!(dispatch(&make_release(Key::KeyP)), "P release is consumed");
-        assert!(dispatch(&make_release(Key::KeyM)), "M release is consumed");
+        assert!(dispatch(&make_press(Key::RightArrow)), "second chord key fires");
+        assert!(dispatch(&make_press(Key::KeyS)), "S repeat is consumed");
+        assert!(dispatch(&make_release(Key::KeyS)), "S release is consumed");
+        assert!(dispatch(&make_release(Key::RightArrow)), "arrow release is consumed");
         assert!(fired_keys().is_empty());
         assert_eq!(
             *fired.borrow(),
-            vec![action_id::SCREENSHOT.to_owned(), action_id::TOGGLE_SHOW_REMOTE_CURSOR.to_owned()]
+            vec![action_id::TOGGLE_MUTE.to_owned(), action_id::SWITCH_DISPLAY_NEXT.to_owned()]
         );
 
         release_chord(chord);
@@ -996,12 +922,12 @@ mod tests {
         let dispatch =
             |e: &rdev::Event| try_dispatch(Some(&SID_A), e, "map", || "windows".into(), |_| {});
 
-        assert!(dispatch(&make_press(Key::KeyP)));
+        assert!(dispatch(&make_press(Key::KeyS)));
         release_chord(chord);
-        assert!(dispatch(&make_press(Key::KeyP)), "repeat without modifiers is consumed");
-        assert!(dispatch(&make_release(Key::KeyP)), "release without modifiers is consumed");
-        assert!(!dispatch(&make_press(Key::KeyP)), "a new press without the chord passes");
-        assert!(!dispatch(&make_release(Key::KeyP)));
+        assert!(dispatch(&make_press(Key::KeyS)), "repeat without modifiers is consumed");
+        assert!(dispatch(&make_release(Key::KeyS)), "release without modifiers is consumed");
+        assert!(!dispatch(&make_press(Key::KeyS)), "a new press without the chord passes");
+        assert!(!dispatch(&make_release(Key::KeyS)));
     }
 
     /// Close tab is itself a shortcut: the session that fired the key is gone
@@ -1017,15 +943,15 @@ mod tests {
             try_dispatch(Some(sid), e, "map", || "windows".into(), |_| {})
         };
 
-        assert!(dispatch(&SID_A, &make_press(Key::KeyP)));
+        assert!(dispatch(&SID_A, &make_press(Key::KeyS)));
         clear_session_state(&SID_A);
-        assert!(dispatch(&SID_B, &make_press(Key::KeyP)), "repeat stays consumed after A closed");
+        assert!(dispatch(&SID_B, &make_press(Key::KeyS)), "repeat stays consumed after A closed");
         release_chord(chord);
-        assert!(dispatch(&SID_B, &make_press(Key::KeyP)), "repeat without the chord too");
-        assert!(dispatch(&SID_B, &make_release(Key::KeyP)), "release stays consumed after A closed");
+        assert!(dispatch(&SID_B, &make_press(Key::KeyS)), "repeat without the chord too");
+        assert!(dispatch(&SID_B, &make_release(Key::KeyS)), "release stays consumed after A closed");
         assert!(fired_keys().is_empty());
-        assert!(!dispatch(&SID_B, &make_press(Key::KeyP)), "a new press without the chord passes");
-        assert!(!dispatch(&SID_B, &make_release(Key::KeyP)));
+        assert!(!dispatch(&SID_B, &make_press(Key::KeyS)), "a new press without the chord passes");
+        assert!(!dispatch(&SID_B, &make_release(Key::KeyS)));
     }
 
     #[test]
@@ -1040,17 +966,17 @@ mod tests {
             try_dispatch(None, e, "map", || "windows".into(), |_| {})
         };
 
-        assert!(dispatch(&make_press(Key::KeyP)));
+        assert!(dispatch(&make_press(Key::KeyS)));
         crate::flutter::set_cur_session_id(SID_B);
         release_chord(chord);
-        assert!(dispatch(&make_press(Key::KeyP)), "repeat stays consumed in the new tab");
+        assert!(dispatch(&make_press(Key::KeyS)), "repeat stays consumed in the new tab");
         clear_session_state(&SID_A);
         crate::flutter::set_cur_session_id(SID_A);
-        assert!(dispatch(&make_press(Key::KeyP)), "repeat stays consumed after switching back");
+        assert!(dispatch(&make_press(Key::KeyS)), "repeat stays consumed after switching back");
         crate::flutter::set_cur_session_id(SID_B);
-        assert!(dispatch(&make_release(Key::KeyP)), "release stays consumed in the new tab");
+        assert!(dispatch(&make_release(Key::KeyS)), "release stays consumed in the new tab");
         crate::flutter::set_cur_session_id(SID_A);
-        assert!(!dispatch(&make_press(Key::KeyP)), "new press is not a stale repeat");
+        assert!(!dispatch(&make_press(Key::KeyS)), "new press is not a stale repeat");
         crate::flutter::set_cur_session_id(previous_session);
     }
 
@@ -1061,7 +987,7 @@ mod tests {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let chord = enable_defaults_and_hold_chord();
         assert!(try_dispatch(
-            Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(), |_| {}
+            Some(&SID_A), &make_press(Key::KeyS), "map", || "windows".into(), |_| {}
         ));
         super::super::release_remote_keys("map");
         assert_eq!(
@@ -1082,7 +1008,7 @@ mod tests {
         let remote_held = std::cell::RefCell::new(
             chord.into_iter().collect::<std::collections::HashSet<_>>()
         );
-        for key in [Key::KeyP, Key::KeyM] {
+        for key in [Key::KeyS, Key::RightArrow] {
             assert!(try_dispatch(
                 Some(&SID_A),
                 &make_press(key),
@@ -1114,12 +1040,7 @@ mod tests {
         use rdev::Key;
 
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        for action in [action_id::TOGGLE_MUTE,
-            action_id::TOGGLE_VIEW_ONLY, action_id::TOGGLE_SHOW_MY_CURSOR,
-            action_id::INSERT_LOCK, action_id::SEND_CTRL_ALT_DEL,
-            action_id::KEYBOARD_MODE_MAP, action_id::KEYBOARD_MODE_TRANSLATE,
-            action_id::KEYBOARD_MODE_LEGACY]
-        {
+        for action in [action_id::TOGGLE_MUTE, action_id::INSERT_LOCK, action_id::SEND_CTRL_ALT_DEL] {
             let chord = enable_defaults_and_hold_chord();
             let mut bindings = default_bindings();
             bindings.iter_mut().find(|b| b.key == "s").unwrap().action = action.into();
@@ -1200,7 +1121,7 @@ mod tests {
         {
              // Mobile does not encode Legacy events.
              // Right Option is filtered.
-            reload_from_raw(r#"{"enabled":true,"bindings":[{"action":"toggle_mute","mods":["alt"],"key":"m"}]}"#, "windows", false);
+            reload_from_raw(r#"{"enabled":true,"bindings":[{"action":"toggle_mute","mods":["alt"],"key":"m"}]}"#, "windows");
             reset_fired_keys();
             clear_session_state(&SID_A);
             let sent = std::cell::RefCell::new(Vec::new());
@@ -1289,7 +1210,7 @@ mod tests {
             enabled: true,
             pass_through: false,
             bindings: vec![Binding {
-                action: action_id::SCREENSHOT.into(),
+                action: action_id::TOGGLE_MUTE.into(),
                 mods: vec![Modifier::Primary],
                 key: "p".into(),
             }],
@@ -1339,54 +1260,6 @@ mod tests {
         assert_eq!(sent, vec![(rdev::Key::KeyC, true)]);
     }
 
-    #[test]
-    fn view_only_preserves_rdev_shortcut_keys() {
-        use rdev::Key;
-        use std::sync::atomic::Ordering;
-
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = super::super::IS_RDEV_ENABLED.swap(true, Ordering::SeqCst);
-        let chord = enable_defaults_and_hold_chord();
-        assert!(try_dispatch(
-            Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(), |_| {}
-        ));
-        enter_view_only(&SID_A);
-        let action = match_event(&make_press(Key::KeyM));
-        let fired = fired_keys().contains(&Key::KeyP);
-        super::super::IS_RDEV_ENABLED.store(previous, Ordering::SeqCst);
-        release_chord(chord);
-        clear_session_state(&SID_A);
-        assert_eq!(action.as_deref(), Some(action_id::TOGGLE_SHOW_REMOTE_CURSOR));
-        assert!(fired, "rdev still receives the held shortcut key's release");
-    }
-
-    #[test]
-    fn view_only_clears_flutter_shortcut_keys_and_modifiers() {
-        use rdev::Key;
-        use std::sync::atomic::Ordering;
-
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let previous = super::super::IS_RDEV_ENABLED.swap(false, Ordering::SeqCst);
-        let chord = enable_defaults_and_hold_chord();
-        assert!(try_dispatch(
-            Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(), |_| {}
-        ));
-        clear_session_state(&SID_B);
-        assert_eq!(match_event(&make_press(Key::KeyM)).as_deref(), Some(action_id::TOGGLE_SHOW_REMOTE_CURSOR));
-        enter_view_only(&SID_A);
-        super::super::IS_RDEV_ENABLED.store(previous, Ordering::SeqCst);
-        assert!(fired_keys().is_empty());
-        assert_eq!(
-            super::super::client::get_modifiers_state(false, false, false, false),
-            (false, false, false, false)
-        );
-        assert!(!try_dispatch(
-            Some(&SID_A), &make_press(Key::KeyP), "map", || "windows".into(),
-            |_| panic!("view-only reset must not replay old modifiers")
-        ));
-        release_chord(chord);
-    }
-
     /// The Dart matcher keeps the same list (`kShortcutActionsRunOnKeyUp`);
     /// the fixture is the shared source of truth.
     #[test]
@@ -1407,7 +1280,7 @@ mod tests {
         for id in &fixture {
             assert!(runs_on_release(id));
         }
-        assert!(!runs_on_release(action_id::SCREENSHOT));
+        assert!(!runs_on_release(action_id::TOGGLE_MUTE));
     }
 
     /// Close tab and tab switching move focus away before the key is
@@ -1425,7 +1298,7 @@ mod tests {
             pass_through: false,
             bindings: vec![
                 Binding { action: action_id::CLOSE_TAB.into(), mods: prefix(), key: "w".into() },
-                Binding { action: action_id::SCREENSHOT.into(), mods: prefix(), key: "p".into() },
+                Binding { action: action_id::TOGGLE_MUTE.into(), mods: prefix(), key: "p".into() },
             ],
         });
         let dispatch = |sid: &hbb_common::SessionID, e: &rdev::Event| {
@@ -1448,38 +1321,6 @@ mod tests {
         clear_session_state(&SID_A);
         assert_eq!(pending_for(Key::KeyW), None, "a closed session owes nothing");
         assert!(dispatch(&SID_A, &make_release(Key::KeyW)), "but its key stays owned");
-        release_chord(chord);
-    }
-
-    #[test]
-    fn clipboard_prompt_waits_for_release_before_taking_focus() {
-        use rdev::Key;
-
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let chord = enable_defaults_and_hold_chord();
-        *CACHE.write().unwrap() = Arc::new(Bindings {
-            enabled: true,
-            pass_through: false,
-            bindings: vec![Binding {
-                action: action_id::SEND_CLIPBOARD_KEYSTROKES.into(),
-                mods: vec![Modifier::Primary, Modifier::Alt, Modifier::Shift],
-                key: "v".into(),
-            }],
-        });
-        let dispatch = |event: &rdev::Event| {
-            try_dispatch(Some(&SID_A), event, "map", || "linux".into(), |_| {})
-        };
-        for _ in 0..2 {
-            assert!(dispatch(&make_press(Key::KeyV)));
-            assert_eq!(
-                RELEASE_ACTIONS.lock().unwrap().get(&Key::KeyV).cloned(),
-                Some((SID_A, action_id::SEND_CLIPBOARD_KEYSTROKES.to_owned())),
-                "the prompt must not take focus before the trigger release"
-            );
-            assert!(dispatch(&make_release(Key::KeyV)));
-            assert!(!fired_keys().contains(&Key::KeyV));
-            assert!(!RELEASE_ACTIONS.lock().unwrap().contains_key(&Key::KeyV));
-        }
         release_chord(chord);
     }
 

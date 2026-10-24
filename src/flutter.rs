@@ -956,15 +956,6 @@ impl InvokeUiSession for FlutterHandler {
         }
     }
 
-    fn handle_screenshot_resp(&self, sid: String, msg: String) {
-        match SessionID::from_str(&sid) {
-            Ok(sid) => self.push_event_to("screenshot", &[("msg", json!(msg))], &[&sid]),
-            Err(e) => {
-                // Unreachable!
-                log::error!("Failed to parse sid \"{}\", {}", sid, e);
-            }
-        }
-    }
 }
 
 impl FlutterHandler {

@@ -200,8 +200,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **T3.3** Força bruta: o que já existia em `connection.rs` foi verificado e mantido — por IP, mais de 6 senhas erradas no mesmo minuto → "tente em 1 minuto"; a senha temporária é trocada após várias erradas seguidas; limites extras por prefixo IPv6. Mudança: o bloqueio após mais de 30 erradas (e os dos prefixos IPv6) era permanente até reiniciar o app; agora dura `LOCKOUT_MINUTES` = 15 min desde a última tentativa errada (`lockout_expired`); os contadores ficam, então a próxima errada bloqueia de novo por 15 min. Teste novo `test_lockout_after_too_many_wrong_attempts_is_temporary`.
   Checagem: `cargo test --lib lockout` 1 ok.
   dep: T3.2 · Área: `src/server/connection.rs` · @dono: claude
-- [ ] **T3.4** Aviso visível no computador acessado enquanto houver sessão ativa (janela do gerenciador de conexão com botão "Desconectar") e comportamento de aceite conforme D5.
-  dep: D5 · Área: `flutter/lib/desktop/pages/server_page.dart` · @dono:
+- [x] **T3.4** Aviso "sendo acessado" sempre visível: o gerenciador de conexão já abre sempre (T3.2), fica no topo (`alwaysOnTop`) com o botão "Desconectar"; saiu a minimização automática 3 s após autorizar (`cmHiddenTimer` e o `Listener` que a cancelava) e a minimização ao clicar "Elevar". O usuário local ainda pode minimizar pela barra da janela. Aceite conforme D5 já feito na T3.2 (sem clique).
+  Checagem: `flutter analyze` sem erros/avisos (o `dart format` reindentou o bloco do `DesktopTab` em `server_page.dart`).
+  dep: D5 · Área: `flutter/lib/desktop/pages/server_page.dart` · @dono: claude
 - [x] **T3.5** A escuta direta só aceita endereços da rede local (`is_lan_addr` em `src/server.rs`): IPv4 privados (RFC 1918), link-local (169.254/16), loopback e os equivalentes IPv6 (fc00::/7, fe80::/10, ::1); IPv4 mapeado em IPv6 é convertido antes. Outros endereços (inclusive CGNAT 100.64/10) são fechados logo no `accept`, antes do handshake, com log limitado a 1 por minuto. Teste novo `server::lan_addr_tests::only_local_network_addresses_are_accepted`.
   Checagem: `cargo test --lib lan_addr` 1 ok.
   dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono: claude

@@ -59,7 +59,8 @@ class _DesktopServerPageState extends State<DesktopServerPage>
 
   @override
   void onWindowClose() {
-    Future.wait([gFFI.serverModel.closeAll(byOperator: true), gFFI.close()]).then((_) {
+    Future.wait([gFFI.serverModel.closeAll(byOperator: true), gFFI.close()])
+        .then((_) {
       windowManager.setPreventClose(false);
       windowManager.close();
     });
@@ -86,13 +87,12 @@ class _DesktopServerPageState extends State<DesktopServerPage>
             body: ConnectionManager(),
           );
           return workaroundWindowBorder(
-                  context,
-                  Container(
-                    decoration: BoxDecoration(
-                        border:
-                            Border.all(color: MyTheme.color(context).border!)),
-                    child: body,
-                  ));
+              context,
+              Container(
+                decoration: BoxDecoration(
+                    border: Border.all(color: MyTheme.color(context).border!)),
+                child: body,
+              ));
         },
       ),
     );
@@ -161,13 +161,6 @@ class ConnectionManagerState extends State<ConnectionManager>
   @override
   Widget build(BuildContext context) {
     final serverModel = Provider.of<ServerModel>(context);
-    pointerHandler(PointerEvent e) {
-      if (serverModel.cmHiddenTimer != null) {
-        serverModel.cmHiddenTimer!.cancel();
-        serverModel.cmHiddenTimer = null;
-        debugPrint("CM hidden timer has been canceled");
-      }
-    }
 
     return serverModel.clients.isEmpty
         ? Column(
@@ -180,83 +173,79 @@ class ConnectionManagerState extends State<ConnectionManager>
               ),
             ],
           )
-        : Listener(
-            onPointerDown: pointerHandler,
-            onPointerMove: pointerHandler,
-            child: DesktopTab(
-              showTitle: false,
-              showMaximize: false,
-              showMinimize: true,
-              showClose: true,
-              onWindowCloseButton: handleWindowCloseButton,
-              controller: serverModel.tabController,
-              selectedBorderColor: MyTheme.accent,
-              maxLabelWidth: 100,
-              tail: null, //buildScrollJumper(),
-              tabBuilder: (key, icon, label, themeConf) {
-                final client = serverModel.clients
-                    .firstWhereOrNull((client) => client.id.toString() == key);
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Tooltip(
-                        message: key,
-                        waitDuration: Duration(seconds: 1),
-                        child: label),
-                    unreadMessageCountBuilder(client?.unreadFileTransferLogCount)
-                        .marginOnly(left: 4),
-                  ],
+        : DesktopTab(
+            showTitle: false,
+            showMaximize: false,
+            showMinimize: true,
+            showClose: true,
+            onWindowCloseButton: handleWindowCloseButton,
+            controller: serverModel.tabController,
+            selectedBorderColor: MyTheme.accent,
+            maxLabelWidth: 100,
+            tail: null, //buildScrollJumper(),
+            tabBuilder: (key, icon, label, themeConf) {
+              final client = serverModel.clients
+                  .firstWhereOrNull((client) => client.id.toString() == key);
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Tooltip(
+                      message: key,
+                      waitDuration: Duration(seconds: 1),
+                      child: label),
+                  unreadMessageCountBuilder(client?.unreadFileTransferLogCount)
+                      .marginOnly(left: 4),
+                ],
+              );
+            },
+            pageViewBuilder: (pageView) => LayoutBuilder(
+              builder: (context, constrains) {
+                var borderWidth = 0.0;
+                if (constrains.maxWidth >
+                    kConnectionManagerWindowSizeClosedSidePage.width) {
+                  borderWidth = kConnectionManagerWindowSizeOpenSidePage.width -
+                      constrains.maxWidth;
+                } else {
+                  borderWidth =
+                      kConnectionManagerWindowSizeClosedSidePage.width -
+                          constrains.maxWidth;
+                }
+                if (borderWidth < 0 || borderWidth > 50) {
+                  borderWidth = 0;
+                }
+                final realClosedWidth =
+                    kConnectionManagerWindowSizeClosedSidePage.width -
+                        borderWidth;
+                final realSidePageWidth = constrains.maxWidth - realClosedWidth;
+                final row = Row(children: [
+                  if (constrains.maxWidth >
+                      kConnectionManagerWindowSizeClosedSidePage.width)
+                    SizedBox(
+                      width: realSidePageWidth,
+                      child: allowRemoteCMModification()
+                          ? buildSidePage()
+                          : buildRemoteBlock(
+                              child: buildSidePage(),
+                              block: _sidePageBlock,
+                              mask: true),
+                    ),
+                  SizedBox(
+                      width: realClosedWidth,
+                      child: SizedBox(
+                          width: realClosedWidth,
+                          child: allowRemoteCMModification()
+                              ? pageView
+                              : buildRemoteBlock(
+                                  child: _buildKeyEventBlock(pageView),
+                                  block: _controlPageBlock,
+                                  mask: false,
+                                ))),
+                ]);
+                return Container(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: row,
                 );
               },
-              pageViewBuilder: (pageView) => LayoutBuilder(
-                builder: (context, constrains) {
-                  var borderWidth = 0.0;
-                  if (constrains.maxWidth >
-                      kConnectionManagerWindowSizeClosedSidePage.width) {
-                    borderWidth = kConnectionManagerWindowSizeOpenSidePage.width -
-                        constrains.maxWidth;
-                  } else {
-                    borderWidth = kConnectionManagerWindowSizeClosedSidePage.width -
-                        constrains.maxWidth;
-                  }
-                  if (borderWidth < 0 || borderWidth > 50) {
-                    borderWidth = 0;
-                  }
-                  final realClosedWidth =
-                      kConnectionManagerWindowSizeClosedSidePage.width -
-                          borderWidth;
-                  final realSidePageWidth =
-                      constrains.maxWidth - realClosedWidth;
-                  final row = Row(children: [
-                    if (constrains.maxWidth >
-                        kConnectionManagerWindowSizeClosedSidePage.width)
-                      SizedBox(
-                        width: realSidePageWidth,
-                        child: allowRemoteCMModification()
-                            ? buildSidePage()
-                            : buildRemoteBlock(
-                                child: buildSidePage(),
-                                block: _sidePageBlock,
-                                mask: true),
-                      ),
-                    SizedBox(
-                        width: realClosedWidth,
-                        child: SizedBox(
-                            width: realClosedWidth,
-                            child: allowRemoteCMModification()
-                                ? pageView
-                                : buildRemoteBlock(
-                                    child: _buildKeyEventBlock(pageView),
-                                    block: _controlPageBlock,
-                                    mask: false,
-                                  ))),
-                  ]);
-                  return Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
-                    child: row,
-                  );
-                },
-              ),
             ),
           );
   }
@@ -648,82 +637,72 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
               mainAxisSpacing: spacing,
               crossAxisSpacing: spacing,
               children: [
-                  buildPermissionIcon(
-                    client.keyboard,
-                    Icons.keyboard,
-                    (enabled) {
-                      bind.cmSwitchPermission(
-                          connId: client.id,
-                          name: "keyboard",
-                          enabled: enabled);
-                      setState(() {
-                        client.keyboard = enabled;
-                      });
-                    },
-                    translate('Enable keyboard/mouse'),
-                    canModify: canModifyPermission,
-                  ),
-                  buildPermissionIcon(
-                    client.clipboard,
-                    Icons.assignment_rounded,
-                    (enabled) {
-                      bind.cmSwitchPermission(
-                          connId: client.id,
-                          name: "clipboard",
-                          enabled: enabled);
-                      setState(() {
-                        client.clipboard = enabled;
-                      });
-                    },
-                    translate('Enable clipboard'),
-                    canModify: canModifyPermission,
-                  ),
-                  buildPermissionIcon(
-                    client.audio,
-                    Icons.volume_up_rounded,
-                    (enabled) {
-                      bind.cmSwitchPermission(
-                          connId: client.id,
-                          name: "audio",
-                          enabled: enabled);
-                      setState(() {
-                        client.audio = enabled;
-                      });
-                    },
-                    translate('Enable audio'),
-                    canModify: canModifyPermission,
-                  ),
-                  buildPermissionIcon(
-                    client.file,
-                    Icons.upload_file_rounded,
-                    (enabled) {
-                      bind.cmSwitchPermission(
-                          connId: client.id,
-                          name: "file",
-                          enabled: enabled);
-                      setState(() {
-                        client.file = enabled;
-                      });
-                    },
-                    translate('Enable file copy and paste'),
-                    canModify: canModifyPermission,
-                  ),
-                  buildPermissionIcon(
-                    client.restart,
-                    Icons.restart_alt_rounded,
-                    (enabled) {
-                      bind.cmSwitchPermission(
-                          connId: client.id,
-                          name: "restart",
-                          enabled: enabled);
-                      setState(() {
-                        client.restart = enabled;
-                      });
-                    },
-                    translate('Enable remote restart'),
-                    canModify: canModifyPermission,
-                  ),
-                ],
+                buildPermissionIcon(
+                  client.keyboard,
+                  Icons.keyboard,
+                  (enabled) {
+                    bind.cmSwitchPermission(
+                        connId: client.id, name: "keyboard", enabled: enabled);
+                    setState(() {
+                      client.keyboard = enabled;
+                    });
+                  },
+                  translate('Enable keyboard/mouse'),
+                  canModify: canModifyPermission,
+                ),
+                buildPermissionIcon(
+                  client.clipboard,
+                  Icons.assignment_rounded,
+                  (enabled) {
+                    bind.cmSwitchPermission(
+                        connId: client.id, name: "clipboard", enabled: enabled);
+                    setState(() {
+                      client.clipboard = enabled;
+                    });
+                  },
+                  translate('Enable clipboard'),
+                  canModify: canModifyPermission,
+                ),
+                buildPermissionIcon(
+                  client.audio,
+                  Icons.volume_up_rounded,
+                  (enabled) {
+                    bind.cmSwitchPermission(
+                        connId: client.id, name: "audio", enabled: enabled);
+                    setState(() {
+                      client.audio = enabled;
+                    });
+                  },
+                  translate('Enable audio'),
+                  canModify: canModifyPermission,
+                ),
+                buildPermissionIcon(
+                  client.file,
+                  Icons.upload_file_rounded,
+                  (enabled) {
+                    bind.cmSwitchPermission(
+                        connId: client.id, name: "file", enabled: enabled);
+                    setState(() {
+                      client.file = enabled;
+                    });
+                  },
+                  translate('Enable file copy and paste'),
+                  canModify: canModifyPermission,
+                ),
+                buildPermissionIcon(
+                  client.restart,
+                  Icons.restart_alt_rounded,
+                  (enabled) {
+                    bind.cmSwitchPermission(
+                        connId: client.id, name: "restart", enabled: enabled);
+                    setState(() {
+                      client.restart = enabled;
+                    });
+                  },
+                  translate('Enable remote restart'),
+                  canModify: canModifyPermission,
+                ),
+              ],
             ),
           ),
         ],
@@ -771,10 +750,7 @@ class _CmControlPanel extends StatelessWidget {
           child: buildButton(
             context,
             color: MyTheme.accent,
-            onClick: () {
-              handleElevate(context);
-              windowManager.minimize();
-            },
+            onClick: () => handleElevate(context),
             icon: Icon(
               Icons.security_rounded,
               color: Colors.white,
@@ -910,7 +886,6 @@ class _CmControlPanel extends StatelessWidget {
   void handleSwitchBack(BuildContext context) {
     bind.cmSwitchBack(connId: client.id);
   }
-
 }
 
 void checkClickTime(int id, Function() callback) async {

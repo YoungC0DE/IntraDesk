@@ -37,9 +37,6 @@ class ServerModel with ChangeNotifier {
 
   final List<Client> _clients = [];
 
-  Timer? cmHiddenTimer;
-
-
   bool get isStart => _isStart;
 
   bool get mediaOk => _mediaOk;
@@ -53,7 +50,6 @@ class ServerModel with ChangeNotifier {
   bool get clipboardOk => _clipboardOk;
 
   bool get showElevation => _showElevation;
-
 
   String get temporaryPasswordLength {
     final lengthIndex = ["6", "8", "10"].indexOf(_temporaryPasswordLength);
@@ -462,13 +458,6 @@ class ServerModel with ChangeNotifier {
     Future.delayed(Duration.zero, () async {
       windowOnTop(null);
     });
-    // Only do the hidden task when on Desktop.
-    if (client.authorized) {
-      cmHiddenTimer = Timer(const Duration(seconds: 3), () {
-        windowManager.minimize();
-        cmHiddenTimer = null;
-      });
-    }
   }
 
   scrollToBottom() {

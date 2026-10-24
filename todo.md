@@ -40,10 +40,10 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **D7** Elevação → **não forçar**: botão opcional "Executar como administrador" (sem admin, a sessão não controla janelas elevadas/UAC nem a tela de login) (decidido em 22/10/2026).
 - [x] **D8** Idiomas → **pt-BR + inglês**; os demais arquivos de `src/lang` saem (decidido em 22/10/2026).
 - [x] **D9** Onde salvar a configuração → **`%APPDATA%\IntraDesk`** (decidido em 22/10/2026).
-- [ ] **D10** "Trocar de lado" (o controlado passa a controlar quem o acessou, sem senha, via uuid de uma sessão autenticada no sentido contrário) → manter ou remover? Não está na lista "Mantém". Se remover: servidor, cliente, IPC `SwitchSides*`, botão no CM e na barra.
-- [ ] **D11** 2FA local por TOTP (app autenticador) e dispositivos confiáveis → manter ou remover? O escopo remove o "2FA ligado a conta"; este é local e só vale depois da senha.
+- [x] **D10** "Trocar de lado" (o controlado passa a controlar quem o acessou, sem senha, via uuid de uma sessão autenticada no sentido contrário) → manter ou remover? Não está na lista "Mantém". Se remover: servidor, cliente, IPC `SwitchSides*`, botão no CM e na barra. → **remover** (decidido em 24/10/2026; T3.6).
+- [x] **D11** 2FA local por TOTP (app autenticador) e dispositivos confiáveis → manter ou remover? O escopo remove o "2FA ligado a conta"; este é local e só vale depois da senha. → **remover** (decidido em 24/10/2026; T3.7).
 - [x] **D12** Firewall em redes de domínio/públicas → as regras do botão valem para **todos os perfis, restritas à sub-rede local** (T2.11; decorre do teste do usuário em 24/10/2026, que precisou liberar em rede pública).
-- [ ] **D13** Sessões em abas (T4.4) → manter várias sessões em abas numa janela (como AnyDesk) ou uma sessão por janela?
+- [x] **D13** Sessões em abas (T4.4) → manter várias sessões em abas numa janela (como AnyDesk) ou uma sessão por janela? → **uma janela, sessões separadas por abas** (decidido em 24/10/2026).
 
 ---
 
@@ -218,6 +218,10 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **T3.5** A escuta direta só aceita endereços da rede local (`is_lan_addr` em `src/server.rs`): IPv4 privados (RFC 1918), link-local (169.254/16), loopback e os equivalentes IPv6 (fc00::/7, fe80::/10, ::1); IPv4 mapeado em IPv6 é convertido antes. Outros endereços (inclusive CGNAT 100.64/10) são fechados logo no `accept`, antes do handshake, com log limitado a 1 por minuto. Teste novo `server::lan_addr_tests::only_local_network_addresses_are_accepted`.
   Checagem: `cargo test --lib lan_addr` 1 ok.
   dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono: claude
+- [ ] **T3.6** Remover "Trocar de lado" (D10): servidor (autorização pelo uuid), cliente, IPC `SwitchSides*`, botão no CM e item na barra da sessão, chaves de tradução.
+  dep: D10 · Área: `src/server/connection.rs`, `src/client.rs`, `src/ipc.rs`, `flutter/lib/common/widgets/toolbar.dart`, CM · @dono:
+- [ ] **T3.7** Remover o 2FA local por TOTP e os dispositivos confiáveis (D11): login, configurações, IPC/FFI, config e chaves de tradução.
+  dep: D11 · Área: `src/server/connection.rs`, `src/ui_interface.rs`, `src/flutter_ffi.rs`, `desktop_setting_page.dart`, `libs/hbb_common/src/config.rs` · @dono:
 
 **Fim das Fases 2 e 3 (24/10/2026):** `cargo test --lib --features flutter,hwcodec,vram` 150 ok, 0 falhas, 1 ignorado (o de detecção do firewall); `cargo test --package hbb_common --lib` 90 ok; `flutter test` 96 ok, 1 pulado. Teste manual em 2 PCs com o build da T2.11 ok (24/10/2026, usuário): descoberta, conexão e botão do firewall com UAC visível. Falta ver o aviso de chave alterada (entra no roteiro da T7.3).
 
@@ -229,9 +233,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Padrões agora fixos: modo de teclado "Map", fonte de entrada 1. Valores por peer gravados por builds anteriores (ex.: só visualizar ligado) não podem mais ser trocados na sessão; só afeta configs de teste.
   Ficou: modo de mouse relativo (`input_model.dart`, `relative_mouse_model.dart`; nada liga mais); `show_cursor` do servidor (`connection.rs` → `input_service`/IPC do serviço portátil, já ignorado); senha do SO/auto-login (`sessionInputOsPassword` no timer de espera de imagem; nada define mais `os-password`); leitores das opções por peer ainda definidas pela página de configurações (T5.3); overlay do monitor de qualidade e preferência de codec (ainda nas configurações, T5.3); tipo de teclado ISO (só macOS) no `hbb_common`/`keyboard.rs`.
   Checagem: `cargo check --workspace --lib --tests` ok; `cargo test --lib keyboard::shortcuts` 27 ok; `flutter analyze` sem erros/avisos; `flutter test` (atalhos) 54 ok.
-- [ ] **T4.2** Validar cada item da barra entre dois PCs Windows (ver T7.3) e corrigir o que quebrou com a limpeza.
+- [x] **T4.2** Validar cada item da barra entre dois PCs Windows (ver T7.3) e corrigir o que quebrou com a limpeza. Teste do usuário em 2 PCs com o build da T5.2 ok (24/10/2026).
   dep: T4.1, T3.1 · Área: conforme bug · @dono:
-- [ ] **T4.3** Área de transferência: garantir texto, imagem e arquivos (D1) nos dois sentidos.
+- [x] **T4.3** Área de transferência: garantir texto, imagem e arquivos (D1) nos dois sentidos. Teste do usuário em 2 PCs com o build da T5.2 ok (24/10/2026).
   dep: T4.1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
 - [ ] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
   dep: T4.1, D13 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
@@ -263,7 +267,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Feito (subagente, revisado). Painel esquerdo "Este computador" (nome com copiar, ID pequeno com copiar, IPs da LAN, senha de uso único com copiar/gerar/alterar). À direita: "Conectar a" (IP, nome ou ID; `resolveConnectTarget` troca nome/apelido de peer conhecido pelo ID) com "Conectar" e "Transferir arquivo"; abas "Computadores na rede" (padrão), "Sessões recentes", "Favoritos"; busca sempre visível por nome, usuário ou IP; cards com nome/apelido e "usuário · IP". Barra de status (visível na rede / firewall) embaixo, largura total. `Peer` lê `ip` e `version`. Saíram: cartões de ajuda/instalação, botão "Sair" e redimensionamento do modo só-entrada, reordenar/ocultar abas, opção `disable-discovery-panel` no Dart, `titlebar_widget.dart`, `connection_page_title.dart`, 10 chaves de tradução. 8 chaves novas. Teste novo `lan_peer_display_test.dart` (4).
   Para revisar com o usuário: clique simples só seleciona o card (duplo conecta; no AnyDesk o simples conecta); aba "Sessões recentes" (não "Recentes"); "Senha de uso único" (não "temporária"); textos de lista vazia com jeito RustDesk (`empty_lan_tip`) → T5.5.
   Ficou (limpeza): FFI `main_get_error` sem uso; `OPTION_DISABLE_DISCOVERY_PANEL` em `keys.rs`; dependência `pull_down_button`; `FixedWidthButton`; helpers do modo só-entrada (`imcomingOnlyHomeSize` etc.); `OnlineStatusWidget.onSvcStatusChanged`; cores fixas verde/vermelho de status em `OnlineStatusWidget`/`peer_card.dart` e chips do `setPasswordDialog` (semânticas, mas fora dos tokens).
-  Checagem: `cargo check` ok; `flutter analyze` sem erros/avisos (253 infos); `flutter test` 95 ok. **Pendente: ver a tela rodando (800x600, claro/escuro).**
+  Checagem: `cargo check` ok; `flutter analyze` sem erros/avisos (253 infos); `flutter test` 95 ok. Teste do usuário com o build novo ok (24/10/2026); os pontos "para revisar" ficam como estão (decisão do usuário).
 - [ ] **T5.3** Configurações enxutas: Geral (idioma, tema), Segurança (senha fixa, aceite), Rede (portas, firewall), Exibição (qualidade/escala padrão), Áudio, Sobre (licença AGPL e link do código-fonte). Remover as outras abas.
   dep: T1.9, T1.10 · Área: `desktop_setting_page.dart` · @dono:
 - [ ] **T5.4** Marca: nome "IntraDesk" em títulos, bandeja, janela, "Sobre"; novos ícones (`res/icon.ico`, `res/tray-icon.ico`, `res/logo*.svg`, `flutter/windows/runner/resources/app_icon.ico`, `flutter/assets`); metadados do .exe (`flutter/windows/runner/Runner.rc`, `Cargo.toml` `[package.metadata.winres]`).

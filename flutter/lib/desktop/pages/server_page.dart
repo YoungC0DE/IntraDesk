@@ -818,66 +818,20 @@ class _CmControlPanel extends StatelessWidget {
     ).marginOnly(bottom: buttonBottomMargin);
   }
 
+  // Waiting for the peer's password; only the password lets it in.
   buildUnAuthorized(BuildContext context) {
-    final bool canElevate = bind.cmCanElevate();
-    final model = Provider.of<ServerModel>(context);
-    final showElevation = canElevate &&
-        model.showElevation &&
-        client.type_() == ClientType.remote &&
-        bind.mainGetBuildinOption(
-                key: kOptionHideElevateButtonInAcceptWindow) !=
-            'Y';
-    final showAccept = model.approveMode != 'password';
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Offstage(
-          offstage: !showElevation || !showAccept,
-          child: buildButton(context, color: Colors.green[700], onClick: () {
-            handleAccept(context);
-            handleElevate(context);
-            windowManager.minimize();
-          },
-              text: 'Accept and Elevate',
-              icon: Icon(
-                Icons.security_rounded,
-                color: Colors.white,
-                size: 14,
-              ),
-              textColor: Colors.white,
-              tooltip: 'accept_and_elevate_btn_tooltip'),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (showAccept)
-              Expanded(
-                child: Column(
-                  children: [
-                    buildButton(
-                      context,
-                      color: MyTheme.accent,
-                      onClick: () {
-                        handleAccept(context);
-                        windowManager.minimize();
-                      },
-                      text: 'Accept',
-                      textColor: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: buildButton(
-                context,
-                color: Colors.transparent,
-                border: Border.all(color: Colors.grey),
-                onClick: handleDisconnect,
-                text: 'Cancel',
-                textColor: null,
-              ),
-            ),
-          ],
+        Expanded(
+          child: buildButton(
+            context,
+            color: Colors.transparent,
+            border: Border.all(color: Colors.grey),
+            onClick: handleDisconnect,
+            text: 'Cancel',
+            textColor: null,
+          ),
         ),
       ],
     ).marginOnly(bottom: buttonBottomMargin);
@@ -890,7 +844,6 @@ class _CmControlPanel extends StatelessWidget {
       BoxBorder? border,
       required String text,
       required Color? textColor,
-      String? tooltip,
       GestureTapDownCallback? onTapDown}) {
     assert(!(onClick == null && onTapDown == null));
     Widget textWidget;
@@ -910,7 +863,7 @@ class _CmControlPanel extends StatelessWidget {
       );
     }
     final borderRadius = BorderRadius.circular(10.0);
-    final btn = Container(
+    return Container(
       height: 28,
       decoration: BoxDecoration(
           color: color, borderRadius: borderRadius, border: border),
@@ -934,23 +887,11 @@ class _CmControlPanel extends StatelessWidget {
           ],
         ),
       ),
-    );
-    return (tooltip != null
-            ? Tooltip(
-                message: translate(tooltip),
-                child: btn,
-              )
-            : btn)
-        .marginAll(4);
+    ).marginAll(4);
   }
 
   void handleDisconnect() {
     bind.cmCloseConnection(connId: client.id);
-  }
-
-  void handleAccept(BuildContext context) {
-    final model = Provider.of<ServerModel>(context, listen: false);
-    model.sendLoginResponse(client, true);
   }
 
   void handleElevate(BuildContext context) {

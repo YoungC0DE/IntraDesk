@@ -1063,25 +1063,6 @@ void showElevationError(SessionID sessionId, String type, String title,
   });
 }
 
-void showWaitAcceptDialog(SessionID sessionId, String type, String title,
-    String text, OverlayDialogManager dialogManager) {
-  dialogManager.dismissAll();
-  dialogManager.show((setState, close, context) {
-    onCancel() {
-      closeConnection();
-    }
-
-    return CustomAlertDialog(
-      title: null,
-      content: msgboxContent(type, title, text),
-      actions: [
-        dialogButton('Cancel', onPressed: onCancel, isOutline: true),
-      ],
-      onCancel: onCancel,
-    );
-  });
-}
-
 void showRestartRemoteDevice(PeerInfo pi, String id, SessionID sessionId,
     OverlayDialogManager dialogManager) async {
   final res = await dialogManager

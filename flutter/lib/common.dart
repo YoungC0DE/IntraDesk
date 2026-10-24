@@ -1195,7 +1195,7 @@ Widget msgboxIcon(String type) {
   if (type.contains("success")) {
     iconData = Icons.check_circle;
   }
-  if (type == "wait-uac" || type == "wait-remote-accept-nook") {
+  if (type == "wait-uac") {
     iconData = Icons.hourglass_top;
   }
   if (type == 'on-uac' || type == 'on-foreground-elevated') {
@@ -3231,7 +3231,6 @@ get defaultOptionYes => isCustomClient ? 'Y' : '';
 get defaultOptionNo => isCustomClient ? 'N' : '';
 get defaultOptionWhitelist => isCustomClient ? ',' : '';
 get defaultOptionAccessMode => isCustomClient ? 'custom' : '';
-get defaultOptionApproveMode => isCustomClient ? 'password-click' : '';
 
 bool whitelistNotEmpty() {
   // https://rustdesk.com/docs/en/self-host/client-configuration/advanced-settings/#whitelist

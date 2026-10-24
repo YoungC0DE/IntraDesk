@@ -16,10 +16,6 @@ import 'model.dart';
 
 const kLoginDialogTag = "LOGIN";
 
-const kUseTemporaryPassword = "use-temporary-password";
-const kUsePermanentPassword = "use-permanent-password";
-const kUseBothPasswords = "use-both-passwords";
-
 class ServerModel with ChangeNotifier {
   bool _isStart = false; // Android MainService status
   bool _mediaOk = false;
@@ -28,11 +24,8 @@ class ServerModel with ChangeNotifier {
   bool _fileOk = false;
   bool _clipboardOk = false;
   bool _showElevation = false;
-  bool hideCm = false;
-  String _verificationMethod = "";
   String _temporaryPasswordLength = "";
   bool _allowNumericOneTimePassword = false;
-  String _approveMode = "";
   int _zeroClientLengthCounter = 0;
 
   late String _emptyIdShow;
@@ -62,30 +55,6 @@ class ServerModel with ChangeNotifier {
   bool get showElevation => _showElevation;
 
 
-  String get verificationMethod {
-    final index = [
-      kUseTemporaryPassword,
-      kUsePermanentPassword,
-      kUseBothPasswords
-    ].indexOf(_verificationMethod);
-    if (index < 0) {
-      return kUseBothPasswords;
-    }
-    return _verificationMethod;
-  }
-
-  String get approveMode => _approveMode;
-
-  setVerificationMethod(String method) async {
-    await bind.mainSetOption(key: kOptionVerificationMethod, value: method);
-    /*
-    if (method != kUsePermanentPassword) {
-      await bind.mainSetOption(
-          key: 'allow-hide-cm', value: bool2option('allow-hide-cm', false));
-    }
-    */
-  }
-
   String get temporaryPasswordLength {
     final lengthIndex = ["6", "8", "10"].indexOf(_temporaryPasswordLength);
     if (lengthIndex < 0) {
@@ -96,16 +65,6 @@ class ServerModel with ChangeNotifier {
 
   setTemporaryPasswordLength(String length) async {
     await bind.mainSetOption(key: "temporary-password-length", value: length);
-  }
-
-  setApproveMode(String mode) async {
-    await bind.mainSetOption(key: kOptionApproveMode, value: mode);
-    /*
-    if (mode != 'password') {
-      await bind.mainSetOption(
-          key: 'allow-hide-cm', value: bool2option('allow-hide-cm', false));
-    }
-    */
   }
 
   bool get allowNumericOneTimePassword => _allowNumericOneTimePassword;
@@ -128,19 +87,6 @@ class ServerModel with ChangeNotifier {
     _emptyIdShow = translate("Generating ...");
     _serverId = IDTextEditingController(text: _emptyIdShow);
 
-    /*
-    // initital _hideCm at startup
-    final verificationMethod =
-        bind.mainGetOptionSync(key: kOptionVerificationMethod);
-    final approveMode = bind.mainGetOptionSync(key: kOptionApproveMode);
-    _hideCm = option2bool(
-        'allow-hide-cm', bind.mainGetOptionSync(key: 'allow-hide-cm'));
-    if (!(approveMode == 'password' &&
-        verificationMethod == kUsePermanentPassword)) {
-      _hideCm = false;
-    }
-    */
-
     timerCallback() async {
       if (desktopType == DesktopType.cm) {
         final res = await bind.cmCheckClientsLength(length: _clients.length);
@@ -156,7 +102,7 @@ class ServerModel with ChangeNotifier {
             }
           } else {
             _zeroClientLengthCounter = 0;
-            if (!hideCm) showCmWindow();
+            showCmWindow();
           }
         }
       }
@@ -208,30 +154,13 @@ class ServerModel with ChangeNotifier {
   updatePasswordModel() async {
     var update = false;
     final temporaryPassword = await bind.mainGetTemporaryPassword();
-    final verificationMethod =
-        await bind.mainGetOption(key: kOptionVerificationMethod);
     final temporaryPasswordLength =
         await bind.mainGetOption(key: "temporary-password-length");
-    final approveMode = await bind.mainGetOption(key: kOptionApproveMode);
     final numericOneTimePassword =
         await mainGetBoolOption(kOptionAllowNumericOneTimePassword);
-    /*
-    var hideCm = option2bool(
-        'allow-hide-cm', await bind.mainGetOption(key: 'allow-hide-cm'));
-    if (!(approveMode == 'password' &&
-        verificationMethod == kUsePermanentPassword)) {
-      hideCm = false;
-    }
-    */
-    if (_approveMode != approveMode) {
-      _approveMode = approveMode;
-      update = true;
-    }
     var stopped = await mainGetBoolOption(kOptionStopService);
     final oldPwdText = _serverPasswd.text;
-    if (stopped ||
-        verificationMethod == kUsePermanentPassword ||
-        _approveMode == 'click') {
+    if (stopped) {
       _serverPasswd.text = '-';
     } else {
       if (_serverPasswd.text != temporaryPassword &&
@@ -240,10 +169,6 @@ class ServerModel with ChangeNotifier {
       }
     }
     if (oldPwdText != _serverPasswd.text) {
-      update = true;
-    }
-    if (_verificationMethod != verificationMethod) {
-      _verificationMethod = verificationMethod;
       update = true;
     }
     if (_temporaryPasswordLength != temporaryPasswordLength) {
@@ -257,19 +182,6 @@ class ServerModel with ChangeNotifier {
       _allowNumericOneTimePassword = numericOneTimePassword;
       update = true;
     }
-    /*
-    if (_hideCm != hideCm) {
-      _hideCm = hideCm;
-      if (desktopType == DesktopType.cm) {
-        if (hideCm) {
-          await hideCmWindow();
-        } else {
-          await showCmWindow();
-        }
-      }
-      update = true;
-    }
-    */
     if (update) {
       notifyListeners();
     }
@@ -490,7 +402,7 @@ class ServerModel with ChangeNotifier {
     if (desktopType == DesktopType.cm) {
       if (_clients.isEmpty) {
         hideCmWindow();
-      } else if (!hideCm) {
+      } else {
         showCmWindow();
       }
     }
@@ -530,7 +442,7 @@ class ServerModel with ChangeNotifier {
         _clients.removeAt(index_disconnected);
         tabController.remove(index_disconnected);
       }
-      if (desktopType == DesktopType.cm && !hideCm) {
+      if (desktopType == DesktopType.cm) {
         showCmWindow();
       }
       scrollToBottom();
@@ -548,12 +460,12 @@ class ServerModel with ChangeNotifier {
         onTap: () {},
         page: desktop.buildConnectionCard(client)));
     Future.delayed(Duration.zero, () async {
-      if (!hideCm) windowOnTop(null);
+      windowOnTop(null);
     });
     // Only do the hidden task when on Desktop.
     if (client.authorized) {
       cmHiddenTimer = Timer(const Duration(seconds: 3), () {
-        if (!hideCm) windowManager.minimize();
+        windowManager.minimize();
         cmHiddenTimer = null;
       });
     }
@@ -561,24 +473,6 @@ class ServerModel with ChangeNotifier {
 
   scrollToBottom() {
     return;
-  }
-
-  void sendLoginResponse(Client client, bool res) async {
-    if (res) {
-      bind.cmLoginRes(connId: client.id, res: res);
-      if (!client.isFileTransfer) {
-        parent.target?.invokeMethod("start_capture");
-      }
-      parent.target?.invokeMethod("cancel_notification", client.id);
-      client.authorized = true;
-      notifyListeners();
-    } else {
-      bind.cmLoginRes(connId: client.id, res: res);
-      parent.target?.invokeMethod("cancel_notification", client.id);
-      final index = _clients.indexOf(client);
-      tabController.remove(index);
-      _clients.remove(client);
-    }
   }
 
   void onClientRemove(Map<String, dynamic> evt) {

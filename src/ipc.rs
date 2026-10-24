@@ -251,7 +251,6 @@ pub enum Data {
     SystemInfo(Option<String>),
     ClickTime(i64),
     MouseMoveTime(i64),
-    Authorize,
     Close,
     SAS,
     UserSid(Option<u32>),
@@ -551,12 +550,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     value = Some(Config::get_salt());
                 } else if name == "fingerprint" {
                     value = Some(crate::common::pk_to_fingerprint(Config::get_key_pair().1));
-                } else if name == "hide_cm" {
-                    value = if crate::common::is_custom_client() {
-                        Some(hbb_common::password_security::hide_cm().to_string())
-                    } else {
-                        None
-                    };
                 } else if name == "unlock-pin" {
                     value = Some(Config::get_unlock_pin());
                 } else if name == "trusted-devices" {

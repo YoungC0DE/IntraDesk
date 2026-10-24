@@ -87,7 +87,6 @@ pub const LOGIN_MSG_PASSWORD_EMPTY: &str = "Empty Password";
 pub const LOGIN_MSG_PASSWORD_WRONG: &str = "Wrong Password";
 pub const LOGIN_MSG_2FA_WRONG: &str = "Wrong 2FA Code";
 pub const REQUIRE_2FA: &'static str = "2FA Required";
-pub const LOGIN_MSG_NO_PASSWORD_ACCESS: &str = "No Password Access";
 pub const LOGIN_MSG_OFFLINE: &str = "Offline";
 pub const LOGIN_MSG_NOT_FOUND: &str = "Computer not found on the network";
 pub const LOGIN_SCREEN_WAYLAND: &str = "Wayland login screen is not supported";
@@ -2225,12 +2224,6 @@ lazy_static::lazy_static! {
             title: "Login Error",
             text: "Login screen using Wayland is not supported",
             link: "https://rustdesk.com/docs/en/manual/linux/#login-screen",
-            try_again: true,
-        }), (LOGIN_MSG_NO_PASSWORD_ACCESS, LoginErrorMsgBox{
-            msgtype: "wait-remote-accept-nook",
-            title: "Prompt",
-            text: "Please wait for the remote side to accept your session request...",
-            link: "",
             try_again: true,
         })]);
         Arc::new(map)

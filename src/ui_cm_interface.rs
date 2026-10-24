@@ -271,14 +271,6 @@ pub fn get_click_time() -> i64 {
 }
 
 #[inline]
-pub fn authorize(id: i32) {
-    if let Some(client) = CLIENTS.write().unwrap().get_mut(&id) {
-        client.authorized = true;
-        allow_err!(client.tx.send(Data::Authorize));
-    };
-}
-
-#[inline]
 pub fn close(id: i32) {
     if let Some(client) = CLIENTS.read().unwrap().get(&id) {
         allow_err!(client.tx.send(Data::Close));
@@ -563,10 +555,6 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                             if _name == "file" {
                                 self.file_transfer_enabled = *_enabled;
                             }
-                        }
-                        Data::Authorize => {
-                            self.running = true;
-                            break;
                         }
                         _ => {
                         }

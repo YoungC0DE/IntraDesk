@@ -12,7 +12,7 @@ use hbb_common::{
         preset_permanent_password_storage_is_usable_for_auth, Config, TrustedDevice,
     },
     get_time, get_version_number,
-    password_security::{self as password, ApproveMode},
+    password_security as password,
     sha2::{Digest, Sha256},
     sleep,
     tokio::{
@@ -514,12 +514,6 @@ impl Connection {
                 }
                 Some(data) = rx_from_cm.recv() => {
                     match data {
-                        ipc::Data::Authorize => {
-                            conn.require_2fa.take();
-                            if !conn.send_logon_response_and_keep_alive().await {
-                                break;
-                            }
-                        }
                         ipc::Data::Close => {
                             conn.file_transferred = false; //seen
                             conn.send_close_reason_no_retry("").await;
@@ -1419,10 +1413,6 @@ impl Connection {
                 Mutex::new(State::default());
         }
 
-        if !password::temporary_enabled() {
-            return;
-        }
-
         let mut state = TEMPORARY_PASSWORD_FAILURES.lock().unwrap();
         let current_password = password::temporary_password();
         if current_password.is_empty() {
@@ -1454,47 +1444,29 @@ impl Connection {
         state.failures = 0;
     }
 
-    fn validate_password(&mut self, allow_permanent_password: bool) -> bool {
-        if password::temporary_enabled() {
-            let password = password::temporary_password();
-            if self.validate_password_plain(&password) {
-                raii::AuthedConnID::update_or_insert_session(
-                    self.session_key(),
-                    Some(password),
-                    Some(false),
-                );
-                self.check_update_temporary_password(true);
-                return true;
-            }
+    // The temporary password always works; the permanent one does once it is set.
+    fn validate_password(&mut self) -> bool {
+        let password = password::temporary_password();
+        if self.validate_password_plain(&password) {
+            raii::AuthedConnID::update_or_insert_session(
+                self.session_key(),
+                Some(password),
+                Some(false),
+            );
+            self.check_update_temporary_password(true);
+            return true;
         }
-        if password::permanent_enabled() || allow_permanent_password {
-            let print_fallback = || {
-                if allow_permanent_password && !password::permanent_enabled() {
-                    log::info!("Permanent password accepted via logon-screen fallback");
-                }
-            };
-            // Strictly check storage usability before auth so malformed encrypted/hash storage
-            // cannot fall back to being accepted as legacy plaintext.
-            let (local_storage, local_salt) =
-                Config::get_local_permanent_password_storage_and_salt();
-            if !local_storage.is_empty() {
-                if local_permanent_password_storage_is_usable_for_auth(&local_storage, &local_salt)
-                    && self.validate_password_storage(&local_storage)
-                {
-                    print_fallback();
-                    return true;
-                }
-            } else {
-                let (hard, salt) = Config::get_preset_password_storage_and_salt();
-                if preset_permanent_password_storage_is_usable_for_auth(&hard, &salt)
-                    && self.validate_preset_password_storage(&hard, &salt)
-                {
-                    print_fallback();
-                    return true;
-                }
-            }
+        // Strictly check storage usability before auth so malformed encrypted/hash storage
+        // cannot fall back to being accepted as legacy plaintext.
+        let (local_storage, local_salt) = Config::get_local_permanent_password_storage_and_salt();
+        if !local_storage.is_empty() {
+            local_permanent_password_storage_is_usable_for_auth(&local_storage, &local_salt)
+                && self.validate_password_storage(&local_storage)
+        } else {
+            let (hard, salt) = Config::get_preset_password_storage_and_salt();
+            preset_permanent_password_storage_is_usable_for_auth(&hard, &salt)
+                && self.validate_preset_password_storage(&hard, &salt)
         }
-        false
     }
 
     fn is_recent_session(&mut self, tfa: bool) -> bool {
@@ -1765,37 +1737,7 @@ impl Connection {
 
             self.try_start_cm_ipc();
 
-            // https://github.com/rustdesk/rustdesk-server-pro/discussions/646
-            // `is_logon` is used to check login with `OPTION_ALLOW_LOGON_SCREEN_PASSWORD` == "Y".
-            // `is_logon_ui()` is a fallback for logon UI detection on Windows.
-            let is_logon = || {
-                crate::platform::is_prelogin() || crate::platform::is_locked() || {
-                    match crate::platform::is_logon_ui() {
-                        Ok(result) => result,
-                        Err(e) => {
-                            log::error!("Failed to detect logon UI: {:?}", e);
-                            false
-                        }
-                    }
-                }
-            };
-
-            let allow_logon_screen_password =
-                crate::get_builtin_option(keys::OPTION_ALLOW_LOGON_SCREEN_PASSWORD) == "Y"
-                    && is_logon();
-
-            if (password::approve_mode() == ApproveMode::Click && !allow_logon_screen_password)
-                || password::approve_mode() == ApproveMode::Both && !password::has_valid_password()
-            {
-                self.try_start_cm(lr.my_id, lr.my_name, false);
-                if hbb_common::get_version_number(&lr.version)
-                    >= hbb_common::get_version_number("1.2.0")
-                {
-                    self.send_login_error(crate::client::LOGIN_MSG_NO_PASSWORD_ACCESS)
-                        .await;
-                }
-                return true;
-            } else if self.is_recent_session(false) {
+            if self.is_recent_session(false) {
                 if !self.send_logon_response_and_keep_alive().await {
                     return false;
                 }
@@ -1807,7 +1749,7 @@ impl Connection {
                 if !res {
                     return true;
                 }
-                if !self.validate_password(allow_logon_screen_password) {
+                if !self.validate_password() {
                     self.update_failure(failure, false, 0);
                     self.check_update_temporary_password(false);
                     self.send_login_error(crate::client::LOGIN_MSG_PASSWORD_WRONG)
@@ -1822,7 +1764,7 @@ impl Connection {
                 }
             }
         } else if let Some(message::Union::Auth2fa(tfa)) = msg.union {
-            // A 2FA response may arrive after click authorization has completed.
+            // A 2FA response may arrive after authorization has completed.
             // Ignore it unless this connection is still waiting for the response.
             if !self.awaiting_2fa {
                 return true;

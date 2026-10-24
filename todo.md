@@ -40,6 +40,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **D7** Elevação → **não forçar**: botão opcional "Executar como administrador" (sem admin, a sessão não controla janelas elevadas/UAC nem a tela de login) (decidido em 22/10/2026).
 - [x] **D8** Idiomas → **pt-BR + inglês**; os demais arquivos de `src/lang` saem (decidido em 22/10/2026).
 - [x] **D9** Onde salvar a configuração → **`%APPDATA%\IntraDesk`** (decidido em 22/10/2026).
+- [ ] **D10** "Trocar de lado" (o controlado passa a controlar quem o acessou, sem senha, via uuid de uma sessão autenticada no sentido contrário) → manter ou remover? Não está na lista "Mantém". Se remover: servidor, cliente, IPC `SwitchSides*`, botão no CM e na barra.
+- [ ] **D11** 2FA local por TOTP (app autenticador) e dispositivos confiáveis → manter ou remover? O escopo remove o "2FA ligado a conta"; este é local e só vale depois da senha.
 
 ---
 
@@ -189,8 +191,12 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Checagem: `cargo check --workspace --lib --tests`, `flutter analyze` ok; `cargo test --lib kx_tests` 6 ok; `cargo test --lib handshake` 3 ok.
   Corrigido de passagem: `flutter/windows/runner/main.cpp` não compilava desde a T1.10 (`installParam`); build local completo ok (`dist\IntraDesk-dev.exe`, ~20 MB, 24/10/2026). **Pendente: teste manual em 2 PCs com este build.**
   dep: T2.3 · Área: `src/client.rs` (`secure_connection`), `src/server/connection.rs` (lado servidor do handshake) · @dono: claude
-- [ ] **T3.2** Senha obrigatória: temporária gerada a cada execução e exibida na tela inicial; senha fixa opcional (D6). Remover qualquer caminho que conecte sem senha.
-  dep: D6, T2.2 · Área: `src/server/connection.rs`, `src/ui_interface.rs`, tela inicial · @dono:
+- [x] **T3.2** Só a senha dá acesso (D5/D6; feito por subagente, revisado). Saíram o aceite por clique (`ApproveMode`/`approve_mode`, opção `approve-mode`, ramo de login que abria o CM e respondia `LOGIN_MSG_NO_PASSWORD_ACCESS`, IPC `Data::Authorize`/`ui_cm_interface::authorize`, FFI `cm_login_res`, botões "Aceitar"/"Aceitar e elevar" e opção `hide-elevate-button-in-accept-window`, diálogo do cliente "aguarde o outro lado aceitar"), o método de verificação (`VerificationMethod`, opção `verification-method`, rádios temporária/permanente/ambas: agora a temporária vale sempre e a permanente quando definida), a opção de builtin `allow-logon-screen-password` (só servia aos modos removidos; com ela `is_logon_ui`/`is_locked`/`get_pids` e a feature `Win32_System_Diagnostics_ToolHelp`) e o ocultar CM (`hide_cm`, `allow-hide-cm`, FFI `cm_get_config`, `ServerModel.hideCm`; o CM sempre abre visível). Tela inicial: senha temporária sempre visível (com copiar/gerar nova). 13 chaves de tradução.
+  Comportamento: tentativa sem senha/senha errada aparece no CM como "Solicitando acesso..." só com "Cancelar"; quem conecta vê direto "Senha necessária".
+  Auditoria dos caminhos que autorizam sem a senha atual: clique no CM e modo clique (autorizavam sem senha) → **removidos**; `is_recent_session` (reconexão em até 30 s provando a senha temporária do login anterior) → mantido; 2FA TOTP/dispositivos confiáveis (só pulam o 2FA, depois da senha) → ver D11; "Trocar de lado" (autoriza sem senha quem apresenta o uuid gerado pelo próprio usuário local numa sessão autenticada no sentido contrário, 1 vez, 10 s) → ver D10.
+  Ficou: estado `authorized` do CM (cliente pendente/conectado); botão "Elevar" de clientes autorizados; `OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW`; o CM ainda é minimizado 3 s após autorizar (`cmHiddenTimer`, para a T3.4).
+  Checagem: `cargo check --workspace --lib --tests` ok; `flutter analyze` sem erros/avisos; `cargo test --lib server::` 66 ok; `cargo test -p hbb_common --lib` 90 ok; `flutter test` 96 ok, 1 pulado.
+  dep: D6, T2.2 · Área: `src/server/connection.rs`, `src/ui_interface.rs`, tela inicial · @dono: claude
 - [ ] **T3.3** Proteção contra força bruta: bloqueio temporário por IP após N senhas erradas (verificar e reaproveitar o que já existe em `connection.rs`).
   dep: T3.2 · Área: `src/server/connection.rs` · @dono:
 - [ ] **T3.4** Aviso visível no computador acessado enquanto houver sessão ativa (janela do gerenciador de conexão com botão "Desconectar") e comportamento de aceite conforme D5.

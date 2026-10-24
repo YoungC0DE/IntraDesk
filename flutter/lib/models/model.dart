@@ -635,8 +635,6 @@ class FfiModel with ChangeNotifier {
       _restartReconnectDelayTimer?.cancel();
       _restartReconnectDelayTimer = null;
       reconnect(dialogManager, sessionId);
-    } else if (type == 'wait-remote-accept-nook') {
-      showWaitAcceptDialog(sessionId, type, title, text, dialogManager);
     } else if (type == 'on-uac' || type == 'on-foreground-elevated') {
       showOnBlockDialog(sessionId, type, title, text, dialogManager);
     } else if (type == 'wait-uac') {

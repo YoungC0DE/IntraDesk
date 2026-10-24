@@ -37,8 +37,6 @@ pub const OPTION_ENABLE_FILE_TRANSFER: &str = "enable-file-transfer";
 pub const OPTION_ENABLE_AUDIO: &str = "enable-audio";
 pub const OPTION_ENABLE_REMOTE_RESTART: &str = "enable-remote-restart";
 pub const OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW: &str = "enable-perm-change-in-accept-window";
-pub const OPTION_HIDE_ELEVATE_BUTTON_IN_ACCEPT_WINDOW: &str =
-    "hide-elevate-button-in-accept-window";
 pub const OPTION_ALLOW_SCOPE_VIOLATION_CLOSE: &str = "allow-scope-violation-close";
 pub const OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION: &str = "allow-remote-config-modification";
 pub const OPTION_ENABLE_LAN_DISCOVERY: &str = "enable-lan-discovery";
@@ -52,8 +50,6 @@ pub const OPTION_ENABLE_ABR: &str = "enable-abr";
 pub const OPTION_ALLOW_REMOVE_WALLPAPER: &str = "allow-remove-wallpaper";
 pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-render";
 pub const OPTION_ENABLE_HWCODEC: &str = "enable-hwcodec";
-pub const OPTION_APPROVE_MODE: &str = "approve-mode";
-pub const OPTION_VERIFICATION_METHOD: &str = "verification-method";
 pub const OPTION_TEMPORARY_PASSWORD_LENGTH: &str = "temporary-password-length";
 pub const OPTION_PRESET_ADDRESS_BOOK_NAME: &str = "preset-address-book-name";
 pub const OPTION_PRESET_ADDRESS_BOOK_TAG: &str = "preset-address-book-tag";
@@ -102,7 +98,6 @@ pub const OPTION_HIDE_HELP_CARDS: &str = "hide-help-cards";
 pub const OPTION_DEFAULT_CONNECT_PASSWORD: &str = "default-connect-password";
 pub const OPTION_HIDE_TRAY: &str = "hide-tray";
 pub const OPTION_ONE_WAY_CLIPBOARD_REDIRECTION: &str = "one-way-clipboard-redirection";
-pub const OPTION_ALLOW_LOGON_SCREEN_PASSWORD: &str = "allow-logon-screen-password";
 pub const OPTION_ALLOW_DEEP_LINK_PASSWORD: &str = "allow-deep-link-password";
 pub const OPTION_ONE_WAY_FILE_TRANSFER: &str = "one-way-file-transfer";
 pub const OPTION_HIDE_POWERED_BY_ME: &str = "hide-powered-by-me";
@@ -229,8 +224,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ALLOW_REMOVE_WALLPAPER,
     OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER,
     OPTION_ENABLE_HWCODEC,
-    OPTION_APPROVE_MODE,
-    OPTION_VERIFICATION_METHOD,
     OPTION_TEMPORARY_PASSWORD_LENGTH,
     OPTION_PRESET_ADDRESS_BOOK_NAME,
     OPTION_PRESET_ADDRESS_BOOK_TAG,
@@ -262,7 +255,6 @@ pub const KEYS_BUILDIN_SETTINGS: &[&str] = &[
     OPTION_DEFAULT_CONNECT_PASSWORD,
     OPTION_HIDE_TRAY,
     OPTION_ONE_WAY_CLIPBOARD_REDIRECTION,
-    OPTION_ALLOW_LOGON_SCREEN_PASSWORD,
     OPTION_ALLOW_DEEP_LINK_PASSWORD,
     OPTION_ONE_WAY_FILE_TRANSFER,
     OPTION_ALLOW_HOSTNAME_AS_ID,
@@ -272,7 +264,6 @@ pub const KEYS_BUILDIN_SETTINGS: &[&str] = &[
     OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD,
     OPTION_DISABLE_UNLOCK_PIN,
     OPTION_ENABLE_PERM_CHANGE_IN_ACCEPT_WINDOW,
-    OPTION_HIDE_ELEVATE_BUTTON_IN_ACCEPT_WINDOW,
     OPTION_ALLOW_COMMAND_LINE_SETTINGS_WHEN_SETTINGS_DISABLED,
 ];
 

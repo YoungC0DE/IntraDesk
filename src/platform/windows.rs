@@ -59,10 +59,6 @@ use windows::Win32::{
         GetTokenInformation as WinGetTokenInformation, IsWellKnownSid, TokenUser,
         WinLocalSystemSid, TOKEN_QUERY as WIN_TOKEN_QUERY, TOKEN_USER,
     },
-    System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
-    },
     System::Threading::{
         OpenProcess as WinOpenProcess, OpenProcessToken as WinOpenProcessToken,
         QueryFullProcessImageNameW as WinQueryFullProcessImageNameW,
@@ -905,27 +901,9 @@ pub fn is_prelogin() -> bool {
     username.is_empty() || username == "SYSTEM"
 }
 
-pub fn is_locked() -> bool {
-    let Some(session_id) = get_current_process_session_id() else {
-        return false;
-    };
-    is_session_locked_flag(session_id) == Some(true)
-}
-
-#[inline]
-pub fn is_logon_ui() -> ResultType<bool> {
-    let Some(current_sid) = get_current_process_session_id() else {
-        return Ok(false);
-    };
-    let pids = get_pids("LogonUI.exe")?;
-    Ok(pids
-        .into_iter()
-        .any(|pid| get_session_id_of_process(pid) == Some(current_sid)))
-}
-
 // Auto-login types the OS password on this, so a state that cannot be read counts as unlocked.
-// `is_prelogin()` reads a failed query as no user signed in, and `is_logon_ui()` is left out
-// because a LogonUI.exe can outlive the unlock.
+// `is_prelogin()` reads a failed query as no user signed in, and LogonUI.exe is not looked for
+// because it can outlive the unlock.
 pub fn is_logon_screen() -> bool {
     let Some(session_id) = get_current_process_session_id() else {
         return false;
@@ -2480,41 +2458,6 @@ pub mod reg_display_settings {
             _ => RegType::REG_NONE,
         }
     }
-}
-
-fn get_pids<S: AsRef<str>>(name: S) -> ResultType<Vec<u32>> {
-    let name = name.as_ref().to_lowercase();
-    let mut pids = Vec::new();
-
-    unsafe {
-        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?;
-        if snapshot == WinHANDLE::default() {
-            return Ok(pids);
-        }
-
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-        if Process32FirstW(snapshot, &mut entry).is_ok() {
-            loop {
-                let proc_name = OsString::from_wide(&entry.szExeFile)
-                    .to_string_lossy()
-                    .to_lowercase();
-
-                if proc_name.contains(&name) {
-                    pids.push(entry.th32ProcessID);
-                }
-
-                if !Process32NextW(snapshot, &mut entry).is_ok() {
-                    break;
-                }
-            }
-        }
-
-        let _ = WinCloseHandle(snapshot);
-    }
-
-    Ok(pids)
 }
 
 #[cfg(not(target_pointer_width = "64"))]

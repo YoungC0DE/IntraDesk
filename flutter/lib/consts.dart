@@ -86,12 +86,8 @@ const String kOptionEnableAudio = "enable-audio";
 const String kOptionEnableRemoteRestart = "enable-remote-restart";
 const String kOptionEnablePermChangeInAcceptWindow =
     "enable-perm-change-in-accept-window";
-const String kOptionHideElevateButtonInAcceptWindow =
-    "hide-elevate-button-in-accept-window";
 const String kOptionAllowRemoteConfigModification =
     "allow-remote-config-modification";
-const String kOptionVerificationMethod = "verification-method";
-const String kOptionApproveMode = "approve-mode";
 const String kOptionAllowNumericOneTimePassword =
     "allow-numeric-one-time-password";
 const String kOptionCollapseToolbar = "collapse_toolbar";

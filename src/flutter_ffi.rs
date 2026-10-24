@@ -1650,14 +1650,6 @@ pub fn main_create_shortcut(_id: String) {
     create_shortcut(_id);
 }
 
-pub fn cm_login_res(conn_id: i32, res: bool) {
-    if res {
-        crate::ui_cm_interface::authorize(conn_id);
-    } else {
-        crate::ui_cm_interface::close(conn_id);
-    }
-}
-
 pub fn cm_close_connection(conn_id: i32) {
     crate::ui_cm_interface::close(conn_id);
 }
@@ -1694,16 +1686,6 @@ pub fn cm_elevate_portable(conn_id: i32) {
 
 pub fn cm_switch_back(conn_id: i32) {
     crate::ui_cm_interface::switch_back(conn_id);
-}
-
-pub fn cm_get_config(name: String) -> String {
-    {
-        if let Ok(Some(v)) = crate::ipc::get_config(&name) {
-            v
-        } else {
-            "".to_string()
-        }
-    }
 }
 
 pub fn main_get_build_date() -> String {

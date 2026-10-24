@@ -6,20 +6,6 @@ lazy_static::lazy_static! {
     pub static ref TEMPORARY_PASSWORD:Arc<RwLock<String>> = Arc::new(RwLock::new(get_auto_password()));
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VerificationMethod {
-    OnlyUseTemporaryPassword,
-    OnlyUsePermanentPassword,
-    UseBothPasswords,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ApproveMode {
-    Both,
-    Password,
-    Click,
-}
-
 fn get_auto_password() -> String {
     let len = temporary_password_length();
     if Config::get_bool_option(crate::config::keys::OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD) {
@@ -39,17 +25,6 @@ pub fn temporary_password() -> String {
     TEMPORARY_PASSWORD.read().unwrap().clone()
 }
 
-fn verification_method() -> VerificationMethod {
-    let method = Config::get_option("verification-method");
-    if method == "use-temporary-password" {
-        VerificationMethod::OnlyUseTemporaryPassword
-    } else if method == "use-permanent-password" {
-        VerificationMethod::OnlyUsePermanentPassword
-    } else {
-        VerificationMethod::UseBothPasswords // default
-    }
-}
-
 pub fn temporary_password_length() -> usize {
     let length = Config::get_option("temporary-password-length");
     if length == "8" {
@@ -59,36 +34,6 @@ pub fn temporary_password_length() -> usize {
     } else {
         6 // default
     }
-}
-
-pub fn temporary_enabled() -> bool {
-    verification_method() != VerificationMethod::OnlyUsePermanentPassword
-}
-
-pub fn permanent_enabled() -> bool {
-    verification_method() != VerificationMethod::OnlyUseTemporaryPassword
-}
-
-pub fn has_valid_password() -> bool {
-    temporary_enabled() && !temporary_password().is_empty()
-        || permanent_enabled() && Config::has_permanent_password()
-}
-
-pub fn approve_mode() -> ApproveMode {
-    let mode = Config::get_option("approve-mode");
-    if mode == "password" {
-        ApproveMode::Password
-    } else if mode == "click" {
-        ApproveMode::Click
-    } else {
-        ApproveMode::Both
-    }
-}
-
-pub fn hide_cm() -> bool {
-    approve_mode() == ApproveMode::Password
-        && verification_method() == VerificationMethod::OnlyUsePermanentPassword
-        && crate::config::option2bool("allow-hide-cm", &Config::get_option("allow-hide-cm"))
 }
 
 const VERSION_LEN: usize = 2;

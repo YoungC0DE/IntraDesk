@@ -43,6 +43,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [ ] **D10** "Trocar de lado" (o controlado passa a controlar quem o acessou, sem senha, via uuid de uma sessão autenticada no sentido contrário) → manter ou remover? Não está na lista "Mantém". Se remover: servidor, cliente, IPC `SwitchSides*`, botão no CM e na barra.
 - [ ] **D11** 2FA local por TOTP (app autenticador) e dispositivos confiáveis → manter ou remover? O escopo remove o "2FA ligado a conta"; este é local e só vale depois da senha.
 - [x] **D12** Firewall em redes de domínio/públicas → as regras do botão valem para **todos os perfis, restritas à sub-rede local** (T2.11; decorre do teste do usuário em 24/10/2026, que precisou liberar em rede pública).
+- [ ] **D13** Sessões em abas (T4.4) → manter várias sessões em abas numa janela (como AnyDesk) ou uma sessão por janela?
 
 ---
 
@@ -233,8 +234,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [ ] **T4.3** Área de transferência: garantir texto, imagem e arquivos (D1) nos dois sentidos.
   dep: T4.1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
 - [ ] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
-  dep: T4.1 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
-- [ ] **T4.5** Bug relatado: depois de muito tempo de sessão, ao abrir um CSV grande no PC acessado, **a imagem congela** mas o áudio continua e o mouse mexe.
+  dep: T4.1, D13 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
+- [x] **T4.5** Bug relatado: depois de muito tempo de sessão, ao abrir um CSV grande no PC acessado, **a imagem congela** mas o áudio continua e o mouse mexe.
   Evidências (logs do RustDesk 1.5.1 portátil no notebook, out/2026):
   - Encoder em uso: **Intel Quick Sync H.265 por hardware** (`hevc_qsv`, caminho VRAM), tela 1366x768, ~1 GB de RAM livre.
   - Em todas as sessões com o problema: `[FFMPEG_VRAM_ENC] avcodec_send_frame failed ... Invalid FrameType:0` → `encode fail: no valid frame, times: 1`, e **nenhum log de vídeo depois disso** até o usuário fechar a sessão 10–30 s depois (ex.: 08/10 19:20:50 → 19:21:19; 13/10 11:56:20 → 11:56:29).
@@ -242,7 +243,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   - Não é criptografia nem a rota pela internet: o áudio continua passando pela mesma conexão criptografada. Rodar só na LAN **não resolve sozinho**.
   Plano: (1) reproduzir no IntraDesk entre dois PCs (CSV grande no Excel, RAM baixa); (2) watchdog no serviço de vídeo: se a sessão está ativa e nenhum quadro é enviado por N segundos, registrar e reiniciar o serviço com encoder por software (VP9); (3) avaliar VP9 por software como padrão no IntraDesk, já que na LAN a banda sobra e evita bugs de driver de GPU.
   Teste rápido hoje, no RustDesk atual: no notebook, desativar "Habilitar codificação por hardware" (opção `enable-hwcodec`) ou escolher VP9 no menu de exibição da sessão; se o congelamento sumir, a causa está confirmada.
-  dep: T0.3 · Área: `src/server/video_service.rs`, `libs/scrap/src/common/{codec,hwcodec,vram}.rs` · @dono:
+  dep: T0.3 · Área: `src/server/video_service.rs`, `libs/scrap/src/common/{codec,hwcodec,vram}.rs` · @dono: claude
+  Feito: um encoder por hardware agora é desligado e trocado (`bail!("SWITCH")`, recria captura e encoder, cai para VP9 por software) **na primeira falha de codificação**, em vez de esperar 3 falhas seguidas que nunca chegavam (`handle_one_frame` em `video_service.rs`). No Windows todos os encoders por hardware são `latency_free` (o limite maior só existia para mediacodec/videotoolbox), então uma falha nunca é aquecimento legítimo. O log passa a mostrar `switch due to encoding fails`. A recriação da captura também cobre o caso de a DXGI parar de entregar quadros depois da falha. O botão "Atualizar" da barra (T4.1) segue como recuperação manual.
+  Sem teste automático: exigiria um encoder falso (infraestrutura nova). **Pendente: reproduzir entre 2 PCs (CSV grande, pouca RAM) e conferir no log do PC acessado a troca e a imagem voltando** (entra na T7.3). Se ainda congelar: watchdog fora do loop de vídeo (o loop pode estar bloqueado dentro da captura/encoder) ou VP9 por software como padrão (plano item 3).
 
 ## Fase 5 — Interface e marca (trilha E)
 

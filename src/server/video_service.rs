@@ -837,20 +837,11 @@ fn handle_one_frame(
             if !cfg!(target_os = "android") {
                 log::error!("encode fail: {e:?}, times: {}", *encode_fail_counter,);
             }
-            let max_fail_times = if cfg!(target_os = "android") && encoder.is_hardware() {
-                9
-            } else {
-                3
-            };
-            let repeat = !encoder.latency_free();
-            // repeat encoders can reach max_fail_times on the first frame
-            if (first && !repeat) || *encode_fail_counter >= max_fail_times {
+            if encoder.is_hardware() {
                 *encode_fail_counter = 0;
-                if encoder.is_hardware() {
-                    encoder.disable();
-                    log::error!("switch due to encoding fails, first frame: {first}, error: {e:?}");
-                    bail!("SWITCH");
-                }
+                encoder.disable();
+                log::error!("switch due to encoding fails, first frame: {first}, error: {e:?}");
+                bail!("SWITCH");
             }
             match e.to_string().as_str() {
                 scrap::codec::ENCODE_NEED_SWITCH => {

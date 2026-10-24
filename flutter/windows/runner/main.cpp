@@ -124,10 +124,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!command_line_arguments.empty() && command_line_arguments.front().compare(0, cmParam.size(), cmParam.c_str()) == 0) {
     is_cm_page = true;
   }
-  bool is_install_page = false;
-  if (!command_line_arguments.empty() && command_line_arguments.front().compare(0, installParam.size(), installParam.c_str()) == 0) {
-    is_install_page = true;
-  }
 
   command_line_arguments.insert(command_line_arguments.end(), rust_args.begin(), rust_args.end());
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
@@ -152,8 +148,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   std::wstring window_title;
   if (is_cm_page) {
     window_title = app_name + L" - Connection Manager";
-  } else if (is_install_page) {
-    window_title = app_name + L" - Install";
   } else {
     window_title = app_name;
   }

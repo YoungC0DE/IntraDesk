@@ -187,6 +187,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Incompatível com builds anteriores do IntraDesk (e com o RustDesk): os dois lados precisam desta versão.
   Testes novos: `client::kx_tests` (6: troca de versões, chave conhecida/alterada, ID errado recusado, peer sem assinatura recusado) e `server::handshake_tests` (2: cliente e servidor reais fecham sessão criptografada; servidor recusa cliente sem chave).
   Checagem: `cargo check --workspace --lib --tests`, `flutter analyze` ok; `cargo test --lib kx_tests` 6 ok; `cargo test --lib handshake` 3 ok.
+  Corrigido de passagem: `flutter/windows/runner/main.cpp` não compilava desde a T1.10 (`installParam`); build local completo ok (`dist\IntraDesk-dev.exe`, ~20 MB, 24/10/2026). **Pendente: teste manual em 2 PCs com este build.**
   dep: T2.3 · Área: `src/client.rs` (`secure_connection`), `src/server/connection.rs` (lado servidor do handshake) · @dono: claude
 - [ ] **T3.2** Senha obrigatória: temporária gerada a cada execução e exibida na tela inicial; senha fixa opcional (D6). Remover qualquer caminho que conecte sem senha.
   dep: D6, T2.2 · Área: `src/server/connection.rs`, `src/ui_interface.rs`, tela inicial · @dono:

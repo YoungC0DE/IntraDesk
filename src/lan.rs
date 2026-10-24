@@ -17,10 +17,27 @@ use hbb_common::{
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket},
-    time::Instant,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::{Duration, Instant},
 };
 
 type Message = RendezvousMessage;
+
+const DISCOVERY_INTERVAL: Duration = Duration::from_secs(10);
+/// A manual refresh right after a round is skipped, so repeated UI rebuilds don't flood the LAN.
+const MIN_REQUESTED_INTERVAL: Duration = Duration::from_secs(3);
+/// Long enough to survive a lost broadcast without the peer blinking offline.
+const OFFLINE_AFTER_SECS: u64 = 25;
+const FORGET_AFTER_SECS: u64 = 7 * 24 * 3600;
+
+static DISCOVERY_RUNNING: AtomicBool = AtomicBool::new(false);
+static DISCOVERY_REQUESTED: AtomicBool = AtomicBool::new(false);
+lazy_static::lazy_static! {
+    static ref LAST_ROUND: Mutex<Option<Instant>> = Mutex::new(None);
+}
 
 pub(super) fn start_listening() -> ResultType<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], get_broadcast_port()));
@@ -71,8 +88,53 @@ pub(super) fn start_listening() -> ResultType<()> {
     }
 }
 
+/// Starts searching the LAN every `DISCOVERY_INTERVAL` (once per process) and asks for a round
+/// right away.
+pub fn start_discovery() {
+    DISCOVERY_REQUESTED.store(true, Ordering::SeqCst);
+    if DISCOVERY_RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| loop {
+        let requested = DISCOVERY_REQUESTED.swap(false, Ordering::SeqCst);
+        let since_last = LAST_ROUND.lock().unwrap().map(|t| t.elapsed());
+        let due = match since_last {
+            None => true,
+            Some(elapsed) => {
+                elapsed >= DISCOVERY_INTERVAL || (requested && elapsed >= MIN_REQUESTED_INTERVAL)
+            }
+        };
+        if due {
+            *LAST_ROUND.lock().unwrap() = Some(Instant::now());
+            allow_err!(discover());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    });
+}
+
+/// Splits `ids` by whether the last LAN discovery rounds saw them. An id may also be an address
+/// typed by the user (`ip` or `ip:port`), matched against the addresses the peers answered from.
+pub fn online_states(ids: Vec<String>) -> (Vec<String>, Vec<String>) {
+    split_by_online(ids, &config::LanPeers::load().peers)
+}
+
+fn split_by_online(
+    ids: Vec<String>,
+    peers: &[config::DiscoveryPeer],
+) -> (Vec<String>, Vec<String>) {
+    ids.into_iter().partition(|id| {
+        let ip = id
+            .parse::<SocketAddr>()
+            .map(|a| a.ip().to_string())
+            .unwrap_or_else(|_| id.clone());
+        peers
+            .iter()
+            .any(|p| p.online && (&p.id == id || p.ip_mac.contains_key(&ip)))
+    })
+}
+
 #[tokio::main(flavor = "current_thread")]
-pub async fn discover() -> ResultType<()> {
+async fn discover() -> ResultType<()> {
     let sockets = send_query()?;
     let rx = spawn_wait_responses(sockets);
     handle_received_peers(rx).await?;
@@ -270,6 +332,7 @@ fn wait_response(
                                     hostname: p.hostname.clone(),
                                     platform: p.platform.clone(),
                                     online: true,
+                                    ..Default::default()
                                 }));
                             }
                         }
@@ -301,9 +364,11 @@ fn spawn_wait_responses(sockets: Vec<UdpSocket>) -> UnboundedReceiver<config::Di
 }
 
 async fn handle_received_peers(mut rx: UnboundedReceiver<config::DiscoveryPeer>) -> ResultType<()> {
+    let now = hbb_common::get_time() as u64 / 1000;
     let mut peers = config::LanPeers::load().peers;
+    peers.retain(|peer| now.saturating_sub(peer.last_seen) < FORGET_AFTER_SECS);
     peers.iter_mut().for_each(|peer| {
-        peer.online = false;
+        peer.online = now.saturating_sub(peer.last_seen) < OFFLINE_AFTER_SECS;
     });
 
     let mut response_set = HashSet::new();
@@ -312,6 +377,7 @@ async fn handle_received_peers(mut rx: UnboundedReceiver<config::DiscoveryPeer>)
         tokio::select! {
             data = rx.recv() => match data {
                 Some(mut peer) => {
+                    peer.last_seen = now;
                     let in_response_set = !response_set.insert(peer.id.clone());
                     if let Some(pos) = peers.iter().position(|x| x.is_same_peer(&peer) ) {
                         let peer1 = peers.remove(pos);
@@ -338,4 +404,32 @@ async fn handle_received_peers(mut rx: UnboundedReceiver<config::DiscoveryPeer>)
     config::LanPeers::store(&peers);
     crate::flutter_ffi::main_load_lan_peers();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn peer(id: &str, ip: &str, online: bool) -> config::DiscoveryPeer {
+        config::DiscoveryPeer {
+            id: id.to_owned(),
+            ip_mac: HashMap::from([(ip.to_owned(), String::new())]),
+            online,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn split_by_online_matches_ids_and_addresses_of_online_peers() {
+        let peers = [
+            peer("111", "192.168.0.10", true),
+            peer("222", "192.168.0.20", false),
+        ];
+        let ids = ["111", "222", "192.168.0.10", "192.168.0.10:21118", "192.168.0.20", "333"]
+            .map(String::from)
+            .to_vec();
+        let (onlines, offlines) = split_by_online(ids, &peers);
+        assert_eq!(onlines, ["111", "192.168.0.10", "192.168.0.10:21118"]);
+        assert_eq!(offlines, ["222", "192.168.0.20", "333"]);
+    }
 }

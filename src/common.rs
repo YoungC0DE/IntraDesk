@@ -14,15 +14,14 @@ use hbb_common::{
     anyhow::anyhow,
     bail, base64,
     bytes::Bytes,
-    config::{self, LocalConfig, READ_TIMEOUT},
+    config::{self, LocalConfig},
     futures_util::future::poll_fn,
     log,
     protobuf::{Enum, Message as _},
     rendezvous_proto::*,
-    socket_client,
     sodiumoxide::crypto::{box_, secretbox, sign},
     tokio::time::{Duration, Instant, Interval},
-    ResultType, Stream,
+    ResultType,
 };
 
 use crate::ui_interface::{get_option, set_option};
@@ -504,29 +503,6 @@ audio_rechannel!(audio_rechannel_8_5, 8, 5);
 audio_rechannel!(audio_rechannel_8_6, 8, 6);
 audio_rechannel!(audio_rechannel_8_7, 8, 7);
 
-pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
-    let (mut a, mut b) = get_rendezvous_server_(ms_timeout).await;
-    let mut b: Vec<String> = b
-        .drain(..)
-        .map(|x| socket_client::check_port(x, config::RENDEZVOUS_PORT))
-        .collect();
-    let c = if b.contains(&a) {
-        b = b.drain(..).filter(|x| x != &a).collect();
-        true
-    } else {
-        a = b.pop().unwrap_or(a);
-        false
-    };
-    (a, b, c)
-}
-
-
-#[inline]
-async fn get_rendezvous_server_(ms_timeout: u64) -> (String, Vec<String>) {
-    crate::ipc::get_rendezvous_server(ms_timeout).await
-}
-
-
 #[inline]
 pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::process::Child> {
     let cmd = std::env::current_exe()?;
@@ -797,30 +773,6 @@ pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {
             }
         })
         .collect()
-}
-
-#[inline]
-pub async fn get_next_nonkeyexchange_msg(
-    conn: &mut Stream,
-    timeout: Option<u64>,
-) -> Option<RendezvousMessage> {
-    let timeout = timeout.unwrap_or(READ_TIMEOUT);
-    for _ in 0..2 {
-        if let Some(Ok(bytes)) = conn.next_timeout(timeout).await {
-            if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
-                match &msg_in.union {
-                    Some(rendezvous_message::Union::KeyExchange(_)) => {
-                        continue;
-                    }
-                    _ => {
-                        return Some(msg_in);
-                    }
-                }
-            }
-        }
-        break;
-    }
-    None
 }
 
 #[cfg(not(target_pointer_width = "64"))]

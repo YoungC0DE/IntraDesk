@@ -2077,6 +2077,9 @@ pub struct DiscoveryPeer {
     pub online: bool,
     #[serde(default, deserialize_with = "deserialize_hashmap_string_string")]
     pub ip_mac: HashMap<String, String>,
+    /// Unix time (seconds) of the last discovery response from this peer.
+    #[serde(default, deserialize_with = "deserialize_u64")]
+    pub last_seen: u64,
 }
 
 impl DiscoveryPeer {
@@ -2263,6 +2266,7 @@ macro_rules! deserialize_default {
 deserialize_default!(deserialize_string, String);
 deserialize_default!(deserialize_bool, bool);
 deserialize_default!(deserialize_i32, i32);
+deserialize_default!(deserialize_u64, u64);
 deserialize_default!(deserialize_vec_u8, Vec<u8>);
 deserialize_default!(deserialize_vec_string, Vec<String>);
 deserialize_default!(deserialize_vec_discoverypeer, Vec<DiscoveryPeer>);

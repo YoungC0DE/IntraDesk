@@ -452,9 +452,7 @@ pub fn create_shortcut(_id: String) {
 
 #[inline]
 pub fn discover() {
-    std::thread::spawn(move || {
-        allow_err!(crate::lan::discover());
-    });
+    crate::lan::start_discovery();
 }
 
 pub fn peer_to_map(id: String, p: PeerConfig) -> HashMap<&'static str, String> {

@@ -35,7 +35,6 @@ lazy_static::lazy_static! {
 }
 
 fn initialize(app_dir: &str, custom_client_config: &str) {
-    flutter::async_tasks::start_flutter_async_runner();
     // `APP_DIR` is set in `main_get_data_dir_ios()` on iOS.
     {
         *config::APP_DIR.write().unwrap() = app_dir.to_owned();
@@ -1769,7 +1768,16 @@ pub fn session_register_gpu_texture(
 }
 
 pub fn query_onlines(ids: Vec<String>) {
-    let _ = flutter::async_tasks::query_onlines(ids);
+    let (onlines, offlines) = crate::lan::online_states(ids);
+    let data = HashMap::from([
+        ("name", "callback_query_onlines".to_owned()),
+        ("onlines", onlines.join(",")),
+        ("offlines", offlines.join(",")),
+    ]);
+    let _res = flutter::push_global_event(
+        flutter::APP_TYPE_MAIN,
+        serde_json::ser::to_string(&data).unwrap_or("".to_owned()),
+    );
 }
 
 pub fn version_to_number(v: String) -> SyncReturn<i64> {

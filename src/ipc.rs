@@ -258,7 +258,6 @@ pub enum Data {
     OnlineStatus(Option<(i64, bool)>),
     Config((String, Option<String>)),
     Options(Option<HashMap<String, String>>),
-    NatType(Option<i32>),
     ConfirmedKey(Option<(Vec<u8>, Vec<u8>)>),
     RawMessage(Vec<u8>),
     Socks(Option<config::Socks5Server>),
@@ -608,8 +607,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                         Config::get_rendezvous_server(),
                         Config::get_rendezvous_servers().join(",")
                     ));
-                } else if name == "rendezvous_servers" {
-                    value = Some(Config::get_rendezvous_servers().join(","));
                 } else if name == "fingerprint" {
                     value = if Config::get_key_confirmed() {
                         Some(crate::common::pk_to_fingerprint(Config::get_key_pair().1))
@@ -679,10 +676,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                 allow_err!(stream.send(&Data::Options(None)).await);
             }
         },
-        Data::NatType(_) => {
-            let t = Config::get_nat_type();
-            allow_err!(stream.send(&Data::NatType(Some(t))).await);
-        }
         Data::SyncConfig(Some(configs)) => {
             let (config, config2) = *configs;
             let _chk = CheckIfRestart::new();
@@ -1264,31 +1257,6 @@ pub async fn set_options(value: HashMap<String, String>) -> ResultType<()> {
     }
     Config::set_options(value);
     Ok(())
-}
-
-#[inline]
-async fn get_nat_type_(ms_timeout: u64) -> ResultType<i32> {
-    let mut c = connect(ms_timeout, "").await?;
-    c.send(&Data::NatType(None)).await?;
-    if let Some(Data::NatType(Some(value))) = c.next_timeout(ms_timeout).await? {
-        Config::set_nat_type(value);
-        Ok(value)
-    } else {
-        Ok(Config::get_nat_type())
-    }
-}
-
-pub async fn get_nat_type(ms_timeout: u64) -> i32 {
-    get_nat_type_(ms_timeout)
-        .await
-        .unwrap_or(Config::get_nat_type())
-}
-
-pub async fn get_rendezvous_servers(ms_timeout: u64) -> Vec<String> {
-    if let Ok(Some(v)) = get_config_async("rendezvous_servers", ms_timeout).await {
-        return v.split(',').map(|x| x.to_owned()).collect();
-    }
-    return Config::get_rendezvous_servers();
 }
 
 #[inline]

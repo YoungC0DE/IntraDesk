@@ -215,8 +215,6 @@ pub struct Config2 {
     #[serde(default, deserialize_with = "deserialize_string")]
     rendezvous_server: String,
     #[serde(default, deserialize_with = "deserialize_i32")]
-    nat_type: i32,
-    #[serde(default, deserialize_with = "deserialize_i32")]
     serial: i32,
     #[serde(default, deserialize_with = "deserialize_string")]
     unlock_pin: String,
@@ -848,19 +846,6 @@ impl Config {
         }
         config.id = id.into();
         config.store();
-    }
-
-    pub fn set_nat_type(nat_type: i32) {
-        let mut config = CONFIG2.write().unwrap();
-        if nat_type == config.nat_type {
-            return;
-        }
-        config.nat_type = nat_type;
-        config.store();
-    }
-
-    pub fn get_nat_type() -> i32 {
-        CONFIG2.read().unwrap().nat_type
     }
 
     pub fn set_serial(serial: i32) {
@@ -2766,8 +2751,6 @@ mod tests {
             decrypt_str_or_original(&cfg.unlock_pin, PASSWORD_ENC_VERSION);
         assert!(decrypted);
         cfg.unlock_pin = unlock_pin;
-        cfg.nat_type = 1;
-
         cfg.store();
 
         let stored = Config::load_::<Config2>("2");

@@ -83,7 +83,6 @@ class _PeersView extends StatefulWidget {
 /// State for the peer widget.
 class _PeersViewState extends State<_PeersView>
     with WindowListener, WidgetsBindingObserver {
-  static const int _maxQueryCount = 3;
   final HashMap<String, String> _emptyMessages = HashMap.from({
     LoadEvent.recent: 'empty_recent_tip',
     LoadEvent.favorite: 'empty_favorite_tip',
@@ -95,7 +94,6 @@ class _PeersViewState extends State<_PeersView>
   var _lastQueryPeers = <String>{};
   var _lastQueryTime = DateTime.now();
   var _lastWindowRestoreTime = DateTime.now();
-  var _queryCount = 0;
   var _exit = false;
   bool _isActive = true;
 
@@ -122,7 +120,6 @@ class _PeersViewState extends State<_PeersView>
 
   @override
   void onWindowFocus() {
-    _queryCount = 0;
     _isActive = true;
   }
 
@@ -137,7 +134,6 @@ class _PeersViewState extends State<_PeersView>
             const Duration(milliseconds: 300)) {
       return;
     }
-    _queryCount = _maxQueryCount;
     _isActive = false;
   }
 
@@ -145,7 +141,6 @@ class _PeersViewState extends State<_PeersView>
   void onWindowRestore() {
     // Window restore (on MacOS and Linux) also triggers `onWindowFocus()`.
     // But on Windows, it triggers `onWindowBlur()`, mybe it's a bug of the window manager.
-    _queryCount = 0;
     _isActive = true;
     _lastWindowRestoreTime = DateTime.now();
   }
@@ -296,14 +291,10 @@ class _PeersViewState extends State<_PeersView>
     return body;
   }
 
-  var _queryInterval = const Duration(seconds: 20);
+  final _queryInterval = const Duration(seconds: 6);
 
   void _startCheckOnlines() {
     () async {
-      final p = await bind.mainIsUsingPublicServer();
-      if (!p) {
-        _queryInterval = const Duration(seconds: 6);
-      }
       while (!_exit) {
         final now = DateTime.now();
         if (!setEquals(_curPeers, _lastQueryPeers)) {
@@ -312,12 +303,11 @@ class _PeersViewState extends State<_PeersView>
           }
         } else {
           final skipIfNotActive = !_isActive;
-          if (!skipIfNotActive && (_queryCount < _maxQueryCount || !p)) {
+          if (!skipIfNotActive) {
             if (now.difference(_lastQueryTime) >= _queryInterval) {
               if (_curPeers.isNotEmpty) {
                 bind.queryOnlines(ids: _curPeers.toList(growable: false));
                 _lastQueryTime = DateTime.now();
-                _queryCount += 1;
               }
             }
           }
@@ -330,7 +320,6 @@ class _PeersViewState extends State<_PeersView>
   _queryOnlines(bool isLoadEvent) {
     if (_curPeers.isNotEmpty) {
       bind.queryOnlines(ids: _curPeers.toList(growable: false));
-      _queryCount = 0;
     }
     _lastQueryPeers = {..._curPeers};
     if (isLoadEvent) {

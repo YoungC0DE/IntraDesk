@@ -116,7 +116,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Add", ""),
         ("Local Port", ""),
         ("Change Local Port", ""),
-        ("setup_server_tip", ""),
         ("The confirmation is not identical.", ""),
         ("Permissions", ""),
         ("Accept", ""),
@@ -450,10 +449,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Large", ""),
         ("Alias", ""),
         ("ScrollEdge", ""),
-        ("Allow insecure TLS fallback", ""),
-        ("allow-insecure-tls-fallback-tip", ""),
-        ("Disable UDP", ""),
-        ("disable-udp-tip", ""),
         ("server-oss-not-support-tip", ""),
         ("Relative mouse mode", ""),
         ("rel-mouse-not-supported-peer-tip", ""),
@@ -525,5 +520,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("shortcut-key-not-supported", ""),
         ("On", ""),
         ("Off", ""),
+        ("Computer not found on the network", ""),
     ].iter().cloned().collect();
 }

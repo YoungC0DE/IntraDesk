@@ -116,7 +116,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Add", "Adicionar"),
         ("Local Port", "Porta Local"),
         ("Change Local Port", "Alterar Porta Local"),
-        ("setup_server_tip", "Para uma conexão mais rápida, por favor configure seu próprio servidor"),
         ("The confirmation is not identical.", "A confirmação não é idêntica."),
         ("Permissions", "Permissões"),
         ("Accept", "Aceitar"),
@@ -450,10 +449,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Large", "Grande"),
         ("Alias", "Apelido"),
         ("ScrollEdge", "Rolagem nas bordas"),
-        ("Allow insecure TLS fallback", "Permitir fallback TLS inseguro"),
-        ("allow-insecure-tls-fallback-tip", "Por padrão, o RustDesk verifica o certificado do servidor para protocolos que usam TLS.\nCom esta opção habilitada, o RustDesk ignorará a verificação e prosseguirá em caso de falha."),
-        ("Disable UDP", "Desabilitar UDP"),
-        ("disable-udp-tip", "Controla se deve usar somente TCP.\nCom esta opção habilitada, o RustDesk não usará mais UDP 21116, TCP 21116 será usado no lugar."),
         ("server-oss-not-support-tip", "NOTA: O servidor RustDesk OSS não inclui este recurso."),
         ("Relative mouse mode", "Modo de mouse relativo"),
         ("rel-mouse-not-supported-peer-tip", "O modo de mouse relativo não é suportado pelo parceiro conectado."),
@@ -525,5 +520,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("shortcut-key-not-supported", "Não é possível usar \"{}\" como atalho."),
         ("On", "Ativado"),
         ("Off", "Desativado"),
+        ("Computer not found on the network", "Computador não encontrado na rede"),
     ].iter().cloned().collect();
 }

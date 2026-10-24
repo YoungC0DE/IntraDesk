@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use base::message_proto::*;
 use bytes::Bytes;
 use hbb_common::{
-    config::{LocalConfig, PeerConfig},
+    config::PeerConfig,
     get_version_number, log,
     rendezvous_proto::ConnType,
     tokio::{
@@ -1534,9 +1534,7 @@ impl<T: InvokeUiSession> Session<T> {
 pub async fn io_loop<T: InvokeUiSession>(handler: Session<T>, round: u32) {
     let (sender, receiver) = mpsc::unbounded_channel::<Data>();
     *handler.sender.write().unwrap() = Some(sender.clone());
-    let token = LocalConfig::get_option("access_token");
-    let key = crate::get_key(false).await;
     let mut remote = Remote::new(handler, receiver, sender);
-    remote.io_loop(&key, &token, round).await;
+    remote.io_loop(round).await;
     let _ = remote.sync_jobs_status_to_local().await;
 }

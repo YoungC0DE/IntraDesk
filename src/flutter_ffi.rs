@@ -944,10 +944,6 @@ pub fn main_check_connect_status() {
     start_option_status_sync(); // avoid multi calls
 }
 
-pub fn main_is_using_public_server() -> bool {
-    crate::using_public_server()
-}
-
 pub fn main_discover() {
     discover();
 }

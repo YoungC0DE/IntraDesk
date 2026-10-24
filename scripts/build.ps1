@@ -27,7 +27,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Keep in sync with BUILD_ARGS in .github/workflows/build-windows.yml.
-$BuildArgs = @('--portable', '--flutter', '--skip-portable-pack', '--hwcodec', '--vram')
+$BuildArgs = @('--portable', '--skip-portable-pack', '--hwcodec', '--vram')
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 

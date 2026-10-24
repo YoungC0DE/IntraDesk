@@ -694,15 +694,9 @@ impl InvokeUiSession for FlutterHandler {
         );
     }
 
-    /// unused in flutter, use switch_display or set_peer_info
-    fn set_display(&self, _x: i32, _y: i32, _w: i32, _h: i32, _cursor_embedded: bool, _scale: f64) {}
-
     fn set_permission(&self, name: &str, value: bool) {
         self.push_event("permission", &[(name, &value.to_string())], &[]);
     }
-
-    // unused in flutter
-    fn close_success(&self) {}
 
     fn update_quality_status(&self, status: QualityStatus) {
         const NULL: String = String::new();
@@ -765,9 +759,6 @@ impl InvokeUiSession for FlutterHandler {
         );
     }
 
-    // unused in flutter
-    fn clear_all_jobs(&self) {}
-
     fn load_last_job(&self, _cnt: i32, job_json: &str, _auto_start: bool) {
         self.push_event("load_last_job", &[("value", job_json)], &[]);
     }
@@ -813,12 +804,6 @@ impl InvokeUiSession for FlutterHandler {
         );
     }
 
-    // unused in flutter
-    fn update_transfer_list(&self) {}
-
-    // unused in flutter // TEST flutter
-    fn confirm_delete_files(&self, _id: i32, _i: i32, _name: String) {}
-
     fn override_file_confirm(
         &self,
         id: i32,
@@ -852,9 +837,6 @@ impl InvokeUiSession for FlutterHandler {
             &[],
         );
     }
-
-    // unused in flutter
-    fn adapt_size(&self) {}
 
     #[inline]
     #[cfg(not(any(target_os = "android", target_os = "ios")))]

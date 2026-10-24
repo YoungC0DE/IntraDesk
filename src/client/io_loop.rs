@@ -28,7 +28,7 @@ use crate::{clipboard::try_empty_clipboard_files, clipboard_file::unix_file_clip
 use base::{
     fs::{
         self, can_enable_overwrite_detection, get_job, get_string, new_send_confirm,
-        DigestCheckResult, RemoveJobMeta,
+        DigestCheckResult,
     },
     message_proto::{permission_info::Permission, *},
 };
@@ -151,7 +151,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(crate::SimpleCallOnReturn {
                     b: true,
                     f: Box::new(|| {
-                        // No need to call `enable(false)` for sciter version, because each client of sciter version is a new process.
                         // It's better to check if the peers are windows(support file copy&paste), but it's not necessary.
                         #[cfg(feature = "flutter")]
                         if !crate::flutter::sessions::has_sessions_running(ConnType::DEFAULT_CONN) {
@@ -488,25 +487,6 @@ impl<T: InvokeUiSession> Remote<T> {
     }
 
     fn handle_job_status(&mut self, id: i32, file_num: i32, err: Option<String>) {
-        if let Some(job) = self.remove_jobs.get_mut(&id) {
-            if job.no_confirm {
-                let file_num = (file_num + 1) as usize;
-                if file_num < job.files.len() {
-                    let path = format!("{}{}{}", job.path, job.sep, job.files[file_num].name);
-                    self.sender
-                        .send(Data::RemoveFile((id, path, file_num as i32, job.is_remote)))
-                        .ok();
-                    let elapsed = job.last_update_job_status.elapsed().as_millis() as i32;
-                    if elapsed >= 1000 {
-                        job.last_update_job_status = Instant::now();
-                    } else {
-                        return;
-                    }
-                } else {
-                    self.remove_jobs.remove(&id);
-                }
-            }
-        }
         if let Some(err) = err {
             self.handler.job_error(id, err, file_num);
         } else {
@@ -871,23 +851,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
             }
-            Data::SetNoConfirm(id) => {
-                if let Some(job) = self.remove_jobs.get_mut(&id) {
-                    job.no_confirm = true;
-                }
-            }
-            Data::ConfirmDeleteFiles((id, file_num)) => {
-                if let Some(job) = self.remove_jobs.get_mut(&id) {
-                    let i = file_num as usize;
-                    if i < job.files.len() {
-                        self.handler.ui_handler.confirm_delete_files(
-                            id,
-                            file_num,
-                            job.files[i].name.clone(),
-                        );
-                    }
-                }
-            }
             Data::SetConfirmOverrideFile((id, file_num, need_override, remember, is_upload)) => {
                 if is_upload {
                     if let Some(job) = fs::get_job(id, &mut self.read_jobs) {
@@ -931,7 +894,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
             }
             Data::RemoveDirAll((id, path, is_remote, include_hidden)) => {
-                let sep = self.handler.get_path_sep(is_remote);
                 if is_remote {
                     let mut msg_out = Message::new();
                     let mut file_action = FileAction::new();
@@ -944,7 +906,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     msg_out.set_file_action(file_action);
                     allow_err!(peer.send(&msg_out).await);
                     self.remove_jobs
-                        .insert(id, RemoveJob::new(Vec::new(), path, sep, is_remote));
+                        .insert(id, RemoveJob::new(Vec::new()));
                 } else {
                     match fs::get_recursive_files(&path, include_hidden) {
                         Ok(entries) => {
@@ -956,7 +918,7 @@ impl<T: InvokeUiSession> Remote<T> {
                                 false,
                             );
                             self.remove_jobs
-                                .insert(id, RemoveJob::new(entries, path, sep, is_remote));
+                                .insert(id, RemoveJob::new(entries));
                         }
                         Err(err) => {
                             self.handle_job_status(id, -1, Some(err.to_string()));
@@ -1329,8 +1291,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::VideoFrame(vf)) => {
                     if !self.first_frame {
                         self.first_frame = true;
-                        self.handler.close_success();
-                        self.handler.adapt_size();
                         self.send_toggle_virtual_display_msg(peer).await;
                     }
                     self.video_format = CodecFormat::from(&vf);
@@ -1390,7 +1350,7 @@ impl<T: InvokeUiSession> Remote<T> {
 
                             #[cfg(feature = "flutter")]
                             #[cfg(not(target_os = "ios"))]
-                            let rx = Client::try_start_clipboard(None);
+                            let rx = Client::try_start_clipboard();
                             // To make sure current text clipboard data is updated.
                             #[cfg(not(target_os = "ios"))]
                             if let Some(mut rx) = rx {
@@ -1830,24 +1790,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         if let Some(thread) = self.video_threads.get_mut(&(s.display as usize)) {
                             thread.video_sender.send(MediaData::Reset).ok();
                         }
-
-                        let mut scale = 1.0;
-                        if let Some(pi) = &self.handler.lc.read().unwrap().peer_info {
-                            if let Some(d) = pi.displays.get(s.display as usize) {
-                                scale = d.scale;
-                            }
-                        }
-
-                        if s.width > 0 && s.height > 0 {
-                            self.handler.set_display(
-                                s.x,
-                                s.y,
-                                s.width,
-                                s.height,
-                                s.cursor_embedded,
-                                scale,
-                            );
-                        }
                     }
                     Some(misc::Union::CloseReason(c)) => {
                         self.sent_close_reason = true; // The controlled end will close, no need to send close reason
@@ -2276,31 +2218,11 @@ impl CursorDedupe {
 
 struct RemoveJob {
     files: Vec<FileEntry>,
-    path: String,
-    sep: &'static str,
-    is_remote: bool,
-    no_confirm: bool,
-    last_update_job_status: Instant,
 }
 
 impl RemoveJob {
-    fn new(files: Vec<FileEntry>, path: String, sep: &'static str, is_remote: bool) -> Self {
-        Self {
-            files,
-            path,
-            sep,
-            is_remote,
-            no_confirm: false,
-            last_update_job_status: Instant::now(),
-        }
-    }
-
-    pub fn _gen_meta(&self) -> RemoveJobMeta {
-        RemoveJobMeta {
-            path: self.path.clone(),
-            is_remote: self.is_remote,
-            no_confirm: self.no_confirm,
-        }
+    fn new(files: Vec<FileEntry>) -> Self {
+        Self { files }
     }
 }
 

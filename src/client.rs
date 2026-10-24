@@ -123,10 +123,6 @@ pub const SCRAP_X11_REF_URL: &str = "https://rustdesk.com/docs/en/manual/linux/#
 #[cfg(not(target_os = "linux"))]
 pub const AUDIO_BUFFER_MS: usize = 3000;
 
-#[cfg(feature = "flutter")]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub(crate) struct ClientClipboardContext;
-
 /// Client of the remote desktop.
 pub struct Client;
 
@@ -1901,9 +1897,7 @@ impl Client {
     //
     // If clipboard update is detected, the text will be sent to all sessions by `send_clipboard_msg`.
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn try_start_clipboard(
-        _client_clip_ctx: Option<ClientClipboardContext>,
-    ) -> Option<UnboundedReceiver<()>> {
+    fn try_start_clipboard() -> Option<UnboundedReceiver<()>> {
         let mut clipboard_lock = CLIPBOARD_STATE.lock().unwrap();
         if clipboard_lock.running {
             return None;
@@ -1963,7 +1957,7 @@ impl Client {
     }
 
     #[cfg(target_os = "android")]
-    fn try_start_clipboard(_p: Option<()>) -> Option<UnboundedReceiver<()>> {
+    fn try_start_clipboard() -> Option<UnboundedReceiver<()>> {
         let mut clipboard_lock = CLIPBOARD_STATE.lock().unwrap();
         if clipboard_lock.running {
             return None;
@@ -3902,7 +3896,7 @@ fn fps_calculate(
 }
 
 fn get_hwcodec_config() {
-    // for sciter and unilink
+    // for unilink
     #[cfg(feature = "hwcodec")]
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
@@ -4602,8 +4596,6 @@ pub enum Data {
     InitialClipboard(usize, Option<Message>),
     SendFiles((i32, JobType, String, String, i32, bool, bool)),
     RemoveDirAll((i32, String, bool, bool)),
-    ConfirmDeleteFiles((i32, i32)),
-    SetNoConfirm(i32),
     RemoveDir((i32, String)),
     RemoveFile((i32, String, i32, bool)),
     CreateDir((i32, String, bool)),

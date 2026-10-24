@@ -5470,7 +5470,6 @@ dependencies = [
  "windows 0.61.1",
  "windows-service",
  "winreg",
- "winres",
  "wol-rs",
  "xxhash-rust",
  "zstd",

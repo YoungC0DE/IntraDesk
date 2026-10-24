@@ -331,13 +331,6 @@ pub mod client {
         // shortcuts to the actual keys they press, regardless of swap settings.
         // Key swapping only affects what gets sent to the remote.
         //
-        // Gated on `feature = "flutter"` because the dispatch target
-        // (`flutter::push_session_event`) is Flutter-only. Sciter builds never
-        // call `reload_from_config`, so the cache stays disabled and the
-        // matcher would no-op anyway — but we still skip the call entirely so
-        // a hand-edited config can't silently swallow keys on a UI that has
-        // no way to surface the action.
-        //
         // `None` for session_id makes the helper resolve through
         // `flutter::get_cur_session_id()` — the rdev grab loop is process-wide
         // and has no per-event session context to thread.
@@ -530,7 +523,6 @@ fn get_keyboard_mode() -> String {
 /// Exit shortcuts (only exits, not toggles):
 /// - macOS: Cmd+G
 /// - Windows/Linux: Ctrl+Alt (triggered when both are pressed)
-/// Note: This shortcut is only available in Flutter client. Sciter client does not support relative mouse mode.
 #[cfg(feature = "flutter")]
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn is_exit_relative_mouse_shortcut(key: Key) -> bool {
@@ -569,7 +561,6 @@ fn is_exit_relative_mouse_shortcut(key: Key) -> bool {
 }
 
 /// Notify Flutter to exit relative mouse mode.
-/// Note: This is Flutter-only. Sciter client does not support relative mouse mode.
 #[cfg(feature = "flutter")]
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn notify_exit_relative_mouse_mode() {

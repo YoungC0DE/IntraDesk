@@ -62,11 +62,6 @@ pub mod input {
     pub const MOUSE_TYPE_TRACKPAD: i32 = 4;
     /// Relative mouse movement type for gaming/3D applications.
     /// This type sends delta (dx, dy) values instead of absolute coordinates.
-    /// NOTE: This is only supported by the Flutter client. The Sciter client (deprecated)
-    /// does not support relative mouse mode due to:
-    /// 1. Fixed send_mouse() function signature that doesn't allow type differentiation
-    /// 2. Lack of pointer lock API in Sciter/TIS
-    /// 3. No OS cursor control (hide/show/clip) FFI bindings in Sciter UI
     pub const MOUSE_TYPE_MOVE_RELATIVE: i32 = 5;
 
     /// Mask to extract the mouse event type from the mask field.

@@ -252,10 +252,6 @@ impl VideoSource {
             VideoSource::Monitor => "monitor",
         }
     }
-
-    pub fn is_monitor(&self) -> bool {
-        matches!(self, VideoSource::Monitor)
-    }
 }
 
 #[derive(Clone)]
@@ -507,13 +503,6 @@ fn run(vs: VideoService) -> ResultType<()> {
     };
     #[cfg(feature = "vram")]
     c.set_output_texture(encoder.input_texture());
-    #[cfg(target_os = "android")]
-    if vs.source.is_monitor() {
-        if let Err(e) = check_change_scale(encoder.is_hardware()) {
-            try_broadcast_display_changed(&sp, display_idx, &c, true).ok();
-            bail!(e);
-        }
-    }
     VIDEO_QOS.lock().unwrap().store_bitrate(encoder.bitrate());
     VIDEO_QOS
         .lock()
@@ -547,7 +536,6 @@ fn run(vs: VideoService) -> ResultType<()> {
     // Set once the encoder emits its first packet; until then it may legitimately return nothing.
     let mut encoder_warmed_up = false;
     let mut static_refresh = static_refresh::StaticRefresh::new(
-        vs.source,
         codec_format,
         &encoder_cfg,
         &sp,
@@ -570,9 +558,7 @@ fn run(vs: VideoService) -> ResultType<()> {
         if sp.is_option_true(OPTION_REFRESH)
             && refresh_allowed(first_frame, encoder_warmed_up, encoder.latency_free())
         {
-            if vs.source.is_monitor() {
-                let _ = try_broadcast_display_changed(&sp, display_idx, &c, true);
-            }
+            let _ = try_broadcast_display_changed(&sp, display_idx, &c, true);
             log::info!("switch to refresh");
             bail!("SWITCH");
         }
@@ -608,7 +594,7 @@ fn run(vs: VideoService) -> ResultType<()> {
             }
         }
         let now = time::Instant::now();
-        if vs.source.is_monitor() && last_check_displays.elapsed().as_millis() > 1000 {
+        if last_check_displays.elapsed().as_millis() > 1000 {
             last_check_displays = now;
             // This check may be redundant, but it is better to be safe.
             // The previous check in `sp.is_option_true(OPTION_REFRESH)` block may be enough.
@@ -771,9 +757,7 @@ fn run(vs: VideoService) -> ResultType<()> {
                 };
                 // This check may be redundant, but it is better to be safe.
                 // The previous check in `sp.is_option_true(OPTION_REFRESH)` block may be enough.
-                if vs.source.is_monitor() {
-                    try_broadcast_display_changed(&sp, display_idx, &c, true)?;
-                }
+                try_broadcast_display_changed(&sp, display_idx, &c, true)?;
 
                 #[cfg(windows)]
                 if !c.is_gdi() {

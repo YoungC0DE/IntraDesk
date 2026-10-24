@@ -129,9 +129,9 @@ class ConnectionManagerState extends State<ConnectionManager>
         final client =
             gFFI.serverModel.clients.firstWhereOrNull((e) => e.id == client_id);
         if (client != null) {
-          if (client.unreadChatMessageCount.value > 0) {
+          if (client.unreadFileTransferLogCount.value > 0) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              client.unreadChatMessageCount.value = 0;
+              client.unreadFileTransferLogCount.value = 0;
               if (!gFFI.serverModel.isShowCMSidePage) {
                 gFFI.serverModel.toggleCMSidePage();
               }
@@ -213,7 +213,7 @@ class ConnectionManagerState extends State<ConnectionManager>
                         message: key,
                         waitDuration: Duration(seconds: 1),
                         child: label),
-                    unreadMessageCountBuilder(client?.unreadChatMessageCount)
+                    unreadMessageCountBuilder(client?.unreadFileTransferLogCount)
                         .marginOnly(left: 4),
                   ],
                 );
@@ -222,26 +222,26 @@ class ConnectionManagerState extends State<ConnectionManager>
                 builder: (context, constrains) {
                   var borderWidth = 0.0;
                   if (constrains.maxWidth >
-                      kConnectionManagerWindowSizeClosedChat.width) {
-                    borderWidth = kConnectionManagerWindowSizeOpenChat.width -
+                      kConnectionManagerWindowSizeClosedSidePage.width) {
+                    borderWidth = kConnectionManagerWindowSizeOpenSidePage.width -
                         constrains.maxWidth;
                   } else {
-                    borderWidth = kConnectionManagerWindowSizeClosedChat.width -
+                    borderWidth = kConnectionManagerWindowSizeClosedSidePage.width -
                         constrains.maxWidth;
                   }
                   if (borderWidth < 0 || borderWidth > 50) {
                     borderWidth = 0;
                   }
                   final realClosedWidth =
-                      kConnectionManagerWindowSizeClosedChat.width -
+                      kConnectionManagerWindowSizeClosedSidePage.width -
                           borderWidth;
-                  final realChatPageWidth =
+                  final realSidePageWidth =
                       constrains.maxWidth - realClosedWidth;
                   final row = Row(children: [
                     if (constrains.maxWidth >
-                        kConnectionManagerWindowSizeClosedChat.width)
+                        kConnectionManagerWindowSizeClosedSidePage.width)
                       SizedBox(
-                        width: realChatPageWidth,
+                        width: realSidePageWidth,
                         child: allowRemoteCMModification()
                             ? buildSidePage()
                             : buildRemoteBlock(

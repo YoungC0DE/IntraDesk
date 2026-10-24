@@ -29,8 +29,6 @@ def get_version():
 
 def make_parser():
     parser = argparse.ArgumentParser(description='Build script (Windows only).')
-    parser.add_argument('--flutter', action='store_true',
-                        help='Build flutter package', default=False)
     parser.add_argument(
         '--hwcodec',
         action='store_true',
@@ -67,8 +65,6 @@ def get_features(args):
         features.append('hwcodec')
     if args.vram:
         features.append('vram')
-    if args.flutter:
-        features.append('flutter')
     print("features:", features)
     return features
 

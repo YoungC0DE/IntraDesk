@@ -357,7 +357,7 @@ class BlockableOverlayState extends OverlayKeyState {
 
   void applyFfi(FFI ffi) {
     ffi.dialogManager.setOverlayState(this);
-    // make remote page penetrable automatically, effective for chat over remote
+    // make remote page penetrable automatically
     onMiddleBlockedClick = () {
       setMiddleBlocked(false);
     };

@@ -443,16 +443,6 @@ pub struct TransferJobMeta {
     pub is_remote: bool,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct RemoveJobMeta {
-    #[serde(default)]
-    pub path: String,
-    #[serde(default)]
-    pub is_remote: bool,
-    #[serde(default)]
-    pub no_confirm: bool,
-}
-
 #[inline]
 fn get_ext(name: &str) -> &str {
     if let Some(i) = name.rfind('.') {

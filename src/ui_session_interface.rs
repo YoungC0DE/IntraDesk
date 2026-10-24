@@ -46,10 +46,6 @@ use crate::common::GrabState;
 use crate::keyboard;
 use crate::{client::Data, client::Interface};
 
-#[cfg(any(target_os = "android", target_os = "ios", test))]
-#[path = "platform/mobile_wheel.rs"]
-mod mobile_wheel;
-
 const CHANGE_RESOLUTION_VALID_TIMEOUT_SECS: u64 = 15;
 
 #[derive(Clone, Default)]
@@ -1058,12 +1054,6 @@ impl<T: InvokeUiSession> Session<T> {
         } else {
             (x, y)
         };
-        #[cfg(any(target_os = "android", target_os = "ios"))]
-        let (x, y) = if event_type == MOUSE_TYPE_WHEEL || event_type == MOUSE_TYPE_TRACKPAD {
-            mobile_wheel::mobile_wheel_delta((x, y), &self.lc.read().unwrap().reverse_mouse_wheel)
-        } else {
-            (x, y)
-        };
 
         // #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let (alt, ctrl, shift, command) =
@@ -1201,7 +1191,6 @@ impl<T: InvokeUiSession> Session<T> {
     }
 
     pub fn load_last_jobs(&self) {
-        self.clear_all_jobs();
         let pc = self.load_config();
         if pc.transfer.write_jobs.is_empty() && pc.transfer.read_jobs.is_empty() {
             // no last jobs
@@ -1237,7 +1226,6 @@ impl<T: InvokeUiSession> Session<T> {
                 log::info!("restore write_job: {:?}", job_str);
             }
         }
-        self.update_transfer_list();
     }
 
     pub fn elevate_direct(&self) {
@@ -1415,21 +1403,17 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_cursor_data(&self, cd: CursorData);
     fn set_cursor_id(&self, id: String);
     fn set_cursor_position(&self, cp: CursorPosition);
-    fn set_display(&self, x: i32, y: i32, w: i32, h: i32, cursor_embedded: bool, scale: f64);
     fn switch_display(&self, display: &SwitchDisplay);
     fn set_peer_info(&self, peer_info: &PeerInfo); // flutter
     fn set_displays(&self, displays: &Vec<DisplayInfo>);
     fn set_platform_additions(&self, data: &str);
     fn on_connected(&self, conn_type: ConnType);
     fn set_permission(&self, name: &str, value: bool);
-    fn close_success(&self);
     fn update_quality_status(&self, qs: QualityStatus);
     fn set_connection_type(&self, is_secured: bool, direct: bool, stream_type: &str);
     fn set_fingerprint(&self, fingerprint: String);
     fn job_error(&self, id: i32, err: String, file_num: i32);
     fn job_done(&self, id: i32, file_num: i32);
-    fn clear_all_jobs(&self);
-    fn update_transfer_list(&self);
     fn load_last_job(&self, cnt: i32, job_json: &str, auto_start: bool);
     fn update_folder_files(
         &self,
@@ -1439,7 +1423,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
         is_local: bool,
         only_count: bool,
     );
-    fn confirm_delete_files(&self, id: i32, i: i32, name: String);
     fn override_file_confirm(
         &self,
         id: i32,
@@ -1449,7 +1432,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
         is_identical: bool,
     );
     fn job_progress(&self, id: i32, file_num: i32, speed: f64, finished_size: f64);
-    fn adapt_size(&self);
     fn on_rgba(&self, display: usize, rgba: &mut scrap::ImageRgb);
     fn msgbox(&self, msgtype: &str, title: &str, text: &str, link: &str, retry: bool);
     #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -1538,22 +1520,11 @@ impl<T: InvokeUiSession> Interface for Session<T> {
             if !p.is_empty() {
                 crate::client::auto_login(p, &pi, self.clone());
             }
-            let current = &pi.displays[pi.current_display as usize];
-            self.set_display(
-                current.x,
-                current.y,
-                current.width,
-                current.height,
-                current.cursor_embedded,
-                current.scale,
-            );
         }
         // Save recent peers, then push event to flutter. So flutter can refresh peer page.
         self.lc.write().unwrap().handle_peer_info(&pi);
         self.set_peer_info(&pi);
-        if self.is_file_transfer() {
-            self.close_success();
-        } else {
+        if !self.is_file_transfer() {
             self.msgbox(
                 "success",
                 "Successful",

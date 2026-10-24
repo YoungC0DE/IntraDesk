@@ -24,7 +24,7 @@ pub enum CoreMainAction {
     ExitFailure(hbb_common::anyhow::Error),
 }
 
-/// shared by flutter and sciter main function
+/// called by the flutter main function
 ///
 /// [Note]
 /// If it returns [`None`], then the process will terminate, and flutter gui will not be started.

@@ -660,17 +660,17 @@ class ServerModel with ChangeNotifier {
       notifyListeners();
       await windowManager.show();
       await windowManager.setSizeAlignment(
-          kConnectionManagerWindowSizeClosedChat, Alignment.topRight);
+          kConnectionManagerWindowSizeClosedSidePage, Alignment.topRight);
     } else {
       final currentSelectedTab = tabController.state.value.selectedTabInfo;
       final client = _clients.firstWhereOrNull(
           (client) => client.id.toString() == currentSelectedTab.key);
       if (client != null) {
-        client.unreadChatMessageCount.value = 0;
+        client.unreadFileTransferLogCount.value = 0;
       }
       await windowManager.show();
       await windowManager.setSizeAlignment(
-          kConnectionManagerWindowSizeOpenChat, Alignment.topRight);
+          kConnectionManagerWindowSizeOpenSidePage, Alignment.topRight);
       _isShowCMSidePage = !_isShowCMSidePage;
       notifyListeners();
     }
@@ -698,7 +698,7 @@ class Client {
   bool disconnected = false;
   bool fromSwitch = false;
 
-  RxInt unreadChatMessageCount = 0.obs;
+  RxInt unreadFileTransferLogCount = 0.obs;
 
   Client(this.id, this.authorized, this.isFileTransfer, this.name, this.peerId,
       this.keyboard, this.clipboard, this.audio);

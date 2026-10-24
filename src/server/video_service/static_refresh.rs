@@ -1,4 +1,4 @@
-use super::{GenericService, VideoFrameController, VideoSource};
+use super::{GenericService, VideoFrameController};
 use base::message_proto::Message;
 use hbb_common::{bail, ResultType};
 use scrap::{
@@ -67,7 +67,6 @@ pub(super) struct FrameEncodeResult {
 }
 
 pub(super) struct StaticRefresh<'a> {
-    source: VideoSource,
     codec_format: CodecFormat,
     hardware_backend: HardwareBackend,
     sp: &'a GenericService,
@@ -86,7 +85,6 @@ pub(super) struct StaticRefresh<'a> {
 
 impl<'a> StaticRefresh<'a> {
     pub(super) fn new(
-        source: VideoSource,
         codec_format: CodecFormat,
         encoder_config: &EncoderCfg,
         sp: &'a GenericService,
@@ -114,7 +112,6 @@ impl<'a> StaticRefresh<'a> {
             _ => HardwareBackend::Other,
         };
         Self {
-            source,
             codec_format,
             hardware_backend,
             sp,
@@ -183,8 +180,7 @@ impl<'a> StaticRefresh<'a> {
             quality,
             self.hardware_backend,
         ));
-        if !self.source.is_monitor()
-            || self.codec_format == CodecFormat::AV1
+        if self.codec_format == CodecFormat::AV1
             || !self.source_ready
             || (self.repeat_failures >= MAX_REPEAT_FAILURES
                 && !matches!(
@@ -289,7 +285,6 @@ mod tests {
     use std::{cell::Cell, rc::Rc};
 
     pub(super) fn new_refresh<'a>(
-        source: VideoSource,
         codec_format: CodecFormat,
         sp: &'a GenericService,
         display_idx: usize,
@@ -304,7 +299,7 @@ mod tests {
             codec: VpxVideoCodecId::VP9,
             keyframe_interval: None,
         });
-        StaticRefresh::new(source, codec_format, &config, sp, display_idx)
+        StaticRefresh::new(codec_format, &config, sp, display_idx)
     }
 
     struct CountingEncoder(Rc<Cell<usize>>);
@@ -387,7 +382,6 @@ mod tests {
     fn long_network_waits_preserve_budget_and_new_frames_restart_it() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let mut refresh = new_refresh(
-            VideoSource::Monitor,
             CodecFormat::VP9,
             &sp,
             0,
@@ -420,7 +414,6 @@ mod tests {
     fn initial_delay_repeat_interval_and_qos_limit_refresh_rate() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let mut refresh = new_refresh(
-            VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
             0,
@@ -484,7 +477,6 @@ mod tests {
     fn texture_frames_request_repeats_without_accessing_capture_resources() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let mut refresh = new_refresh(
-            VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
             0,
@@ -519,11 +511,8 @@ mod tests {
     fn av1_and_missing_frames_are_not_refreshed() {
         let sp = GenericService::new("static-refresh-test".to_owned(), false);
         let calls = Rc::new(Cell::new(0));
-        for (source, codec_format, yuv) in [
-            (VideoSource::Monitor, CodecFormat::AV1, &[1][..]),
-            (VideoSource::Monitor, CodecFormat::VP9, &[][..]),
-        ] {
-            let mut refresh = new_refresh(source, codec_format, &sp, 0, 1, 1);
+        for (codec_format, yuv) in [(CodecFormat::AV1, &[1][..]), (CodecFormat::VP9, &[][..])] {
+            let mut refresh = new_refresh(codec_format, &sp, 0, 1, 1);
             refresh.on_frame(&EncodeInput::YUV(yuv));
             refresh.on_encoded(true);
             refresh.elapsed_since_encode = Duration::from_secs(60);
@@ -567,7 +556,6 @@ mod tests {
     fn quality_changes_preserve_the_largest_budget_until_a_new_frame() {
         let sp = GenericService::new("repeat-quality-change-test".to_owned(), false);
         let mut refresh = new_refresh(
-            VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
             0,
@@ -644,7 +632,7 @@ mod tests {
                 HardwareBackend::MediaCodec,
                 HardwareBackend::Other,
             ] {
-                let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+                let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
                 refresh.hardware_backend = backend;
                 for quality in [
                     0.1,
@@ -719,7 +707,7 @@ mod tests {
                 CodecFormat::H264
             };
             let mut refresh =
-                StaticRefresh::new(VideoSource::Monitor, codec_format, &config, &sp, 0);
+                StaticRefresh::new(codec_format, &config, &sp, 0);
             for quality in [0.1, BR_SPEED, BR_BALANCED, BR_BEST] {
                 let limit = max_repeat_frames(codec_format, quality, expected);
                 assert_output_budget(&mut refresh, &sp, quality, limit);
@@ -752,7 +740,7 @@ mod tests {
                 .unwrap(),
             });
             let mut refresh =
-                StaticRefresh::new(VideoSource::Monitor, CodecFormat::H264, &config, &sp, 0);
+                StaticRefresh::new(CodecFormat::H264, &config, &sp, 0);
             for quality in [0.1, BR_SPEED, BR_BALANCED, BR_BEST] {
                 let limit = max_repeat_frames(CodecFormat::H264, quality, expected);
                 assert_output_budget(&mut refresh, &sp, quality, limit);

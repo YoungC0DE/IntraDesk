@@ -110,7 +110,6 @@ fn failures_pause_refresh_until_a_real_frame_succeeds() {
     let (tx, rx) = mpsc::unbounded_channel();
     sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
     let mut refresh = new_refresh(
-        VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
         0,
@@ -170,7 +169,6 @@ fn failures_pause_refresh_until_a_real_frame_succeeds() {
 fn empty_outputs_exhaust_the_no_output_budget_without_disabling_the_encoder() {
     let sp = GenericService::new("repeat-empty-test".to_owned(), false);
     let mut refresh = new_refresh(
-        VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
         0,
@@ -191,7 +189,7 @@ fn empty_outputs_exhaust_the_no_output_budget_without_disabling_the_encoder() {
 fn vpx_drops_exhaust_the_no_output_budget_without_disabling_the_encoder() {
     let sp = GenericService::new("repeat-vpx-drops-test".to_owned(), false);
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let limit = MAX_REPEAT_NO_OUTPUTS;
         let (mut encoder, state) = encoder(&vec![Outcome::Dropped; limit]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
@@ -212,7 +210,7 @@ fn vpx_dropped_capture_repeats_the_latest_frame() {
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
         let (tx, mut rx) = mpsc::unbounded_channel();
         sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let (mut encoder, state) = encoder(&[Frame, Dropped, Dropped, Frame]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
         refresh.on_encoded(true);
@@ -273,7 +271,7 @@ fn captured_frame_errors_do_not_enable_repeat() {
         (CodecFormat::H264, Outcome::Dropped, true),
         (CodecFormat::H265, Outcome::Dropped, true),
     ] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let (mut encoder, state) = encoder(&[outcome, Outcome::Frame]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
         let mut normal_failures = 0;
@@ -305,7 +303,7 @@ fn unsuccessful_repeats_preserve_the_frame_budget() {
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
         let (tx, rx) = mpsc::unbounded_channel();
         sp.on_subscribe(ConnInner::new(1, None, Some(tx)));
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let limit = max_repeat_frames(codec, BR_BALANCED, HardwareBackend::Other);
         let mut outcomes = vec![Outcome::Dropped; 40];
         outcomes.extend(vec![Outcome::Empty; 40]);
@@ -350,7 +348,7 @@ fn repeat_intervals_are_codec_specific_after_the_first_attempt() {
             Outcome::Dropped,
             Outcome::Error,
         ] {
-            let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+            let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
             let (mut encoder, state) = encoder(&[first, Outcome::Frame]);
             refresh.on_frame(&EncodeInput::YUV(&[1]));
             refresh.on_encoded(true);
@@ -390,7 +388,6 @@ fn repeat_timing_uses_the_capture_loop_start() {
         Outcome::Error,
     ] {
         let mut refresh = new_refresh(
-            VideoSource::Monitor,
             CodecFormat::H264,
             &sp,
             0,
@@ -431,7 +428,7 @@ fn repeat_timing_uses_the_capture_loop_start() {
 fn no_output_budget_is_cumulative_and_restarts_with_a_new_frame() {
     let sp = GenericService::new("repeat-no-output-budget-test".to_owned(), false);
     for codec in [CodecFormat::VP8, CodecFormat::VP9] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let mut outcomes = Vec::new();
         for _ in 0..10 {
             outcomes.push(Outcome::Frame);
@@ -472,7 +469,7 @@ fn repeat_error_limits_are_codec_specific() {
         (CodecFormat::H264, 3),
         (CodecFormat::H265, 3),
     ] {
-        let mut refresh = new_refresh(VideoSource::Monitor, codec, &sp, 0, 1, 1);
+        let mut refresh = new_refresh(codec, &sp, 0, 1, 1);
         let limit = MAX_REPEAT_NO_OUTPUTS;
         let (mut encoder, state) = encoder(&vec![Outcome::Error; limit]);
         refresh.on_frame(&EncodeInput::YUV(&[1]));
@@ -491,7 +488,6 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
     use Outcome::*;
     let sp = GenericService::new("repeat-normal-errors-test".to_owned(), false);
     let mut refresh = new_refresh(
-        VideoSource::Monitor,
         CodecFormat::H264,
         &sp,
         0,

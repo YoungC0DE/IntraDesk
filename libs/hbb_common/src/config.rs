@@ -308,13 +308,7 @@ pub struct PeerConfig {
     #[serde(flatten)]
     pub lock_after_session_end: LockAfterSessionEnd,
     #[serde(flatten)]
-    pub terminal_persistent: TerminalPersistent,
-    #[serde(flatten)]
-    pub privacy_mode: PrivacyMode,
-    #[serde(flatten)]
     pub allow_swap_key: AllowSwapKey,
-    #[serde(default, deserialize_with = "deserialize_vec_i32_string_i32")]
-    pub port_forwards: Vec<(i32, String, i32)>,
     #[serde(default, deserialize_with = "deserialize_i32")]
     pub direct_failures: i32,
     #[serde(flatten)]
@@ -404,10 +398,7 @@ impl Default for PeerConfig {
             custom_image_quality: Self::default_custom_image_quality(),
             show_remote_cursor: Default::default(),
             lock_after_session_end: Default::default(),
-            terminal_persistent: Default::default(),
-            privacy_mode: Default::default(),
             allow_swap_key: Default::default(),
-            port_forwards: Default::default(),
             direct_failures: Default::default(),
             disable_audio: Default::default(),
             disable_clipboard: Default::default(),
@@ -2080,18 +2071,6 @@ serde_field_bool!(
     default_lock_after_session_end,
     "LockAfterSessionEnd::default_lock_after_session_end"
 );
-serde_field_bool!(
-    TerminalPersistent,
-    "terminal-persistent",
-    default_terminal_persistent,
-    "TerminalPersistent::default_terminal_persistent"
-);
-serde_field_bool!(
-    PrivacyMode,
-    "privacy_mode",
-    default_privacy_mode,
-    "PrivacyMode::default_privacy_mode"
-);
 
 serde_field_bool!(
     AllowSwapKey,
@@ -2725,7 +2704,6 @@ deserialize_default!(deserialize_bool, bool);
 deserialize_default!(deserialize_i32, i32);
 deserialize_default!(deserialize_vec_u8, Vec<u8>);
 deserialize_default!(deserialize_vec_string, Vec<String>);
-deserialize_default!(deserialize_vec_i32_string_i32, Vec<(i32, String, i32)>);
 deserialize_default!(deserialize_vec_discoverypeer, Vec<DiscoveryPeer>);
 deserialize_default!(deserialize_vec_abpeer, Vec<AbPeer>);
 deserialize_default!(deserialize_vec_abentry, Vec<AbEntry>);
@@ -2815,9 +2793,7 @@ pub fn is_disable_account() -> bool {
     is_some_hard_opton("disable-account")
 }
 
-// This function must be kept the same as the one in flutter and sciter code.
-// flutter: flutter/lib/common.dart -> option2bool()
-// sciter: Does not have the function, but it should be kept the same.
+// This function must be kept the same as option2bool() in flutter/lib/common.dart.
 pub fn option2bool(option: &str, value: &str) -> bool {
     if option.starts_with("enable-") {
         value != "N"

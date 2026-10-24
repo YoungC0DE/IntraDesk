@@ -1094,18 +1094,14 @@ pub mod client {
                     }
                 }
                 StartPara::Logon(username, password) => {
-                    #[allow(unused_mut)]
-                    let mut exe = std::env::current_exe()?.to_string_lossy().to_string();
-                    #[cfg(feature = "flutter")]
-                    {
-                        if let Some(dir) = Path::new(&exe).parent() {
-                            if let Err(err) = set_path_permission(
-                                Path::new(dir),
-                                FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
-                            ) {
-                                clear_runtime_shmem_state();
-                                bail!("Failed to set permission of {:?}: {}", dir, err);
-                            }
+                    let exe = std::env::current_exe()?.to_string_lossy().to_string();
+                    if let Some(dir) = Path::new(&exe).parent() {
+                        if let Err(err) = set_path_permission(
+                            Path::new(dir),
+                            FILE_GENERIC_READ.0 | FILE_GENERIC_EXECUTE.0,
+                        ) {
+                            clear_runtime_shmem_state();
+                            bail!("Failed to set permission of {:?}: {}", dir, err);
                         }
                     }
                     if let Err(e) = crate::platform::windows::create_process_with_logon(

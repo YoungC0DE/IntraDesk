@@ -189,7 +189,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **T2.11** Correções do teste manual em 2 PCs (24/10/2026, relatado pelo usuário):
   1. **PCs da rede não apareciam e conectar pelo ID dava "Computador não encontrado na rede".** A descoberta recebia as respostas, mas não conseguia gravar a lista (`Failed to store lan peers: Failed to serialize configuration data into TOML`): na T2.4/T2.5 os campos `last_seen`/`version` ficaram depois do mapa `ip_mac`, e o TOML exige valores simples antes de tabelas. `ip_mac` voltou a ser o último campo de `DiscoveryPeer` (com comentário). Teste novo `config::tests::test_lan_peers_survive_a_toml_round_trip`.
   2. **"Liberar no firewall" não resolvia** (as redes dos 2 PCs estão como públicas; o usuário teve de marcar público+privado à mão nas regras). As regras agora valem para todos os perfis (`profile=any`), mas só para a sub-rede local (`remoteip=localsubnet`). Com isso saiu a dica "Defina esta rede como privada no Windows" (`firewall_not_private`, `Blocked { private_network }`). Resolve também a D12.
-  Checagem: `cargo test --package hbb_common --lib config::` 44 ok; `cargo test --lib firewall` 3 ok (+1 ignorado); `flutter analyze` sem erros/avisos. Pendente: novo teste manual em 2 PCs.
+  Checagem: `cargo test --package hbb_common --lib config::` 44 ok; `cargo test --lib firewall` 3 ok (+1 ignorado); `flutter analyze` sem erros/avisos. Teste manual em 2 PCs com o build novo ok (24/10/2026, usuário): descoberta, conexão e botão do firewall.
   Área: `libs/hbb_common/src/config.rs`, `src/platform/windows.rs`, `src/ui_interface.rs`, `connection_page.dart` · @dono: claude
 
 **Fim da Fase 2 (24/10/2026):** ver o registro do fim da Fase 3 (testes rodados juntos).
@@ -218,7 +218,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Checagem: `cargo test --lib lan_addr` 1 ok.
   dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono: claude
 
-**Fim das Fases 2 e 3 (24/10/2026):** `cargo test --lib --features flutter,hwcodec,vram` 150 ok, 0 falhas, 1 ignorado (o de detecção do firewall); `cargo test --package hbb_common --lib` 90 ok; `flutter test` 96 ok, 1 pulado. Pendentes manuais: teste em 2 PCs com o build novo (descoberta, conexão por clique/IP, aviso de chave alterada) e o botão do firewall com UAC visível.
+**Fim das Fases 2 e 3 (24/10/2026):** `cargo test --lib --features flutter,hwcodec,vram` 150 ok, 0 falhas, 1 ignorado (o de detecção do firewall); `cargo test --package hbb_common --lib` 90 ok; `flutter test` 96 ok, 1 pulado. Teste manual em 2 PCs com o build da T2.11 ok (24/10/2026, usuário): descoberta, conexão e botão do firewall com UAC visível. Falta ver o aviso de chave alterada (entra no roteiro da T7.3).
 
 ## Fase 4 — Sessão remota
 

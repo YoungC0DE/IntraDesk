@@ -136,6 +136,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Checagem: `cargo check` e `flutter analyze` ok.
   dep: D8, T1.5–T1.12 · Área: `src/lang/`, `src/lang.rs` · @dono: claude
 
+**Fim da Fase 1 (24/10/2026):** `cargo test --lib --features flutter,hwcodec,vram` 160 ok, 0 falhas; `flutter test` 97 ok, 1 pulado. (O `cargo test` precisa do ambiente do VS 2022 carregado, como no `scripts/build.ps1`; fora dele o bindgen do `kcp` não acha `stddef.h`.)
+
 ## Fase 2 — Funcionamento só na LAN (trilha C)
 
 - [ ] **T2.1** Desligar o servidor rendezvous/relay: não iniciar `rendezvous_mediator`, remover os servidores padrão (`RENDEZVOUS_SERVERS`), nenhuma tentativa de conexão externa. Aceite: com Wireshark, o app não envia nada para fora da sub-rede.

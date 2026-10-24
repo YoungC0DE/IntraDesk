@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
-import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -51,8 +50,7 @@ class _PeerCardState extends State<_PeerCard>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Obx(() =>
-        stateGlobal.isPortrait.isTrue ? _buildPortrait() : _buildLandscape());
+    return _buildLandscape();
   }
 
   Widget gestureDetector({required Widget child}) {
@@ -62,56 +60,27 @@ class _PeerCardState extends State<_PeerCard>
         onDoubleTap: peerTabModel.multiSelectionMode
             ? null
             : () => widget.connect(context, peer.id),
-        onTap: () {
-          if (peerTabModel.multiSelectionMode) {
-            peerTabModel.select(peer);
-          } else {
-            peerTabModel.select(peer);
-          }
-        },
+        onTap: () => peerTabModel.select(peer),
         onLongPress: () => peerTabModel.select(peer),
         child: child);
   }
 
-  Widget _buildPortrait() {
-    final peer = super.widget.peer;
-    return Card(
-        margin: EdgeInsets.symmetric(horizontal: 2),
-        child: gestureDetector(
-          child: Container(
-              padding: EdgeInsets.only(left: 12, top: 8, bottom: 8),
-              child: _buildPeerTile(context, peer, null)),
-        ));
-  }
-
-  Widget _buildLandscape() {
-    final peer = super.widget.peer;
-    var deco = Rx<BoxDecoration?>(
-      BoxDecoration(
-        border: Border.all(color: Colors.transparent, width: _borderWidth),
+  BoxDecoration _borderDeco(Color color) => BoxDecoration(
+        border: Border.all(color: color, width: _borderWidth),
         borderRadius: BorderRadius.circular(
           peerCardUiType.value == PeerUiType.grid ? _cardRadius : _tileRadius,
         ),
-      ),
-    );
+      );
+
+  Widget _buildLandscape() {
+    final peer = super.widget.peer;
+    var deco = Rx<BoxDecoration?>(_borderDeco(Colors.transparent));
     return MouseRegion(
       onEnter: (evt) {
-        deco.value = BoxDecoration(
-          border: Border.all(
-              color: Theme.of(context).colorScheme.primary,
-              width: _borderWidth),
-          borderRadius: BorderRadius.circular(
-            peerCardUiType.value == PeerUiType.grid ? _cardRadius : _tileRadius,
-          ),
-        );
+        deco.value = _borderDeco(MyTheme.color(context).accent);
       },
       onExit: (evt) {
-        deco.value = BoxDecoration(
-          border: Border.all(color: Colors.transparent, width: _borderWidth),
-          borderRadius: BorderRadius.circular(
-            peerCardUiType.value == PeerUiType.grid ? _cardRadius : _tileRadius,
-          ),
-        );
+        deco.value = _borderDeco(Colors.transparent);
       },
       child: gestureDetector(
           child: Obx(() => peerCardUiType.value == PeerUiType.grid
@@ -120,10 +89,19 @@ class _PeerCardState extends State<_PeerCard>
     );
   }
 
-  makeChild(bool isPortrait, Peer peer) {
-    final name = hideUsernameOnCard == true
-        ? peer.hostname
-        : '${peer.username}${peer.username.isNotEmpty && peer.hostname.isNotEmpty ? '@' : ''}${peer.hostname}';
+  Widget _title(Peer peer) => Tooltip(
+        message: '${translate('ID')}: ${formatID(peer.id)}',
+        waitDuration: const Duration(seconds: 1),
+        child: Text(
+          peerCardTitle(peer),
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+      );
+
+  Widget makeChild(Peer peer) {
+    final subtitle =
+        peerCardSubtitle(peer, hideUsername: hideUsernameOnCard == true);
     final greyStyle = TextStyle(
         fontSize: 11,
         color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6));
@@ -134,18 +112,14 @@ class _PeerCardState extends State<_PeerCard>
         Container(
             decoration: BoxDecoration(
               color: str2color('${peer.id}${peer.platform}', 0x7f),
-              borderRadius: isPortrait
-                  ? BorderRadius.circular(_tileRadius)
-                  : BorderRadius.only(
-                      topLeft: Radius.circular(_tileRadius),
-                      bottomLeft: Radius.circular(_tileRadius),
-                    ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(_tileRadius),
+                bottomLeft: Radius.circular(_tileRadius),
+              ),
             ),
             alignment: Alignment.center,
-            width: isPortrait ? 50 : 42,
-            height: isPortrait ? 50 : null,
-            child: getPlatformImage(peer.platform, size: isPortrait ? 38 : 30)
-                .paddingAll(6)),
+            width: 42,
+            child: getPlatformImage(peer.platform, size: 30).paddingAll(6)),
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -161,28 +135,19 @@ class _PeerCardState extends State<_PeerCard>
                   child: Column(
                     children: [
                       Row(children: [
-                        getOnline(isPortrait ? 4 : 8, peer.online),
-                        Expanded(
-                            child: Text(
-                          peer.alias.isEmpty ? formatID(peer.id) : peer.alias,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        )),
-                      ]).marginOnly(top: isPortrait ? 0 : 2),
+                        getOnline(8, peer.online),
+                        Expanded(child: _title(peer)),
+                      ]).marginOnly(top: 2),
                       Row(
                         children: [
                           Flexible(
-                            child: Tooltip(
-                              message: name,
-                              waitDuration: const Duration(seconds: 1),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  name,
-                                  style: isPortrait ? null : greyStyle,
-                                  textAlign: TextAlign.start,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                subtitle,
+                                style: greyStyle,
+                                textAlign: TextAlign.start,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
@@ -191,9 +156,7 @@ class _PeerCardState extends State<_PeerCard>
                     ],
                   ).marginOnly(top: 2),
                 ),
-                isPortrait
-                    ? checkBoxOrActionMorePortrait(peer)
-                    : checkBoxOrActionMoreLandscape(peer, isTile: true),
+                checkBoxOrActionMoreLandscape(peer, isTile: true),
               ],
             ).paddingOnly(left: 10.0, top: 3.0),
           ),
@@ -203,16 +166,14 @@ class _PeerCardState extends State<_PeerCard>
   }
 
   Widget _buildPeerTile(
-      BuildContext context, Peer peer, Rx<BoxDecoration?>? deco) {
+      BuildContext context, Peer peer, Rx<BoxDecoration?> deco) {
     hideUsernameOnCard ??=
         bind.mainGetBuildinOption(key: kHideUsernameOnCard) == 'Y';
     return Obx(
-      () => deco == null
-          ? makeChild(stateGlobal.isPortrait.isTrue, peer)
-          : Container(
-              foregroundDecoration: deco.value,
-              child: makeChild(stateGlobal.isPortrait.isTrue, peer),
-            ),
+      () => Container(
+        foregroundDecoration: deco.value,
+        child: makeChild(peer),
+      ),
     );
   }
 
@@ -220,9 +181,8 @@ class _PeerCardState extends State<_PeerCard>
       BuildContext context, Peer peer, Rx<BoxDecoration?> deco) {
     hideUsernameOnCard ??=
         bind.mainGetBuildinOption(key: kHideUsernameOnCard) == 'Y';
-    final name = hideUsernameOnCard == true
-        ? peer.hostname
-        : '${peer.username}${peer.username.isNotEmpty && peer.hostname.isNotEmpty ? '@' : ''}${peer.hostname}';
+    final subtitle =
+        peerCardSubtitle(peer, hideUsername: hideUsernameOnCard == true);
     final child = Card(
       color: Colors.transparent,
       elevation: 0,
@@ -256,17 +216,15 @@ class _PeerCardState extends State<_PeerCard>
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Tooltip(
-                                      message: name,
-                                      waitDuration: const Duration(seconds: 1),
-                                      child: Text(
-                                        name,
-                                        style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12),
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    child: Text(
+                                      subtitle,
+                                      style: TextStyle(
+                                          color: MyTheme.color(context)
+                                              .onAccent
+                                              .withOpacity(0.85),
+                                          fontSize: 12),
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -286,12 +244,7 @@ class _PeerCardState extends State<_PeerCard>
                       Expanded(
                           child: Row(children: [
                         getOnline(8, peer.online),
-                        Expanded(
-                            child: Text(
-                          peer.alias.isEmpty ? formatID(peer.id) : peer.alias,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        )),
+                        Expanded(child: _title(peer)),
                       ]).paddingSymmetric(vertical: 8)),
                       checkBoxOrActionMoreLandscape(peer, isTile: false),
                     ],
@@ -305,34 +258,6 @@ class _PeerCardState extends State<_PeerCard>
     );
 
     return child;
-  }
-
-  Widget checkBoxOrActionMorePortrait(Peer peer) {
-    final PeerTabModel peerTabModel = Provider.of(context);
-    final selected = peerTabModel.isPeerSelected(peer.id);
-    if (peerTabModel.multiSelectionMode) {
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: selected
-            ? Icon(
-                Icons.check_box,
-                color: MyTheme.color(context).accent,
-              )
-            : Icon(Icons.check_box_outline_blank),
-      );
-    } else {
-      return InkWell(
-          child: const Padding(
-              padding: EdgeInsets.all(12), child: Icon(Icons.more_vert)),
-          onTapDown: (e) {
-            final x = e.globalPosition.dx;
-            final y = e.globalPosition.dy;
-            _menuPos = RelativeRect.fromLTRB(x, y, x, y);
-          },
-          onTap: () {
-            _showPeerMenu(peer.id);
-          });
-    }
   }
 
   Widget checkBoxOrActionMoreLandscape(Peer peer, {required bool isTile}) {
@@ -802,6 +727,25 @@ class DiscoveredPeerCard extends BasePeerCard {
   @protected
   @override
   void _update() => bind.mainLoadLanPeers();
+}
+
+/// Main label of a peer card: alias, else computer name, else ID.
+String peerCardTitle(Peer peer) {
+  if (peer.alias.isNotEmpty) return peer.alias;
+  if (peer.hostname.isNotEmpty) return peer.hostname;
+  return formatID(peer.id);
+}
+
+/// Second line of a peer card: user and LAN IP, or the ID when there is no IP.
+String peerCardSubtitle(Peer peer, {bool hideUsername = false}) {
+  final parts = <String>[
+    if (!hideUsername && peer.username.isNotEmpty) peer.username,
+    if (peer.ip.isNotEmpty)
+      peer.ip
+    else if (peerCardTitle(peer) != formatID(peer.id))
+      formatID(peer.id),
+  ];
+  return parts.join(' · ');
 }
 
 Widget getOnline(double rightPadding, bool online) {

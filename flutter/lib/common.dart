@@ -1576,6 +1576,9 @@ Future<bool> matchPeer(
   if (peer.alias.toLowerCase().contains(searchText)) {
     return true;
   }
+  if (peer.ip.contains(searchText)) {
+    return true;
+  }
   return false;
 }
 

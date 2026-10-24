@@ -115,8 +115,6 @@ const String kOptionAllowMultiEdgeToolbarDock =
 const String kOptionRemoteMenubarState = "remoteMenubarState";
 const String kOptionPeerSorting = "peer-sorting";
 const String kOptionPeerTabIndex = "peer-tab-index";
-const String kOptionPeerTabOrder = "peer-tab-order";
-const String kOptionPeerTabVisible = "peer-tab-visible";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
 const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
@@ -145,7 +143,6 @@ const String kOptionDisableChangePermanentPassword =
     "disable-change-permanent-password";
 const String kOptionDisableUnlockPin = "disable-unlock-pin";
 const kHideUsernameOnCard = "hide-username-on-card";
-const String kOptionHideHelpCards = "hide-help-cards";
 const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 
 const String kOptionToggleViewOnly = "view-only";

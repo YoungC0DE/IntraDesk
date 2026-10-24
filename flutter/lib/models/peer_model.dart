@@ -21,6 +21,9 @@ class Peer {
   String device_group_name;
   String note;
   bool? sameServer;
+  // LAN address seen by discovery; empty for peers not found on the network.
+  String ip;
+  String version;
 
   String getId() {
     if (alias != '') {
@@ -43,7 +46,9 @@ class Peer {
         loginName = json['loginName'] ?? '',
         device_group_name = json['device_group_name'] ?? '',
         note = json['note'] is String ? json['note'] : '',
-        sameServer = json['same_server'];
+        sameServer = json['same_server'],
+        ip = json['ip'] is String ? json['ip'] : '',
+        version = json['version'] is String ? json['version'] : '';
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -61,6 +66,8 @@ class Peer {
       'device_group_name': device_group_name,
       'note': note,
       'same_server': sameServer,
+      'ip': ip,
+      'version': version,
     };
   }
 
@@ -105,6 +112,8 @@ class Peer {
     required this.device_group_name,
     required this.note,
     this.sameServer,
+    this.ip = '',
+    this.version = '',
   });
 
   Peer.loading()
@@ -136,7 +145,9 @@ class Peer {
         rdpUsername == other.rdpUsername &&
         device_group_name == other.device_group_name &&
         loginName == other.loginName &&
-        note == other.note;
+        note == other.note &&
+        ip == other.ip &&
+        version == other.version;
   }
 
   factory Peer.copy(Peer other) {
@@ -154,7 +165,9 @@ class Peer {
         loginName: other.loginName,
         device_group_name: other.device_group_name,
         note: other.note,
-        sameServer: other.sameServer);
+        sameServer: other.sameServer,
+        ip: other.ip,
+        version: other.version);
     peer.online = other.online;
     return peer;
   }
@@ -280,4 +293,23 @@ class Peers extends ChangeNotifier {
     }
     return [];
   }
+}
+
+/// Maps what the user typed in "Connect to" to the ID to connect to: a
+/// computer name or alias of a known peer becomes that peer's ID; anything
+/// else (ID, IP) is returned unchanged.
+String resolveConnectTarget(String input, Iterable<Peer> peers) {
+  final text = input.trim();
+  if (text.isEmpty) return text;
+  final lower = text.toLowerCase();
+  for (final peer in peers) {
+    if (peer.id == text) return text;
+  }
+  for (final peer in peers) {
+    if (peer.hostname.toLowerCase() == lower ||
+        peer.alias.toLowerCase() == lower) {
+      return peer.id;
+    }
+  }
+  return text;
 }

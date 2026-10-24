@@ -1,7 +1,6 @@
 lazy_static::lazy_static! {
 pub static ref T: std::collections::HashMap<&'static str, &'static str> =
     [
-        ("desk_tip", "Your desktop can be accessed with this ID and password."),
         ("Slogan_tip", "Made with heart in this chaotic world!"),
         ("Build Date", "Build date"),
         ("Audio Input", "Audio input"),
@@ -24,7 +23,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Remote Host", "Remote host"),
         ("Local Port", "Local port"),
         ("Change Local Port", "Change local port"),
-        ("Enter Remote ID", "Enter remote ID"),
         ("Create Folder", "Create folder"),
         ("whitelist_tip", "Only whitelisted IP can access me"),
         ("verification_tip", "A verification code has been sent to the registered email address, enter the verification code to continue logging in."),
@@ -92,7 +90,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Connection failed due to inactivity", "Automatically disconnected due to inactivity"),
         ("doc_fix_wayland", "https://rustdesk.com/docs/en/client/linux/#x11-required"),
         ("display_is_plugged_out_msg", "The display is plugged out, switch to the first display."),
-        ("id_input_tip", "You can input an ID, a direct IP, or a domain with a port (<domain>:<port>).\nIf you want to access a device on another server, please append the server address (<id>@<server_address>?key=<key_value>), for example,\n9123456234@192.168.16.1:21117?key=5Qbwsde3unUcJBtrx9ZkvUmwFNoExHzpryHuPUdqlWM=.\nIf you want to access a device on a public server, please input \"<id>@public\", the key is not needed for public server.\n\nIf you want to force the use of a relay connection on the first connection, add \"/r\" at the end of the ID, for example, \"9123456234/r\"."),
         ("swap-left-right-mouse", "Swap left-right mouse button"),
         ("2FA code", "2FA code"),
         ("enable-2fa-title", "Enable two-factor authentication"),
@@ -100,7 +97,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("wrong-2fa-code", "Can't verify the code. Check that code and local time settings are correct"),
         ("enter-2fa-title", "Two-factor authentication"),
         ("powered_by_me", "Powered by RustDesk"),
-        ("outgoing_only_desk_tip", "This is a customized edition.\nYou can connect to other devices, but other devices cannot connect to your device."),
         ("preset_password_warning", "This customized edition comes with a preset password. Anyone knowing this password could gain full control of your device. If you did not expect this, uninstall the software immediately."),
         ("clear_Wayland_screen_selection_tip", "After clearing the screen selection, you can reselect the screen to share."),
         ("confirm_clear_Wayland_screen_selection_tip", "Are you sure you want to clear the Wayland screen selection?"),
@@ -108,7 +104,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("cancel-2fa-confirm-tip", "Are you sure you want to cancel 2FA?"),
         ("enable-trusted-devices-tip", "Skip 2FA verification on trusted devices"),
         ("one-way-file-transfer-tip", "One-way file transfer is enabled on the controlled side."),
-        ("web_id_input_tip", "You can input an ID in the same server, direct IP access is not supported in web client.\nIf you want to access a device on another server, please append the server address (<id>@<server_address>?key=<key_value>), for example,\n9123456234@192.168.16.1:21117?key=5Qbwsde3unUcJBtrx9ZkvUmwFNoExHzpryHuPUdqlWM=.\nIf you want to access a device on a public server, please input \"<id>@public\", the key is not needed for public server."),
         ("d3d_render_tip", "When D3D rendering is enabled, the remote control screen may be black on some machines."),
         ("elevation_username_tip", "Input username or domain\\username"),
         ("rel-mouse-not-supported-peer-tip", "Relative mouse mode is not supported by the connected peer."),

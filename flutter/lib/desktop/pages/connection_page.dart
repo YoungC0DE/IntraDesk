@@ -6,7 +6,6 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -22,10 +21,13 @@ import '../../models/platform_model.dart';
 import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
 
 class OnlineStatusWidget extends StatefulWidget {
-  const OnlineStatusWidget({Key? key, this.onSvcStatusChanged})
+  const OnlineStatusWidget({Key? key, this.onSvcStatusChanged, this.localIps})
       : super(key: key);
 
   final VoidCallback? onSvcStatusChanged;
+
+  /// Receives the LAN IPs of this computer, so other widgets can show them.
+  final RxList<String>? localIps;
 
   @override
   State<OnlineStatusWidget> createState() => _OnlineStatusWidgetState();
@@ -34,7 +36,7 @@ class OnlineStatusWidget extends StatefulWidget {
 /// State for the connection page.
 class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
-  final _localIps = <String>[].obs;
+  late final RxList<String> _localIps = widget.localIps ?? <String>[].obs;
   final _firewallBlocked = false.obs;
   Timer? _updateTimer;
 
@@ -87,9 +89,11 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
                         : Color.fromARGB(255, 224, 79, 95)),
               ),
             ).marginSymmetric(horizontal: em),
-            Container(
-              width: isIncomingOnly ? 226 : null,
-              child: _buildConnStatusMsg(),
+            Flexible(
+              child: Container(
+                width: isIncomingOnly ? 226 : null,
+                child: _buildConnStatusMsg(),
+              ),
             ),
             // stop
             if (!isIncomingOnly) startServiceWidget(),
@@ -283,32 +287,24 @@ class _ConnectionPageState extends State<ConnectionPage>
 
   @override
   Widget build(BuildContext context) {
-    final isOutgoingOnly = bind.isOutgoingOnly();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-            child: Column(
-          children: [
-            Row(
-              children: [
-                Flexible(child: _buildRemoteIDTextField(context)),
-              ],
-            ).marginOnly(top: 22),
-            SizedBox(height: 12),
-            Divider().paddingOnly(right: 12),
-            Expanded(child: PeerTabPage()),
-          ],
-        ).paddingOnly(left: 12.0)),
-        if (!isOutgoingOnly) const Divider(height: 1),
-        if (!isOutgoingOnly) OnlineStatusWidget()
+        _buildRemoteIDTextField(context).marginOnly(top: 16, right: 16),
+        const SizedBox(height: 16),
+        Expanded(child: PeerTabPage()),
       ],
-    );
+    ).paddingOnly(left: 16.0);
   }
 
   /// Callback for the connect button.
   /// Connects to the selected peer.
   void onConnect({bool isFileTransfer = false}) {
-    var id = _idController.id;
+    final id = resolveConnectTarget(_idController.id, [
+      ...gFFI.lanPeersModel.peers,
+      ...gFFI.recentPeersModel.peers,
+      ...gFFI.favoritePeersModel.peers,
+    ]);
     connect(context, id, isFileTransfer: isFileTransfer);
   }
 
@@ -316,15 +312,20 @@ class _ConnectionPageState extends State<ConnectionPage>
   /// Search for a peer.
   Widget _buildRemoteIDTextField(BuildContext context) {
     var w = Container(
-      width: 320 + 20 * 2,
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
           borderRadius: const BorderRadius.all(Radius.circular(13)),
           border: Border.all(color: Theme.of(context).colorScheme.background)),
       child: Ink(
         child: Column(
           children: [
-            getConnectionPageTitle(context, false).marginOnly(bottom: 15),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                translate('Connect to'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ).marginOnly(bottom: 10),
             Row(
               children: [
                 Expanded(
@@ -369,7 +370,8 @@ class _ConnectionPageState extends State<ConnectionPage>
                               peer.hostname
                                   .toLowerCase()
                                   .contains(textToFind) ||
-                              peer.alias.toLowerCase().contains(textToFind))
+                              peer.alias.toLowerCase().contains(textToFind) ||
+                              peer.ip.contains(textToFind))
                           .toList();
                       _allPeersLoader.queryOnlines(_autocompleteOpts);
                     }
@@ -392,7 +394,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                           focusNode: fieldFocusNode,
                           style: const TextStyle(
                             fontFamily: 'WorkSans',
-                            fontSize: 22,
+                            fontSize: 18,
                             height: 1.4,
                           ),
                           maxLines: 1,
@@ -403,9 +405,9 @@ class _ConnectionPageState extends State<ConnectionPage>
                               counterText: '',
                               hintText: _idInputFocused.value
                                   ? null
-                                  : translate('Enter Remote ID'),
+                                  : translate('IP address or computer name'),
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 15, vertical: 13)),
+                                  horizontal: 12, vertical: 10)),
                           controller: fieldTextEditingController,
                           inputFormatters: [IDTextInputFormatter()],
                           onChanged: (v) {
@@ -484,13 +486,9 @@ class _ConnectionPageState extends State<ConnectionPage>
                     );
                   },
                 )),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 13.0),
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                const SizedBox(width: 8),
                 SizedBox(
-                  height: 28.0,
+                  height: 36.0,
                   child: ElevatedButton(
                     onPressed: () {
                       onConnect();
@@ -500,8 +498,8 @@ class _ConnectionPageState extends State<ConnectionPage>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  height: 28.0,
-                  width: 28.0,
+                  height: 36.0,
+                  width: 36.0,
                   decoration: BoxDecoration(
                     border: Border.all(color: Theme.of(context).dividerColor),
                     borderRadius: BorderRadius.circular(8),
@@ -569,7 +567,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                     ),
                   ),
                 ),
-              ]),
+              ],
             ),
           ],
         ),

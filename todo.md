@@ -195,8 +195,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T3.2 · Área: `src/server/connection.rs` · @dono:
 - [ ] **T3.4** Aviso visível no computador acessado enquanto houver sessão ativa (janela do gerenciador de conexão com botão "Desconectar") e comportamento de aceite conforme D5.
   dep: D5 · Área: `flutter/lib/desktop/pages/server_page.dart` · @dono:
-- [ ] **T3.5** Aceitar conexões só de IPs privados (RFC 1918, link-local); recusar IP público mesmo com a porta exposta.
-  dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono:
+- [x] **T3.5** A escuta direta só aceita endereços da rede local (`is_lan_addr` em `src/server.rs`): IPv4 privados (RFC 1918), link-local (169.254/16), loopback e os equivalentes IPv6 (fc00::/7, fe80::/10, ::1); IPv4 mapeado em IPv6 é convertido antes. Outros endereços (inclusive CGNAT 100.64/10) são fechados logo no `accept`, antes do handshake, com log limitado a 1 por minuto. Teste novo `server::lan_addr_tests::only_local_network_addresses_are_accepted`.
+  Checagem: `cargo test --lib lan_addr` 1 ok.
+  dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono: claude
 
 ## Fase 4 — Sessão remota
 

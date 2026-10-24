@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::{Arc, Mutex, RwLock, Weak},
     time::Duration,
 };
@@ -506,6 +506,14 @@ async fn direct_server(server: ServerPtr) {
                 continue;
             }
             if let Ok(Ok((stream, addr))) = timeout(1000, l.accept()).await {
+                if !is_lan_addr(hbb_common::try_into_v4(addr).ip()) {
+                    hbb_common::throttled_log!(
+                        Duration::from_secs(60),
+                        warn,
+                        "Refused direct access from {addr}: not a local network address"
+                    );
+                    continue;
+                }
                 stream.set_nodelay(true).ok();
                 log::info!("direct access from {}", addr);
                 let local_addr = stream
@@ -532,6 +540,19 @@ async fn direct_server(server: ServerPtr) {
     }
 }
 
+/// Sessions are taken only from the local network: private (RFC 1918), link-local and loopback
+/// addresses, and their IPv6 counterparts (unique local fc00::/7, link-local fe80::/10). A
+/// public address is refused even when the port is exposed.
+fn is_lan_addr(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
+        IpAddr::V6(v6) => {
+            let first = v6.segments()[0];
+            v6.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
+        }
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 pub async fn stop_main_window_process() {
     // this may also kill another --server process,
@@ -544,6 +565,38 @@ pub async fn stop_main_window_process() {
         if let Err(e) = crate::platform::try_kill_rustdesk_main_window_process() {
             log::error!("kill failed: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod lan_addr_tests {
+    use super::*;
+
+    #[test]
+    fn only_local_network_addresses_are_accepted() {
+        let accepted = [
+            "10.1.2.3",
+            "172.16.0.1",
+            "172.31.255.254",
+            "192.168.0.10",
+            "169.254.1.1",
+            "127.0.0.1",
+            "::1",
+            "fd12:3456::1",
+            "fe80::1",
+        ];
+        let refused = ["8.8.8.8", "172.32.0.1", "100.64.0.1", "2001:db8::1", "2800:3f0::1"];
+        for ip in accepted {
+            assert!(is_lan_addr(ip.parse().unwrap()), "{ip} should be accepted");
+        }
+        for ip in refused {
+            assert!(!is_lan_addr(ip.parse().unwrap()), "{ip} should be refused");
+        }
+        // IPv4-mapped IPv6, as a dual-stack listener reports IPv4 peers.
+        let mapped: SocketAddr = "[::ffff:192.168.0.10]:21118".parse().unwrap();
+        assert!(is_lan_addr(hbb_common::try_into_v4(mapped).ip()));
+        let mapped: SocketAddr = "[::ffff:8.8.8.8]:21118".parse().unwrap();
+        assert!(!is_lan_addr(hbb_common::try_into_v4(mapped).ip()));
     }
 }
 

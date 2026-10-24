@@ -204,7 +204,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Scroll Style", "Estilo de rolagem"),
         ("Show Toolbar", "Mostrar barra de ferramentas"),
         ("Hide Toolbar", "Ocultar barra de ferramentas"),
-        ("Insecure Connection", "Conexão Insegura"),
         ("Scale original", "Escala original"),
         ("Scale adaptive", "Escala adaptada"),
         ("General", "Geral"),
@@ -451,7 +450,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Show on the minimized toolbar", "Mostrar na barra de ferramentas minimizada"),
         ("All monitors", "Todas as telas"),
         ("#{} monitor", "Tela {}"),
-        ("conn-e2ee-unavailable-tip", "Não foi possível verificar a criptografia de ponta a ponta.\nO dispositivo remoto ainda pode estar sendo configurado. Tente novamente mais tarde.\nSe isso continuar acontecendo, o servidor pode não ser confiável.\nContinuar mesmo assim?"),
         ("ID whitelisting", "Lista de IDs permitidos"),
         ("Use ID whitelisting", "Utilizar lista de IDs permitidos"),
         ("id_whitelist_tip", "Somente IDs confiáveis podem me acessar"),
@@ -497,5 +495,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Computer not found on the network", "Computador não encontrado na rede"),
         ("Visible on the network: IP {}", "Visível na rede: IP {}"),
         ("Not connected to a network", "Sem conexão de rede"),
+        ("Computer key changed", "A chave do computador mudou"),
+        ("host-key-changed-tip", "A chave de identidade deste computador é diferente da salva na primeira conexão.\nIsso acontece se as configurações do IntraDesk dele foram apagadas, mas também pode ser outro computador se passando por ele.\nSó continue se souber por que a chave mudou."),
     ].iter().cloned().collect();
 }

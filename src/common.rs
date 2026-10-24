@@ -843,7 +843,7 @@ pub fn check_process(arg: &str, mut same_uid: bool) -> bool {
     false
 }
 
-fn get_pk(pk: &[u8]) -> Option<[u8; 32]> {
+pub fn get_pk(pk: &[u8]) -> Option<[u8; 32]> {
     if pk.len() == 32 {
         let mut tmp = [0u8; 32];
         tmp[..].copy_from_slice(&pk);
@@ -862,13 +862,8 @@ pub fn get_rs_pk(str_base64: &str) -> Option<sign::PublicKey> {
     }
 }
 
-pub fn decode_id_pk(signed: &[u8], key: &sign::PublicKey) -> ResultType<(String, [u8; 32])> {
-    let (id, pk, _) = decode_id_pk_kx(signed, key)?;
-    Ok((id, pk))
-}
-
-/// Like [`decode_id_pk`] but also returns the newest key exchange version the peer speaks (0,
-/// the original scheme, for a peer from before versions).
+/// Verifies a signed `IdPk` and returns the id, the box key and the newest key exchange version
+/// the peer speaks (0, the original scheme, for a peer from before versions).
 pub fn decode_id_pk_kx(
     signed: &[u8],
     key: &sign::PublicKey,
@@ -1331,7 +1326,5 @@ mod tests {
         let last = tampered.len() - 1;
         tampered[last] ^= 1;
         assert!(decode_id_pk_kx(&tampered, &pk).is_err());
-
-        assert_eq!(decode_id_pk(&signed, &pk).unwrap(), (id, their_pk));
     }
 }

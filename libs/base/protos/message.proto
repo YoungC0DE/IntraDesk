@@ -712,7 +712,12 @@ message PublicKey {
   uint32 kx_version = 3;
 }
 
-message SignedId { bytes id = 1; }
+message SignedId {
+  // IdPk signed with the controlled side's long-term key.
+  bytes id = 1;
+  // That long-term (ed25519) public key; the controller pins it on first contact.
+  bytes pk = 2;
+}
 
 message AudioFormat {
   uint32 sample_rate = 1;

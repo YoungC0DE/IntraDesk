@@ -99,7 +99,6 @@ pub async fn create_tcp_connection(
     server: ServerPtr,
     stream: Stream,
     addr: SocketAddr,
-    secure: bool,
     meta: ConnectionMeta,
 ) -> ResultType<()> {
     let mut stream = stream;
@@ -114,7 +113,7 @@ pub async fn create_tcp_connection(
     // Before the handshake, so its read is bounded too; lifted again at authorization.
     stream.set_max_packet_length(MAX_UNAUTHORIZED_MESSAGE);
     tokio::select! {
-        handshake = identity_handshake(&mut stream, secure) => handshake?,
+        handshake = identity_handshake(&mut stream) => handshake?,
         _ = unauthorized.evicted() => {
             bail!("evicted to make room for a newer unauthenticated connection");
         }
@@ -132,81 +131,63 @@ pub async fn create_tcp_connection(
     Ok(())
 }
 
-/// Our signed identity goes out and, when `secure`, the controller's reply keys `stream`.
-/// Separate so it can be raced against the connection's eviction.
-async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()> {
+/// Our long-term key signs a fresh box key; the controller pins the former and seals the session
+/// key to the latter. A controller that does not answer with a session key is refused: there is
+/// no plaintext session. Separate so it can be raced against the connection's eviction.
+async fn identity_handshake(stream: &mut Stream) -> ResultType<()> {
     let (sk, pk) = Config::get_key_pair();
-    if secure && pk.len() == sign::PUBLICKEYBYTES && sk.len() == sign::SECRETKEYBYTES {
-        let mut sk_ = [0u8; sign::SECRETKEYBYTES];
-        sk_[..].copy_from_slice(&sk);
-        let sk = sign::SecretKey(sk_);
-        let mut msg_out = Message::new();
-        let (our_pk_b, our_sk_b) = box_::gen_keypair();
-        let advertised = tcp::KX_VERSION_LATEST;
-        msg_out.set_signed_id(SignedId {
-            id: sign::sign(
-                &IdPk {
-                    id: Config::get_id(),
-                    pk: Bytes::from(our_pk_b.0.to_vec()),
-                    kx_version: advertised,
-                    ..Default::default()
-                }
-                .write_to_bytes()
-                .unwrap_or_default(),
-                &sk,
-            )
-            .into(),
-            ..Default::default()
-        });
-        timeout(CONNECT_TIMEOUT, stream.send(&msg_out)).await??;
-        match timeout(CONNECT_TIMEOUT, stream.next()).await? {
-            Some(res) => {
-                let bytes = res?;
-                if let Ok(msg_in) = Message::parse_from_bytes(&bytes) {
-                    if let Some(message::Union::PublicKey(pk)) = msg_in.union {
-                        if pk.asymmetric_value.len() == box_::PUBLICKEYBYTES {
-                            let key = tcp::Encrypt::decode(
-                                &pk.symmetric_value,
-                                &pk.asymmetric_value,
-                                &our_sk_b,
-                            )?;
-                            if pk.kx_version > advertised {
-                                bail!(
-                                    "Handshake failed: key exchange version {} not offered, {} was",
-                                    pk.kx_version,
-                                    advertised
-                                );
-                            }
-                            stream.set_negotiated_key(
-                                key,
-                                false,
-                                &tcp::KxTranscript {
-                                    initiator_pk: &pk.asymmetric_value,
-                                    responder_pk: &our_pk_b.0,
-                                    advertised,
-                                    picked: pk.kx_version,
-                                },
-                            )?;
-                        } else if pk.asymmetric_value.is_empty() {
-                            Config::set_key_confirmed(false);
-                            log::info!("Force to update pk");
-                        } else {
-                            bail!("Handshake failed: invalid public sign key length from peer");
-                        }
-                    } else {
-                        log::error!("Handshake failed: invalid message type");
-                    }
-                } else {
-                    bail!("Handshake failed: invalid message format");
-                }
-            }
-            None => {
-                bail!("Failed to receive public key");
-            }
-        }
+    if pk.len() != sign::PUBLICKEYBYTES || sk.len() != sign::SECRETKEYBYTES {
+        bail!("Handshake failed: invalid local key pair");
     }
-
-    Ok(())
+    let mut sk_ = [0u8; sign::SECRETKEYBYTES];
+    sk_[..].copy_from_slice(&sk);
+    let sk = sign::SecretKey(sk_);
+    let mut msg_out = Message::new();
+    let (our_pk_b, our_sk_b) = box_::gen_keypair();
+    let advertised = tcp::KX_VERSION_LATEST;
+    msg_out.set_signed_id(SignedId {
+        id: sign::sign(
+            &IdPk {
+                id: Config::get_id(),
+                pk: Bytes::from(our_pk_b.0.to_vec()),
+                kx_version: advertised,
+                ..Default::default()
+            }
+            .write_to_bytes()?,
+            &sk,
+        )
+        .into(),
+        pk: pk.into(),
+        ..Default::default()
+    });
+    timeout(CONNECT_TIMEOUT, stream.send(&msg_out)).await??;
+    let Some(res) = timeout(CONNECT_TIMEOUT, stream.next()).await? else {
+        bail!("Failed to receive public key");
+    };
+    let Some(message::Union::PublicKey(pk)) = Message::parse_from_bytes(&res?)?.union else {
+        bail!("Handshake failed: invalid message type");
+    };
+    if pk.asymmetric_value.len() != box_::PUBLICKEYBYTES {
+        bail!("Handshake failed: invalid public key length from peer");
+    }
+    if pk.kx_version > advertised {
+        bail!(
+            "Handshake failed: key exchange version {} not offered, {} was",
+            pk.kx_version,
+            advertised
+        );
+    }
+    let key = tcp::Encrypt::decode(&pk.symmetric_value, &pk.asymmetric_value, &our_sk_b)?;
+    stream.set_negotiated_key(
+        key,
+        false,
+        &tcp::KxTranscript {
+            initiator_pk: &pk.asymmetric_value,
+            responder_pk: &our_pk_b.0,
+            advertised,
+            picked: pk.kx_version,
+        },
+    )
 }
 
 impl Server {
@@ -537,7 +518,6 @@ async fn direct_server(server: ServerPtr) {
                             server,
                             Stream::from(stream, local_addr),
                             addr,
-                            false,
                             ConnectionMeta::default(),
                         )
                         .await
@@ -564,5 +544,61 @@ pub async fn stop_main_window_process() {
         if let Err(e) = crate::platform::try_kill_rustdesk_main_window_process() {
             log::error!("kill failed: {}", e);
         }
+    }
+}
+
+#[cfg(test)]
+mod handshake_tests {
+    use super::*;
+    use crate::client::{Client, HostKey};
+    use hbb_common::socket_client::connect_tcp;
+
+    fn test_delay(time: i64) -> Message {
+        let mut msg = Message::new();
+        msg.set_test_delay(TestDelay {
+            time,
+            ..Default::default()
+        });
+        msg
+    }
+
+    /// Accepts one connection and runs our side of the handshake on it.
+    async fn controlled() -> (String, tokio::task::JoinHandle<ResultType<Stream>>) {
+        let listener = tcp::new_listener("127.0.0.1:0", false).await.unwrap();
+        let host = listener.local_addr().unwrap().to_string();
+        let served = tokio::spawn(async move {
+            let (stream, addr) = listener.accept().await?;
+            let mut stream = Stream::from(stream, addr);
+            identity_handshake(&mut stream).await?;
+            Ok(stream)
+        });
+        (host, served)
+    }
+
+    #[tokio::test]
+    async fn test_controller_and_controlled_agree_on_an_encrypted_session() {
+        let (host, served) = controlled().await;
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        let host_key = Client::secure_connection(&Config::get_id(), &[], &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(host_key, HostKey::New(Config::get_key_pair().1));
+        let mut served = served.await.unwrap().unwrap();
+        assert!(conn.is_secured() && served.is_secured());
+        conn.send(&test_delay(7)).await.unwrap();
+        let bytes = served.next().await.unwrap().unwrap();
+        assert!(matches!(
+            Message::parse_from_bytes(&bytes).unwrap().union,
+            Some(message::Union::TestDelay(t)) if t.time == 7
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_controlled_side_refuses_a_controller_without_a_session_key() {
+        let (host, served) = controlled().await;
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        conn.next().await.unwrap().unwrap(); // our signed identity
+        conn.send(&test_delay(7)).await.unwrap();
+        assert!(served.await.unwrap().is_err());
     }
 }

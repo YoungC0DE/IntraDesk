@@ -90,8 +90,6 @@ const CHARS: &[char] = &[
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const RS_PUB_KEY: &str = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=";
-
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 
@@ -176,10 +174,6 @@ pub struct Config {
     salt: String,
     #[serde(default, deserialize_with = "deserialize_keypair")]
     key_pair: KeyPair, // sk, pk
-    #[serde(default, deserialize_with = "deserialize_bool")]
-    key_confirmed: bool,
-    #[serde(default, deserialize_with = "deserialize_hashmap_string_bool")]
-    keys_confirmed: HashMap<String, bool>,
 }
 
 // more variable configs
@@ -205,6 +199,9 @@ pub struct Resolution {
 pub struct PeerConfig {
     #[serde(default, deserialize_with = "deserialize_vec_u8")]
     pub password: Vec<u8>,
+    /// The peer's long-term public key, pinned on first contact.
+    #[serde(default, deserialize_with = "deserialize_vec_u8")]
+    pub host_key: Vec<u8>,
     #[serde(default, deserialize_with = "deserialize_size")]
     pub size: Size,
     #[serde(default, deserialize_with = "deserialize_size")]
@@ -324,6 +321,7 @@ impl Default for PeerConfig {
     fn default() -> Self {
         Self {
             password: Default::default(),
+            host_key: Default::default(),
             size: Default::default(),
             size_ft: Default::default(),
             size_pf: Default::default(),
@@ -770,35 +768,6 @@ impl Config {
         (0..length)
             .map(|_| chars[rng.gen::<usize>() % chars.len()])
             .collect()
-    }
-
-    pub fn get_key_confirmed() -> bool {
-        CONFIG.read().unwrap().key_confirmed
-    }
-
-    pub fn set_key_confirmed(v: bool) {
-        let mut config = CONFIG.write().unwrap();
-        if config.key_confirmed == v {
-            return;
-        }
-        config.key_confirmed = v;
-        if !v {
-            config.keys_confirmed = Default::default();
-        }
-        config.store();
-    }
-
-    pub fn get_host_key_confirmed(host: &str) -> bool {
-        matches!(CONFIG.read().unwrap().keys_confirmed.get(host), Some(true))
-    }
-
-    pub fn set_host_key_confirmed(host: &str, v: bool) {
-        if Self::get_host_key_confirmed(host) == v {
-            return;
-        }
-        let mut config = CONFIG.write().unwrap();
-        config.keys_confirmed.insert(host.to_owned(), v);
-        config.store();
     }
 
     pub fn get_key_pair() -> KeyPair {
@@ -2023,7 +1992,6 @@ deserialize_default!(deserialize_vec_discoverypeer, Vec<DiscoveryPeer>);
 deserialize_default!(deserialize_keypair, KeyPair);
 deserialize_default!(deserialize_size, Size);
 deserialize_default!(deserialize_hashmap_string_string, HashMap<String, String>);
-deserialize_default!(deserialize_hashmap_string_bool,  HashMap<String, bool>);
 deserialize_default!(deserialize_hashmap_resolutions, HashMap<String, Resolution>);
 
 #[inline]
@@ -2818,13 +2786,13 @@ mod tests {
 
         let wrong_field_str = r#"
         hello = "world"
-        key_confirmed = true
+        salt = "123456"
         "#;
         let cfg = toml::from_str::<Config>(wrong_field_str);
         assert_eq!(
             cfg,
             Ok(Config {
-                key_confirmed: true,
+                salt: "123456".to_string(),
                 ..Default::default()
             })
         );

@@ -51,7 +51,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Scroll Style", "Scroll style"),
         ("Show Toolbar", "Show toolbar"),
         ("Hide Toolbar", "Hide toolbar"),
-        ("Insecure Connection", "Insecure connection"),
         ("Follow System", "Follow system"),
         ("Unlock Security Settings", "Unlock security settings"),
         ("Audio Input Device", "Audio input device"),
@@ -136,7 +135,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("wayland-keyboard-input-consent-tip", "What you type on this remote computer (including passwords) could be read by other apps on it."),
         ("wayland-keyboard-input-reset-choice-tip", "Reset keyboard input choice"),
         ("remember-wayland-keyboard-choice-tip", "Don't ask again for this remote computer"),
-        ("conn-e2ee-unavailable-tip", "Could not verify end-to-end encryption.\nThe remote device may still be setting up. Try again later.\nIf this keeps happening, the server may be untrusted.\nContinue anyway?"),
         ("id_whitelist_tip", "Only whitelisted IDs can access me"),
         ("id_whitelist_wildcard_tip", "Wildcards are supported: '*' matches any number of characters, '?' matches exactly one character"),
         ("id_whitelist_caveat_tip", "The ID is reported by the connecting client. This whitelist reduces exposure and does not replace the password or 2FA."),
@@ -151,5 +149,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("shortcut-must-include-modifiers", "Must include at least one modifier: {}"),
         ("shortcut-already-bound-to", "Already bound to"),
         ("shortcut-key-not-supported", "\"{}\" can't be used as a shortcut."),
+        ("host-key-changed-tip", "This computer's identity key is different from the one saved on the first connection.\nThis happens if its IntraDesk settings were reset, but it may also be another computer impersonating it.\nContinue only if you know why the key changed."),
     ].iter().cloned().collect();
 }

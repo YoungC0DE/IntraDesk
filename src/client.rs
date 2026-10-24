@@ -24,7 +24,7 @@ use uuid::Uuid;
 use crate::{
     check_port,
     common::input::{MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP},
-    create_symmetric_key_msg, decode_id_pk, decode_id_pk_kx, get_rs_pk,
+    create_symmetric_key_msg, decode_id_pk_kx, get_pk,
     is_keyboard_mode_supported,
     ui_interface::{get_builtin_option, use_texture_render},
     ui_session_interface::{InvokeUiSession, Session},
@@ -101,6 +101,28 @@ const LAN_CONNECT_TIMEOUT: u64 = 3_000;
 /// Client of the remote desktop.
 pub struct Client;
 
+/// How the peer's long-term key compares with the one pinned for it (trust on first use).
+#[derive(Debug, PartialEq)]
+pub enum HostKey {
+    /// First contact: pin `.0`.
+    New(Vec<u8>),
+    Known,
+    /// Differs from the pinned key: another computer may be impersonating the peer.
+    Changed(Vec<u8>),
+}
+
+impl HostKey {
+    fn check(pinned: &[u8], presented: &[u8]) -> Self {
+        if pinned.is_empty() {
+            HostKey::New(presented.to_vec())
+        } else if pinned == presented {
+            HostKey::Known
+        } else {
+            HostKey::Changed(presented.to_vec())
+        }
+    }
+}
+
 struct ClipboardState {
     is_text_required: bool,
     running: bool,
@@ -132,114 +154,68 @@ impl Client {
         peer: &str,
         conn_type: ConnType,
         interface: impl Interface,
-    ) -> ResultType<Stream> {
+    ) -> ResultType<(Stream, HostKey)> {
         debug_assert!(peer == interface.get_id());
         if config::is_incoming_only() && !is_switch_sides_back(conn_type, &interface).await {
             bail!("Incoming only mode");
         }
         for addr in peer_addrs(peer) {
             match connect_tcp_local(&*addr, None, LAN_CONNECT_TIMEOUT).await {
-                Ok(stream) => return Ok(stream),
+                Ok(mut stream) => {
+                    let pinned = interface.get_lch().read().unwrap().config.host_key.clone();
+                    let host_key = Self::secure_connection(peer, &pinned, &mut stream).await?;
+                    return Ok((stream, host_key));
+                }
                 Err(err) => log::info!("Failed to connect to {addr}: {err}"),
             }
         }
         bail!(LOGIN_MSG_NOT_FOUND)
     }
 
-    // Client half of the session handshake; not wired in until the key exchange works without
-    // a rendezvous server.
-    #[allow(dead_code)]
-    async fn secure_connection(
-        peer_id: &str,
-        signed_id_pk: Vec<u8>,
-        key: &str,
+    /// Client half of the session handshake. The controlled side signs a fresh box key with its
+    /// long-term key; we check that key against the one pinned for `peer` and seal the session
+    /// key to the box key. Nothing goes in plaintext: a peer that does not sign is refused.
+    pub(crate) async fn secure_connection(
+        peer: &str,
+        pinned: &[u8],
         conn: &mut Stream,
-    ) -> ResultType<Option<Vec<u8>>> {
-        let rs_pk = get_rs_pk(if key.is_empty() {
-            config::RS_PUB_KEY
-        } else {
-            key
-        });
-        let mut sign_pk = None;
-        let mut option_pk = None;
-        if !signed_id_pk.is_empty() {
-            if let Some(rs_pk) = rs_pk {
-                if let Ok((id, pk)) = decode_id_pk(&signed_id_pk, &rs_pk) {
-                    if id == peer_id {
-                        sign_pk = Some(sign::PublicKey(pk));
-                        option_pk = Some(pk.to_vec());
-                    }
-                }
-            }
-            if sign_pk.is_none() {
-                log::error!("Handshake failed: invalid public key from rendezvous server");
-            }
-        }
-        let sign_pk = match sign_pk {
-            Some(v) => v,
-            None => {
-                // No trusted peer identity (key-less deployment, or a blob that does not verify
-                // under our root): fall through on the non-secure path with is_secured() false.
-                // send an empty message out in case server is setting up secure and waiting for first message
-                conn.send(&Message::new()).await?;
-                return Ok(option_pk);
-            }
+    ) -> ResultType<HostKey> {
+        let Some(res) = timeout(READ_TIMEOUT, conn.next()).await? else {
+            bail!("Reset by the peer");
         };
-        match timeout(READ_TIMEOUT, conn.next()).await? {
-            Some(res) => {
-                let bytes = res?;
-                if let Ok(msg_in) = Message::parse_from_bytes(&bytes) {
-                    if let Some(message::Union::SignedId(si)) = msg_in.union {
-                        if let Ok((id, their_pk_b, kx_version)) =
-                            decode_id_pk_kx(&si.id, &sign_pk)
-                        {
-                            if id == peer_id {
-                                let (asymmetric_value, symmetric_value, key) =
-                                    create_symmetric_key_msg(their_pk_b);
-                                let picked = hbb_common::tcp::kx_version_for(kx_version);
-                                let mut msg_out = Message::new();
-                                msg_out.set_public_key(PublicKey {
-                                    asymmetric_value: asymmetric_value.clone(),
-                                    symmetric_value,
-                                    kx_version: picked,
-                                    ..Default::default()
-                                });
-                                timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
-                                conn.set_negotiated_key(
-                                    key,
-                                    true,
-                                    &hbb_common::tcp::KxTranscript {
-                                        initiator_pk: &asymmetric_value,
-                                        responder_pk: &their_pk_b,
-                                        advertised: kx_version,
-                                        picked,
-                                    },
-                                )?;
-                            } else {
-                                log::error!("Handshake failed: sign failure");
-                                conn.send(&Message::new()).await?;
-                            }
-                        } else {
-                            // fall back to non-secure connection in case pk mismatch
-                            log::info!("pk mismatch, fall back to non-secure");
-                            let mut msg_out = Message::new();
-                            msg_out.set_public_key(PublicKey::new());
-                            conn.send(&msg_out).await?;
-                        }
-                    } else {
-                        log::error!("Handshake failed: invalid message type");
-                        conn.send(&Message::new()).await?;
-                    }
-                } else {
-                    log::error!("Handshake failed: invalid message format");
-                    conn.send(&Message::new()).await?;
-                }
-            }
-            None => {
-                bail!("Reset by the peer");
-            }
+        let msg_in = Message::parse_from_bytes(&res?)?;
+        let Some(message::Union::SignedId(si)) = msg_in.union else {
+            bail!("Handshake failed: the peer did not identify itself");
+        };
+        let Some(sign_pk) = get_pk(&si.pk) else {
+            bail!("Handshake failed: invalid public key from peer");
+        };
+        let (id, their_pk_b, kx_version) = decode_id_pk_kx(&si.id, &sign::PublicKey(sign_pk))?;
+        // An address may be answered by any computer, but an ID names one.
+        if !crate::common::is_direct_ip_access(peer) && id != peer {
+            bail!("Handshake failed: expected {peer}, the peer is {id}");
         }
-        Ok(option_pk)
+        let (asymmetric_value, symmetric_value, key) = create_symmetric_key_msg(their_pk_b);
+        let picked = hbb_common::tcp::kx_version_for(kx_version);
+        let mut msg_out = Message::new();
+        msg_out.set_public_key(PublicKey {
+            asymmetric_value: asymmetric_value.clone(),
+            symmetric_value,
+            kx_version: picked,
+            ..Default::default()
+        });
+        timeout(CONNECT_TIMEOUT, conn.send(&msg_out)).await??;
+        conn.set_negotiated_key(
+            key,
+            true,
+            &hbb_common::tcp::KxTranscript {
+                initiator_pk: &asymmetric_value,
+                responder_pk: &their_pk_b,
+                advertised: kx_version,
+                picked,
+            },
+        )?;
+        Ok(HostKey::check(pinned, &sign_pk))
     }
 
     #[inline]
@@ -1039,6 +1015,12 @@ impl LoginConfigHandler {
     pub fn save_config(&mut self, config: PeerConfig) {
         config.store(&self.id);
         self.config = config;
+    }
+
+    pub fn set_host_key(&mut self, key: Vec<u8>) {
+        let mut config = self.load_config();
+        config.host_key = key;
+        self.save_config(config);
     }
 
     /// Set an option for handler's [`PeerConfig`].
@@ -2646,14 +2628,16 @@ pub enum Data {
     TakeScreenshot((i32, String)),
 }
 
-pub async fn confirm_insecure_connection(
+/// Asks whether to go on with a peer whose key differs from the pinned one; the password is not
+/// sent before the answer.
+pub async fn confirm_host_key_change(
     interface: &impl Interface,
     receiver: &mut UnboundedReceiver<Data>,
 ) -> bool {
     interface.msgbox(
         "insecure-connection-nocancel-hasclose",
-        "Insecure Connection",
-        "conn-e2ee-unavailable-tip",
+        "Computer key changed",
+        "host-key-changed-tip",
         "",
     );
     while let Some(data) = receiver.recv().await {
@@ -2887,27 +2871,16 @@ mod kx_tests {
         }
     }
 
-    /// A stand-in controlled peer on loopback. It advertises `advertised` in its signed identity
-    /// and runs the key under `run`, or under the version the controller picked when `run` is
-    /// `None`, then sends one message and reads one. Returns the host, its identity as the
-    /// rendezvous server would sign it, and what it saw.
+    /// A stand-in controlled peer on loopback, identified as `id` by the long-term key
+    /// `sign_pk`/`sign_sk`. It advertises `advertised` and runs the key under `run`, or under the
+    /// version the controller picked when `run` is `None`, then sends one message and reads one.
     async fn controlled_stub(
+        id: &str,
         advertised: u32,
         run: Option<u32>,
-        rs_sk: sign::SecretKey,
-    ) -> (String, Vec<u8>, oneshot::Receiver<Seen>) {
-        let (sign_pk, sign_sk) = sign::gen_keypair();
-        let id_pk = |pk: &[u8], kx_version| {
-            IdPk {
-                id: PEER_ID.to_owned(),
-                pk: pk.to_vec().into(),
-                kx_version,
-                ..Default::default()
-            }
-            .write_to_bytes()
-            .unwrap()
-        };
-        let signed_id_pk = sign::sign(&id_pk(&sign_pk.0, 0), &rs_sk);
+        (sign_pk, sign_sk): (sign::PublicKey, sign::SecretKey),
+    ) -> (String, oneshot::Receiver<Seen>) {
+        let id = id.to_owned();
         let listener = hbb_common::tcp::new_listener("127.0.0.1:0", false)
             .await
             .unwrap();
@@ -2917,13 +2890,24 @@ mod kx_tests {
             let (stream, addr) = listener.accept().await.unwrap();
             let mut s = FramedStream::from(stream, addr);
             let (our_pk_b, our_sk_b) = box_::gen_keypair();
+            let id_pk = IdPk {
+                id,
+                pk: our_pk_b.0.to_vec().into(),
+                kx_version: advertised,
+                ..Default::default()
+            }
+            .write_to_bytes()
+            .unwrap();
             let mut msg = Message::new();
             msg.set_signed_id(SignedId {
-                id: sign::sign(&id_pk(&our_pk_b.0, advertised), &sign_sk).into(),
+                id: sign::sign(&id_pk, &sign_sk).into(),
+                pk: sign_pk.0.to_vec().into(),
                 ..Default::default()
             });
             s.send(&msg).await.unwrap();
-            let bytes = s.next().await.unwrap().unwrap();
+            let Some(Ok(bytes)) = s.next().await else {
+                return;
+            };
             let Some(message::Union::PublicKey(pk)) =
                 Message::parse_from_bytes(&bytes).unwrap().union
             else {
@@ -2950,20 +2934,21 @@ mod kx_tests {
             })
             .ok();
         });
-        (host, signed_id_pk, rx)
+        (host, rx)
     }
 
     /// The controller's handshake against the stub, then one application message each way.
     /// Returns what the stub saw and whether the stub's message decrypted on this side.
     async fn handshake(advertised: u32, run: Option<u32>) -> (Seen, bool) {
-        let (rs_pk, rs_sk) = sign::gen_keypair();
-        let (host, signed_id_pk, seen) = controlled_stub(advertised, run, rs_sk).await;
+        let keys = sign::gen_keypair();
+        let sign_pk = keys.0;
+        let (host, seen) = controlled_stub(PEER_ID, advertised, run, keys).await;
         let mut conn = connect_tcp(host, 3000).await.unwrap();
-        let pk =
-            Client::secure_connection(PEER_ID, signed_id_pk, &crate::encode64(rs_pk.0), &mut conn)
-                .await
-                .unwrap();
-        assert!(pk.is_some() && conn.is_secured());
+        let host_key = Client::secure_connection(PEER_ID, &[], &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(host_key, HostKey::New(sign_pk.0.to_vec()));
+        assert!(conn.is_secured());
         conn.send(&test_delay(1)).await.unwrap();
         let decrypted = matches!(conn.next().await, Some(Ok(b)) if delay_in(&b) == Some(2));
         (seen.await.unwrap(), decrypted)
@@ -2990,5 +2975,47 @@ mod kx_tests {
         let (seen, decrypted) = handshake(KX_VERSION_LATEST, Some(0)).await;
         assert_eq!(seen.picked, 1);
         assert!(!seen.decrypted && !decrypted);
+    }
+
+    #[tokio::test]
+    async fn test_pinned_key_is_known_and_another_key_is_reported_changed() {
+        let keys = sign::gen_keypair();
+        let pinned = keys.0 .0.to_vec();
+        let (host, _) = controlled_stub(PEER_ID, KX_VERSION_LATEST, None, keys).await;
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        let host_key = Client::secure_connection(PEER_ID, &pinned, &mut conn).await;
+        assert_eq!(host_key.unwrap(), HostKey::Known);
+
+        let impostor = sign::gen_keypair();
+        let impostor_pk = impostor.0 .0.to_vec();
+        let (host, _) = controlled_stub(PEER_ID, KX_VERSION_LATEST, None, impostor).await;
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        let host_key = Client::secure_connection(PEER_ID, &pinned, &mut conn).await;
+        assert_eq!(host_key.unwrap(), HostKey::Changed(impostor_pk));
+    }
+
+    #[tokio::test]
+    async fn test_a_peer_answering_with_another_id_is_refused() {
+        let (host, _) =
+            controlled_stub("987654321", KX_VERSION_LATEST, None, sign::gen_keypair()).await;
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        assert!(Client::secure_connection(PEER_ID, &[], &mut conn).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_a_peer_that_does_not_sign_is_refused() {
+        let listener = hbb_common::tcp::new_listener("127.0.0.1:0", false)
+            .await
+            .unwrap();
+        let host = listener.local_addr().unwrap().to_string();
+        tokio::spawn(async move {
+            let (stream, addr) = listener.accept().await.unwrap();
+            let mut s = FramedStream::from(stream, addr);
+            // What a server without the handshake sends first: a plaintext message.
+            s.send(&test_delay(2)).await.unwrap();
+            s.next().await;
+        });
+        let mut conn = connect_tcp(host, 3000).await.unwrap();
+        assert!(Client::secure_connection(PEER_ID, &[], &mut conn).await.is_err());
     }
 }

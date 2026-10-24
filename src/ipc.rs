@@ -257,7 +257,6 @@ pub enum Data {
     UserSid(Option<u32>),
     Config((String, Option<String>)),
     Options(Option<HashMap<String, String>>),
-    ConfirmedKey(Option<(Vec<u8>, Vec<u8>)>),
     RawMessage(Vec<u8>),
     FS(FS),
     Test,
@@ -517,14 +516,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                 std::process::exit(-1); // to make sure --server luauchagent process can restart because SuccessfulExit used
             }
         }
-        Data::ConfirmedKey(None) => {
-            let out = if Config::get_key_confirmed() {
-                Some(Config::get_key_pair())
-            } else {
-                None
-            };
-            allow_err!(stream.send(&Data::ConfirmedKey(out)).await);
-        }
         Data::VideoConnCount(None) => {
             let n = crate::server::AUTHED_CONNS
                 .lock()
@@ -559,11 +550,7 @@ async fn handle(data: Data, stream: &mut Connection) {
                 } else if name == "salt" {
                     value = Some(Config::get_salt());
                 } else if name == "fingerprint" {
-                    value = if Config::get_key_confirmed() {
-                        Some(crate::common::pk_to_fingerprint(Config::get_key_pair().1))
-                    } else {
-                        None
-                    };
+                    value = Some(crate::common::pk_to_fingerprint(Config::get_key_pair().1));
                 } else if name == "hide_cm" {
                     value = if crate::common::is_custom_client() {
                         Some(hbb_common::password_security::hide_cm().to_string())
@@ -582,12 +569,11 @@ async fn handle(data: Data, stream: &mut Connection) {
             Some(value) => {
                 let mut updated = true;
                 if name == "id" {
-                    // An empty id would wipe the local id and unconfirm the key (cf. #15626).
+                    // An empty id would wipe the local id (cf. #15626).
                     if value.is_empty() {
                         log::warn!("Ignoring empty id write over IPC");
                         updated = false;
                     } else {
-                        Config::set_key_confirmed(false);
                         Config::set_id(&value);
                     }
                 } else if name == "temporary-password" {
@@ -1138,7 +1124,6 @@ pub fn get_id() -> String {
                 Config::set_salt(&v2);
             }
             if v != Config::get_id() {
-                Config::set_key_confirmed(false);
                 Config::set_id(&v);
             }
             return v;

@@ -2,7 +2,8 @@ use crate::clipboard::{clipboard_listener, update_clipboard, ClipboardSide};
 use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::{
     client::{
-        self, Client, Data, Interface, MediaData, MediaSender, QualityStatus, MILLI1, SEC30,
+        self, Client, Data, HostKey, Interface, MediaData, MediaSender, QualityStatus, MILLI1,
+        SEC30,
     },
     ui_session_interface::{InvokeUiSession, Session},
 };
@@ -127,21 +128,25 @@ impl<T: InvokeUiSession> Remote<T> {
         };
 
         match Client::start(&self.handler.get_id(), conn_type, self.handler.clone()).await {
-            Ok(mut peer) => {
+            Ok((mut peer, host_key)) => {
                 self.handler
                     .connection_round_state
                     .lock()
                     .unwrap()
                     .set_connected();
-                let is_secured = peer.is_secured();
-                self.handler.set_connection_type(is_secured); // flutter -> connection_ready
-                if !is_secured
-                    && !crate::common::is_direct_ip_access(&self.handler.get_id())
-                    && !client::confirm_insecure_connection(&self.handler, &mut self.receiver).await
-                {
-                    self.send_close_reason(&mut peer, "").await;
-                    self.handle_disconnected(round);
-                    return;
+                self.handler.set_connection_type(peer.is_secured()); // flutter -> connection_ready
+                match host_key {
+                    HostKey::Known => {}
+                    HostKey::New(key) => self.handler.lc.write().unwrap().set_host_key(key),
+                    HostKey::Changed(key) => {
+                        if !client::confirm_host_key_change(&self.handler, &mut self.receiver).await
+                        {
+                            self.send_close_reason(&mut peer, "").await;
+                            self.handle_disconnected(round);
+                            return;
+                        }
+                        self.handler.lc.write().unwrap().set_host_key(key);
+                    }
                 }
 
                 // just build for now

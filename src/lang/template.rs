@@ -204,7 +204,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Scroll Style", ""),
         ("Show Toolbar", ""),
         ("Hide Toolbar", ""),
-        ("Insecure Connection", ""),
         ("Scale original", ""),
         ("Scale adaptive", ""),
         ("General", ""),
@@ -451,7 +450,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Show on the minimized toolbar", ""),
         ("All monitors", ""),
         ("#{} monitor", ""),
-        ("conn-e2ee-unavailable-tip", ""),
         ("ID whitelisting", ""),
         ("Use ID whitelisting", ""),
         ("id_whitelist_tip", ""),
@@ -497,5 +495,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Computer not found on the network", ""),
         ("Visible on the network: IP {}", ""),
         ("Not connected to a network", ""),
+        ("Computer key changed", ""),
+        ("host-key-changed-tip", ""),
     ].iter().cloned().collect();
 }

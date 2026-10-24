@@ -44,7 +44,7 @@ class DraggableMobileActions extends StatelessWidget {
                   shadowColor: Colors.transparent,
                   child: Container(
                     decoration: BoxDecoration(
-                        color: MyTheme.accent.withOpacity(0.4),
+                        color: MyTheme.color(context).accent.withOpacity(0.4),
                         borderRadius:
                             BorderRadius.all(Radius.circular(15 * scale))),
                     child: Row(

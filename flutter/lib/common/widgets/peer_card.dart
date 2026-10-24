@@ -316,7 +316,7 @@ class _PeerCardState extends State<_PeerCard>
         child: selected
             ? Icon(
                 Icons.check_box,
-                color: MyTheme.accent,
+                color: MyTheme.color(context).accent,
               )
             : Icon(Icons.check_box_outline_blank),
       );
@@ -342,7 +342,7 @@ class _PeerCardState extends State<_PeerCard>
       final icon = selected
           ? Icon(
               Icons.check_box,
-              color: MyTheme.accent,
+              color: MyTheme.color(context).accent,
             )
           : Icon(Icons.check_box_outline_blank);
       bool last = peerTabModel.isShiftDown && peer.id == peerTabModel.lastId;
@@ -350,7 +350,7 @@ class _PeerCardState extends State<_PeerCard>
       if (last) {
         return Container(
           decoration: BoxDecoration(
-              border: Border.all(color: MyTheme.accent, width: 1)),
+              border: Border.all(color: MyTheme.color(context).accent, width: 1)),
           child: icon,
         ).marginOnly(right: right);
       } else {
@@ -410,8 +410,8 @@ abstract class BasePeerCard extends StatelessWidget {
       (await _buildMenuItems(context))
           .map((e) => e.build(
               context,
-              const MenuConfig(
-                  commonColor: CustomPopupMenuTheme.commonColor,
+              MenuConfig(
+                  commonColor: CustomPopupMenuTheme.commonColor(context),
                   height: CustomPopupMenuTheme.height,
                   dividerHeight: CustomPopupMenuTheme.dividerHeight)))
           .expand((i) => i)

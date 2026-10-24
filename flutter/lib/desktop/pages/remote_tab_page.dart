@@ -24,7 +24,8 @@ import '../../common/widgets/dialog.dart';
 import '../../models/platform_model.dart';
 
 class _MenuTheme {
-  static const Color blueColor = MyTheme.button;
+  static Color accentColor(BuildContext context) =>
+      MyTheme.color(context).accent;
   // kMinInteractiveDimension
   static const double height = 20.0;
   static const double dividerHeight = 12.0;
@@ -133,7 +134,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
             const AddButton(),
           ],
         ),
-        selectedBorderColor: MyTheme.accent,
+        selectedBorderColor: MyTheme.color(context).accent,
         pageViewBuilder: (pageView) => pageView,
         labelGetter: DesktopTab.tablabelGetter,
         tabBuilder: (key, icon, label, themeConf) => Obx(() {
@@ -326,8 +327,8 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
       items: menu
           .map((entry) => entry.build(
               context,
-              const MenuConfig(
-                commonColor: _MenuTheme.blueColor,
+              MenuConfig(
+                commonColor: _MenuTheme.accentColor(context),
                 height: _MenuTheme.height,
                 dividerHeight: _MenuTheme.dividerHeight,
               )))

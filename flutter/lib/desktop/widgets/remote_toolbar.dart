@@ -320,8 +320,10 @@ class ToolbarState {
 }
 
 class _ToolbarTheme {
-  static const Color blueColor = MyTheme.button;
-  static const Color hoverBlueColor = MyTheme.accent;
+  static Color accentColor(BuildContext context) =>
+      MyTheme.color(context).accent;
+  static Color hoverAccentColor(BuildContext context) =>
+      MyTheme.color(context).accentHover;
   static Color inactiveColor = Colors.grey[800]!;
   static Color hoverInactiveColor = Colors.grey[850]!;
 
@@ -917,9 +919,9 @@ class _PinMenu extends StatelessWidget {
         tooltip: state.pin ? 'Unpin Toolbar' : 'Pin Toolbar',
         onPressed: state.switchPin,
         color:
-            state.pin ? _ToolbarTheme.blueColor : _ToolbarTheme.inactiveColor,
+            state.pin ? _ToolbarTheme.accentColor(context) : _ToolbarTheme.inactiveColor,
         hoverColor: state.pin
-            ? _ToolbarTheme.hoverBlueColor
+            ? _ToolbarTheme.hoverAccentColor(context)
             : _ToolbarTheme.hoverInactiveColor,
       ),
     );
@@ -974,8 +976,8 @@ class _MainMonitorSwitchButton extends StatelessWidget {
 
       return _IconMenuButton(
         tooltip: cycle.tooltip,
-        color: _ToolbarTheme.blueColor,
-        hoverColor: _ToolbarTheme.hoverBlueColor,
+        color: _ToolbarTheme.accentColor(context),
+        hoverColor: _ToolbarTheme.hoverAccentColor(context),
         onPressed: cycle.next,
         icon: SizedBox(
           width: _ToolbarTheme.buttonSize,
@@ -1049,8 +1051,8 @@ class _MonitorMenu extends StatelessWidget {
         icon: monitorsIcon,
         ffi: ffi,
         width: width.value,
-        color: _ToolbarTheme.blueColor,
-        hoverColor: _ToolbarTheme.hoverBlueColor,
+        color: _ToolbarTheme.accentColor(context),
+        hoverColor: _ToolbarTheme.hoverAccentColor(context),
         menuStyle: MenuStyle(
             padding:
                 MaterialStatePropertyAll(EdgeInsets.symmetric(horizontal: 6))),
@@ -1070,11 +1072,11 @@ class _MonitorMenu extends StatelessWidget {
     );
   }
 
-  buildOneMonitorButton(i, curDisplay) => Text(
+  buildOneMonitorButton(BuildContext context, i, curDisplay) => Text(
         '${i + 1}',
         style: TextStyle(
           color: i == curDisplay
-              ? _ToolbarTheme.blueColor
+              ? _ToolbarTheme.accentColor(context)
               : _ToolbarTheme.inactiveColor,
           fontSize: 12,
           fontWeight: FontWeight.bold,
@@ -1093,7 +1095,7 @@ class _MonitorMenu extends StatelessWidget {
           Widget? monitorsIcon;
           if (isAllMonitors) {
             monitorsIcon = globalMonitorsWidget(
-                width, Colors.white, _ToolbarTheme.blueColor);
+                width, Colors.white, _ToolbarTheme.accentColor(context));
           }
           return _IconMenuButton(
             tooltip: isMulti
@@ -1105,10 +1107,10 @@ class _MonitorMenu extends StatelessWidget {
             vMargin: isMulti ? null : 12,
             topLevel: false,
             color: i == display.value
-                ? _ToolbarTheme.blueColor
+                ? _ToolbarTheme.accentColor(context)
                 : _ToolbarTheme.inactiveColor,
             hoverColor: i == display.value
-                ? _ToolbarTheme.hoverBlueColor
+                ? _ToolbarTheme.hoverAccentColor(context)
                 : _ToolbarTheme.hoverInactiveColor,
             width: isAllMonitors ? width.value : null,
             icon: isAllMonitors
@@ -1125,7 +1127,7 @@ class _MonitorMenu extends StatelessWidget {
                           colorFilter:
                               ColorFilter.mode(Colors.white, BlendMode.srcIn),
                         ),
-                        Obx(() => buildOneMonitorButton(i, display.value)),
+                        Obx(() => buildOneMonitorButton(context, i, display.value)),
                       ],
                     ),
                   ),
@@ -1246,8 +1248,8 @@ class _ControlMenu extends StatelessWidget {
     return _IconSubmenuButton(
         tooltip: 'Control Actions',
         svg: "assets/actions.svg",
-        color: _ToolbarTheme.blueColor,
-        hoverColor: _ToolbarTheme.hoverBlueColor,
+        color: _ToolbarTheme.accentColor(context),
+        hoverColor: _ToolbarTheme.hoverAccentColor(context),
         ffi: ffi,
         menuChildrenGetter: (_) => toolbarControls(context, id, ffi).map((e) {
               if (e.divider) {
@@ -1600,8 +1602,8 @@ class _DisplayMenuState extends State<_DisplayMenu> {
       tooltip: 'Display Settings',
       svg: "assets/display.svg",
       ffi: widget.ffi,
-      color: _ToolbarTheme.blueColor,
-      hoverColor: _ToolbarTheme.hoverBlueColor,
+      color: _ToolbarTheme.accentColor(context),
+      hoverColor: _ToolbarTheme.hoverAccentColor(context),
       menuChildrenGetter: menuChildrenGetter,
     );
   }
@@ -1844,7 +1846,7 @@ class _RectValueThumbShape extends SliderComponentShape {
     );
     final Color? evaluatedColor = colorTween.evaluate(enableAnimation);
     final Color? thumbColor = sliderTheme.thumbColor;
-    final Color fillColor = evaluatedColor ?? thumbColor ?? Colors.blueAccent;
+    final Color fillColor = evaluatedColor ?? thumbColor ?? MyTheme.accentLight;
 
     final RRect rrect = RRect.fromRectAndRadius(
       Rect.fromCenter(center: center, width: width, height: height),
@@ -2691,7 +2693,8 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
     const double iconSize = 20;
 
     buttonWrapper(VoidCallback? onPressed, Widget child,
-        {Color hoverColor = _ToolbarTheme.blueColor}) {
+        {Color? hoverColor}) {
+      final hover = hoverColor ?? _ToolbarTheme.accentColor(context);
       final bgColor = buttonStyle.backgroundColor?.resolve({});
       return TextButton(
         onPressed: onPressed,
@@ -2699,7 +2702,7 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
         style: buttonStyle.copyWith(
           backgroundColor: MaterialStateProperty.resolveWith((states) {
             if (states.contains(MaterialState.hovered)) {
-              return (bgColor ?? hoverColor).withOpacity(0.15);
+              return (bgColor ?? hover).withOpacity(0.15);
             }
             return bgColor;
           }),
@@ -2882,7 +2885,7 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
             padding: MaterialStateProperty.all(EdgeInsets.zero),
             backgroundColor: MaterialStateProperty.resolveWith((states) {
               if (states.contains(MaterialState.hovered)) {
-                return _ToolbarTheme.blueColor.withOpacity(0.15);
+                return _ToolbarTheme.accentColor(context).withOpacity(0.15);
               }
               return null;
             }),
@@ -2893,7 +2896,7 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
               SvgPicture.asset(
                 'assets/display_switcher.svg',
                 colorFilter:
-                    ColorFilter.mode(_ToolbarTheme.blueColor, BlendMode.srcIn),
+                    ColorFilter.mode(_ToolbarTheme.accentColor(context), BlendMode.srcIn),
                 width: iconSize,
                 height: iconSize,
               ),

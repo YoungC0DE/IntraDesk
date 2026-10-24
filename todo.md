@@ -249,8 +249,11 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 
 ## Fase 5 — Interface e marca (trilha E)
 
-- [ ] **T5.1** Paleta laranja escuro em `MyTheme` (`flutter/lib/common.dart`) com os tokens do `CLAUDE.md`, temas claro e escuro. Trocar todas as cores azuis hardcoded (`0xFF0071FF`, `Colors.blue` etc.) pelos tokens.
-  dep: T0.4 · Área: `flutter/lib/common.dart` + buscas por cores em `flutter/lib` · @dono:
+- [x] **T5.1** Paleta laranja escuro em `MyTheme` (`flutter/lib/common.dart`) com os tokens do `CLAUDE.md`, temas claro e escuro. Trocar todas as cores azuis hardcoded (`0xFF0071FF`, `Colors.blue` etc.) pelos tokens.
+  dep: T0.4 · Área: `flutter/lib/common.dart` + buscas por cores em `flutter/lib` · @dono: claude
+  Feito (subagente, revisado). `MyTheme`: constantes `accentLight/Dark`, `accentHoverLight/Dark`, `accentSoftLight/Dark`, `onAccent`; o `ColorThemeExtension` ganhou `accent`, `accentHover`, `accentSoft`, `onAccent` (widgets leem `MyTheme.color(context).accent`). `colorScheme` (primary/secondary/onPrimary), `textSelectionTheme` e `ElevatedButton` dos dois temas usam os tokens. Saíram `MyTheme.accent/accent50/accent80/button/idColor`. Azuis trocados em 17 arquivos (barra da sessão, abas, menus, diálogos, gerenciador de arquivos, CM, configurações).
+  Ficou azul de propósito: passo "médio" da barra de força de senha (`custom_password.dart`) e `str2color2` (nome de cor → cor). Código morto achado: `borderColor` em `desktop_home_page.dart` e `desktop/widgets/titlebar_widget.dart` (ninguém importa) → limpar na T5.2. Para a T5.4: `flutter/assets/icon.svg` (degradê azul, fallback do `icon.png`).
+  Checagem: `flutter analyze` sem erros/avisos; `flutter test` 91 ok, 0 pulados (a queda desde o fim da Fase 3 vem dos testes de atalhos/Wayland removidos na T4.1).
 - [ ] **T5.2** Nova tela inicial no estilo AnyDesk:
   - painel "Este computador": nome, IP, senha temporária (copiar / gerar nova);
   - campo "Conectar a" (IP ou nome) com botão Conectar;

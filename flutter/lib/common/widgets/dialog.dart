@@ -793,7 +793,7 @@ _connectDialog(
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.password_rounded, color: MyTheme.accent),
+          Icon(Icons.password_rounded, color: MyTheme.color(context).accent),
           Text(translate('Password Required')).paddingOnly(left: 10),
         ],
       ),
@@ -1253,7 +1253,7 @@ void renameDialog(
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.edit_rounded, color: MyTheme.accent),
+          Icon(Icons.edit_rounded, color: MyTheme.color(context).accent),
           Text(translate('Rename')).paddingOnly(left: 10),
         ],
       ),

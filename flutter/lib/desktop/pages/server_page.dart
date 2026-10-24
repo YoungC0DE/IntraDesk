@@ -180,7 +180,7 @@ class ConnectionManagerState extends State<ConnectionManager>
             showClose: true,
             onWindowCloseButton: handleWindowCloseButton,
             controller: serverModel.tabController,
-            selectedBorderColor: MyTheme.accent,
+            selectedBorderColor: MyTheme.color(context).accent,
             maxLabelWidth: 100,
             tail: null, //buildScrollJumper(),
             tabBuilder: (key, icon, label, themeConf) {
@@ -433,8 +433,8 @@ class _CmHeaderState extends State<_CmHeader>
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
           colors: [
-            Color(0xff00bfe1),
-            Color(0xff0071ff),
+            MyTheme.color(context).accentHover,
+            MyTheme.color(context).accent,
           ],
         ),
       ),
@@ -572,7 +572,7 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
       child: Container(
         decoration: BoxDecoration(
           color: enabled
-              ? (canModify ? MyTheme.accent : MyTheme.accent.withOpacity(0.6))
+              ? (canModify ? MyTheme.color(context).accent : MyTheme.color(context).accent.withOpacity(0.6))
               : Colors.grey[700],
           borderRadius: BorderRadius.circular(10.0),
         ),
@@ -749,7 +749,7 @@ class _CmControlPanel extends StatelessWidget {
           offstage: !showElevation,
           child: buildButton(
             context,
-            color: MyTheme.accent,
+            color: MyTheme.color(context).accent,
             onClick: () => handleElevate(context),
             icon: Icon(
               Icons.security_rounded,
@@ -786,7 +786,7 @@ class _CmControlPanel extends StatelessWidget {
       children: [
         Expanded(
             child: buildButton(context,
-                color: MyTheme.accent,
+                color: MyTheme.color(context).accent,
                 onClick: handleClose,
                 text: 'Close',
                 textColor: Colors.white)),
@@ -1069,7 +1069,7 @@ class __FileTransferLogPageState extends State<_FileTransferLogPage> {
                                               barRadius: Radius.circular(15),
                                               percent: item.finishedSize /
                                                   item.totalSize,
-                                              progressColor: MyTheme.accent,
+                                              progressColor: MyTheme.color(context).accent,
                                               backgroundColor:
                                                   Theme.of(context).hoverColor,
                                               lineHeight:

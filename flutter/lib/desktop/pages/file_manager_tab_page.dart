@@ -98,7 +98,7 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
           controller: tabController,
           onWindowCloseButton: handleWindowCloseButton,
           tail: const AddButton(),
-          selectedBorderColor: MyTheme.accent,
+          selectedBorderColor: MyTheme.color(context).accent,
           labelGetter: DesktopTab.tablabelGetter,
         ));
     final tabWidget = workaroundWindowBorder(

@@ -278,8 +278,8 @@ class _PeerTabPageState extends State<PeerTabPage>
         items: menu
             .map((entry) => entry.build(
                 context,
-                const MenuConfig(
-                  commonColor: MyTheme.accent,
+                MenuConfig(
+                  commonColor: MyTheme.color(context).accent,
                   height: 20.0,
                   dividerHeight: 12.0,
                 )))

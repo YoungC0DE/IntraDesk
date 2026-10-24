@@ -118,6 +118,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     required this.toastBg,
     required this.toastText,
     required this.divider,
+    required this.accent,
+    required this.accentHover,
+    required this.accentSoft,
+    required this.onAccent,
   });
 
   final Color? border;
@@ -131,6 +135,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   final Color? toastBg;
   final Color? toastText;
   final Color? divider;
+  final Color accent;
+  final Color accentHover;
+  final Color accentSoft;
+  final Color onAccent;
 
   static final light = ColorThemeExtension(
     border: Color(0xFFCCCCCC),
@@ -144,6 +152,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     toastBg: Colors.black.withOpacity(0.6),
     toastText: Colors.white,
     divider: Colors.black38,
+    accent: MyTheme.accentLight,
+    accentHover: MyTheme.accentHoverLight,
+    accentSoft: MyTheme.accentSoftLight,
+    onAccent: MyTheme.onAccent,
   );
 
   static final dark = ColorThemeExtension(
@@ -158,6 +170,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     toastBg: Colors.white.withOpacity(0.6),
     toastText: Colors.black,
     divider: Colors.white38,
+    accent: MyTheme.accentDark,
+    accentHover: MyTheme.accentHoverDark,
+    accentSoft: MyTheme.accentSoftDark,
+    onAccent: MyTheme.onAccent,
   );
 
   @override
@@ -173,6 +189,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     Color? toastBg,
     Color? toastText,
     Color? divider,
+    Color? accent,
+    Color? accentHover,
+    Color? accentSoft,
+    Color? onAccent,
   }) {
     return ColorThemeExtension(
       border: border ?? this.border,
@@ -186,6 +206,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
       toastBg: toastBg ?? this.toastBg,
       toastText: toastText ?? this.toastText,
       divider: divider ?? this.divider,
+      accent: accent ?? this.accent,
+      accentHover: accentHover ?? this.accentHover,
+      accentSoft: accentSoft ?? this.accentSoft,
+      onAccent: onAccent ?? this.onAccent,
     );
   }
 
@@ -207,6 +231,12 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
       toastBg: Color.lerp(shadow, other.toastBg, t),
       toastText: Color.lerp(shadow, other.toastText, t),
       divider: Color.lerp(shadow, other.divider, t),
+      accent: Color.lerp(accent, other.accent, t) ?? other.accent,
+      accentHover:
+          Color.lerp(accentHover, other.accentHover, t) ?? other.accentHover,
+      accentSoft:
+          Color.lerp(accentSoft, other.accentSoft, t) ?? other.accentSoft,
+      onAccent: Color.lerp(onAccent, other.onAccent, t) ?? other.onAccent,
     );
   }
 }
@@ -215,16 +245,21 @@ class MyTheme {
   MyTheme._();
 
   static const Color grayBg = Color(0xFFEFEFF2);
-  static const Color accent = Color(0xFF0071FF);
-  static const Color accent50 = Color(0x770071FF);
-  static const Color accent80 = Color(0xAA0071FF);
+  // Accent palette (dark orange). Widgets read the light/dark variant
+  // through `MyTheme.color(context).accent` (see ColorThemeExtension) or
+  // through `Theme.of(context).colorScheme.primary`.
+  static const Color accentLight = Color(0xFFC2410C);
+  static const Color accentDark = Color(0xFFEA580C);
+  static const Color accentHoverLight = Color(0xFF9A3412);
+  static const Color accentHoverDark = Color(0xFFF97316);
+  static const Color accentSoftLight = Color(0xFFFFEDD5);
+  static const Color accentSoftDark = Color(0xFF431407);
+  static const Color onAccent = Color(0xFFFFFFFF);
   static const Color canvasColor = Color(0xFF212121);
   static const Color border = Color(0xFFCCCCCC);
-  static const Color idColor = Color(0xFF00B6F0);
   static const Color darkGray = Color.fromARGB(255, 148, 148, 148);
   static const Color cmIdColor = Color(0xFF21790B);
   static const Color dark = Colors.black87;
-  static const Color button = Color(0xFF2C8CFF);
   static const Color hoverBorder = Color(0xFF999999);
 
   // ListTile
@@ -364,7 +399,7 @@ class MyTheme {
         bodySmall: TextStyle(fontSize: 12, color: Colors.black87, height: 1.25),
         bodyMedium:
             TextStyle(fontSize: 14, color: Colors.black87, height: 1.25),
-        labelLarge: TextStyle(fontSize: 16.0, color: MyTheme.accent80)),
+        labelLarge: TextStyle(fontSize: 16.0, color: accentLight)),
     cardColor: grayBg,
     hintColor: Color(0xFFAAAAAA),
     visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -385,7 +420,8 @@ class MyTheme {
           ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: MyTheme.accent,
+        backgroundColor: accentLight,
+        foregroundColor: onAccent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),
@@ -408,7 +444,16 @@ class MyTheme {
         style:
             MenuStyle(backgroundColor: MaterialStatePropertyAll(Colors.white))),
     colorScheme: ColorScheme.light(
-        primary: Colors.blue, secondary: accent, background: grayBg),
+        primary: accentLight,
+        onPrimary: onAccent,
+        secondary: accentLight,
+        onSecondary: onAccent,
+        background: grayBg),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: accentLight,
+      selectionColor: accentSoftLight,
+      selectionHandleColor: accentLight,
+    ),
     popupMenuTheme: PopupMenuThemeData(
         color: Colors.white,
         shape: RoundedRectangleBorder(
@@ -458,7 +503,7 @@ class MyTheme {
       labelLarge: TextStyle(
         fontSize: 16.0,
         fontWeight: FontWeight.bold,
-        color: accent80,
+        color: accentDark,
       ),
     ),
     cardColor: Color(0xFF24252B),
@@ -482,8 +527,8 @@ class MyTheme {
           ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: MyTheme.accent,
-        foregroundColor: Colors.white,
+        backgroundColor: accentDark,
+        foregroundColor: onAccent,
         disabledForegroundColor: Colors.white70,
         disabledBackgroundColor: Colors.white10,
         shape: RoundedRectangleBorder(
@@ -510,9 +555,16 @@ class MyTheme {
         style: MenuStyle(
             backgroundColor: MaterialStatePropertyAll(Color(0xFF121212)))),
     colorScheme: ColorScheme.dark(
-      primary: Colors.blue,
-      secondary: accent,
+      primary: accentDark,
+      onPrimary: onAccent,
+      secondary: accentDark,
+      onSecondary: onAccent,
       background: Color(0xFF24252B),
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: accentDark,
+      selectionColor: accentSoftDark,
+      selectionHandleColor: accentDark,
     ),
     popupMenuTheme: PopupMenuThemeData(
         shape: RoundedRectangleBorder(
@@ -1008,39 +1060,41 @@ Widget createDialogContent(String text) {
     return SelectableText(text, style: const TextStyle(fontSize: 15));
   }
 
-  final List<TextSpan> spans = [];
-  int start = 0;
+  return Builder(builder: (context) {
+    final List<TextSpan> spans = [];
+    int start = 0;
 
-  linkRegExp.allMatches(text).forEach((match) {
-    if (match.start > start) {
-      spans.add(TextSpan(text: text.substring(start, match.start)));
+    linkRegExp.allMatches(text).forEach((match) {
+      if (match.start > start) {
+        spans.add(TextSpan(text: text.substring(start, match.start)));
+      }
+      spans.add(TextSpan(
+        text: match.group(0) ?? '',
+        style: TextStyle(
+          color: MyTheme.color(context).accent,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () {
+            String linkText = match.group(0) ?? '';
+            linkText = linkText.replaceAll(RegExp(r'[.,;!?]+$'), '');
+            launchUrl(Uri.parse(linkText));
+          },
+      ));
+      start = match.end;
+    });
+
+    if (start < text.length) {
+      spans.add(TextSpan(text: text.substring(start)));
     }
-    spans.add(TextSpan(
-      text: match.group(0) ?? '',
-      style: const TextStyle(
-        color: Colors.blue,
-        decoration: TextDecoration.underline,
+
+    return SelectableText.rich(
+      TextSpan(
+        style: const TextStyle(fontSize: 15),
+        children: spans,
       ),
-      recognizer: TapGestureRecognizer()
-        ..onTap = () {
-          String linkText = match.group(0) ?? '';
-          linkText = linkText.replaceAll(RegExp(r'[.,;!?]+$'), '');
-          launchUrl(Uri.parse(linkText));
-        },
-    ));
-    start = match.end;
+    );
   });
-
-  if (start < text.length) {
-    spans.add(TextSpan(text: text.substring(start)));
-  }
-
-  return SelectableText.rich(
-    TextSpan(
-      style: const TextStyle(fontSize: 15),
-      children: spans,
-    ),
-  );
 }
 
 void msgBox(SessionID sessionId, String type, String title, String text,
@@ -1174,7 +1228,7 @@ void msgBox(SessionID sessionId, String type, String title, String text,
   );
 }
 
-Color? _msgboxColor(String type) {
+Color? _msgboxColor(BuildContext context, String type) {
   if (type == "input-password" || type == "custom-os-password") {
     return Color(0xFFAD448E);
   }
@@ -1184,7 +1238,7 @@ Color? _msgboxColor(String type) {
   if (type.contains("error") || type == "re-input-password") {
     return Color(0xFFE04F5F);
   }
-  return Color(0xFF2C8CFF);
+  return MyTheme.color(context).accent;
 }
 
 Widget msgboxIcon(String type) {
@@ -1205,8 +1259,10 @@ Widget msgboxIcon(String type) {
     iconData = Icons.info;
   }
   if (iconData != null) {
-    return Icon(iconData, size: 50, color: _msgboxColor(type))
-        .marginOnly(right: 16);
+    return Builder(
+        builder: (context) =>
+            Icon(iconData, size: 50, color: _msgboxColor(context, type))
+                .marginOnly(right: 16));
   }
 
   return Offstage();
@@ -2624,7 +2680,7 @@ Widget buildErrorBanner(BuildContext context,
                     },
                     child: Text(
                       translate("Retry"),
-                      style: TextStyle(color: MyTheme.accent),
+                      style: TextStyle(color: MyTheme.color(context).accent),
                     )).marginSymmetric(horizontal: 5),
               FittedBox(
                 child: InkWell(

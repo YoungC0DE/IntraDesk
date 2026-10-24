@@ -53,18 +53,18 @@ class _ButtonState extends State<Button> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: pressed.value
-                      ? MyTheme.accent
+                      ? MyTheme.color(context).accentHover
                       : (widget.isOutline
                           ? Colors.transparent
-                          : MyTheme.button),
+                          : MyTheme.color(context).accent),
                   border: Border.all(
                     color: pressed.value
-                        ? MyTheme.accent
+                        ? MyTheme.color(context).accentHover
                         : hover.value
                             ? MyTheme.hoverBorder
                             : (widget.isOutline
                                 ? widget.borderColor ?? MyTheme.border
-                                : MyTheme.button),
+                                : MyTheme.color(context).accent),
                   ),
                   borderRadius: BorderRadius.circular(widget.radius ?? 5),
                 ),
@@ -132,16 +132,16 @@ class _FixedWidthButtonState extends State<FixedWidthButton> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: pressed.value
-                  ? MyTheme.accent
-                  : (widget.isOutline ? Colors.transparent : MyTheme.button),
+                  ? MyTheme.color(context).accentHover
+                  : (widget.isOutline ? Colors.transparent : MyTheme.color(context).accent),
               border: Border.all(
                 color: pressed.value
-                    ? MyTheme.accent
+                    ? MyTheme.color(context).accentHover
                     : hover.value
                         ? MyTheme.hoverBorder
                         : (widget.isOutline
                             ? widget.borderColor ?? MyTheme.border
-                            : MyTheme.button),
+                            : MyTheme.color(context).accent),
               ),
               borderRadius: BorderRadius.circular(widget.radius ?? 5),
             ),

@@ -1405,8 +1405,8 @@ class PopupMenuButtonState<T> extends State<PopupMenuButton<T>> {
           widget.tooltip ?? MaterialLocalizations.of(context).showMenuTooltip,
       onPressed: widget.enabled ? showButtonMenu : null,
       enableFeedback: enableFeedback,
-      color: MyTheme.button,
-      hoverColor: MyTheme.accent,
+      color: MyTheme.color(context).accent,
+      hoverColor: MyTheme.color(context).accentHover,
     );
   }
 }

@@ -57,8 +57,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   - `flutter test`: 127 ok, 1 pulado.
   - `cargo test -p hbb_common` (rodado na T2.7): 104 unitários ok; **1 falha pré-existente** no teste de integração `proxy_transport::https_reconnects_for_tls_fallback` (falha igual sem nenhuma mudança nossa).
   dep: T0.3 · Área: este arquivo · @dono: claude
-- [ ] **T0.5** Teste manual de base: dois PCs Windows na mesma LAN, sem internet, usando o acesso direto por IP do RustDesk original (habilitar "Permitir acesso direto por IP"). Registrar o que funciona e o que falha.
-  dep: T0.3 · Área: este arquivo · @dono:
+- [x] **T0.5** Teste manual de base: dois PCs Windows na mesma LAN, sem internet, usando o acesso direto por IP do RustDesk original (habilitar "Permitir acesso direto por IP"). Registrar o que funciona e o que falha.
+  Resultado (24/10/2026, feito pelo usuário): acesso direto por IP funcionando sem problemas.
+  dep: T0.3 · Área: este arquivo · @dono: usuário
 
 - [x] **T0.6** `libs/hbb_common` convertido de submódulo para `git subtree` (base `5d52530`, histórico preservado, `.gitmodules` removido). Pode ser alterado direto neste repositório; não há fork separado.
   dep: T0.2 · Área: `.gitmodules`, `libs/hbb_common` · @dono:
@@ -140,8 +141,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 
 ## Fase 2 — Funcionamento só na LAN (trilha C)
 
-- [ ] **T2.1** Desligar o servidor rendezvous/relay: não iniciar `rendezvous_mediator`, remover os servidores padrão (`RENDEZVOUS_SERVERS`), nenhuma tentativa de conexão externa. Aceite: com Wireshark, o app não envia nada para fora da sub-rede.
-  dep: T0.5, T0.6 · Área: `src/rendezvous_mediator.rs`, `src/server.rs`, `libs/hbb_common/src/config.rs` · @dono:
+- [~] **T2.1** Desligar o servidor rendezvous/relay: não iniciar `rendezvous_mediator`, remover os servidores padrão (`RENDEZVOUS_SERVERS`), nenhuma tentativa de conexão externa. Aceite: com Wireshark, o app não envia nada para fora da sub-rede.
+  dep: T0.5, T0.6 · Área: `src/rendezvous_mediator.rs`, `src/server.rs`, `libs/hbb_common/src/config.rs` · @dono: claude
 - [ ] **T2.2** Acesso direto por IP sempre ligado (porta TCP 21118), sem opção para desligar.
   dep: T2.1, T0.6 · Área: `libs/hbb_common/src/config.rs`, `src/server.rs` · @dono:
 - [ ] **T2.3** Conexão de saída sempre direta: conectar por IP (digitado ou vindo da descoberta), sem consultar servidor nem tentar hole punching/relay. Timeout curto e mensagem clara ("Computador não encontrado na rede").

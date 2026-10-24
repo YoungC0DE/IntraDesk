@@ -73,8 +73,6 @@ async-recursion = "1.1"
 # and work through the upgrade checklist at the top of src/webrtc.rs first.
 webrtc = { version = "0.13.0", optional = true }
 libloading = "0.8"
-
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 mac_address = "1.1"
 default_net = { git = "https://github.com/rustdesk-org/default_net" }
 machine-uid = { git = "https://github.com/rustdesk-org/machine-uid" }
@@ -85,11 +83,6 @@ protobuf-codegen = { version = "3.7" }
 [dev-dependencies]
 clap = "4.5.51"
 webrtc = "0.13.0" # keep in lockstep with [dependencies] webrtc (rustc 1.75 pin, see above)
-
-
-[target.'cfg(target_os = "linux")'.dependencies]
-users = { version = "0.11" }
-x11 = "2.21"
 
 # Only takes effect when this crate is built on its own (tests, examples); a consumer's own
 # [patch] governs its build. Keep the rev in lockstep with rustdesk's root Cargo.toml.

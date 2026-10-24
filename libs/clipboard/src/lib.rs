@@ -1,11 +1,6 @@
 use std::sync::{Arc, Mutex, RwLock};
 
-#[cfg(any(
-    target_os = "windows",
-    all(target_os = "macos", feature = "unix-file-copy-paste")
-))]
 use hbb_common::ResultType;
-#[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
 use hbb_common::{allow_err, log};
 use hbb_common::{
     lazy_static,
@@ -17,29 +12,14 @@ use hbb_common::{
 use serde_derive::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(any(
-    target_os = "windows",
-    all(target_os = "macos", feature = "unix-file-copy-paste")
-))]
 pub mod context_send;
 pub mod platform;
-#[cfg(any(
-    target_os = "windows",
-    all(target_os = "macos", feature = "unix-file-copy-paste")
-))]
 pub use context_send::*;
 
-#[cfg(target_os = "windows")]
 const ERR_CODE_SERVER_FUNCTION_NONE: u32 = 0x00000001;
-#[cfg(target_os = "windows")]
 const ERR_CODE_INVALID_PARAMETER: u32 = 0x00000002;
-#[cfg(target_os = "windows")]
 const ERR_CODE_SEND_MSG: u32 = 0x00000003;
 
-#[cfg(any(
-    target_os = "windows",
-    all(target_os = "macos", feature = "unix-file-copy-paste")
-))]
 pub(crate) use platform::create_cliprdr_context;
 
 pub struct ProgressPercent {
@@ -233,22 +213,12 @@ pub fn remove_channel_by_conn_id(conn_id: i32) {
     }
 }
 
-#[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
 #[inline]
 pub fn send_data(conn_id: i32, data: ClipboardFile) -> Result<(), CliprdrError> {
-    #[cfg(target_os = "windows")]
-    return send_data_to_channel(conn_id, data);
-    #[cfg(not(target_os = "windows"))]
-    if conn_id == 0 {
-        let _ = send_data_to_all(data);
-        Ok(())
-    } else {
-        send_data_to_channel(conn_id, data)
-    }
+    send_data_to_channel(conn_id, data)
 }
 
 #[inline]
-#[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
 fn send_data_to_channel(conn_id: i32, data: ClipboardFile) -> Result<(), CliprdrError> {
     if let Some(msg_channel) = VEC_MSG_CHANNEL
         .read()
@@ -270,21 +240,11 @@ fn send_data_to_channel(conn_id: i32, data: ClipboardFile) -> Result<(), Cliprdr
 }
 
 #[inline]
-#[cfg(target_os = "windows")]
 pub fn send_data_exclude(conn_id: i32, data: ClipboardFile) {
     // Need more tests to see if it's necessary to handle the error.
     for msg_channel in VEC_MSG_CHANNEL.read().unwrap().iter() {
         if msg_channel.conn_id != conn_id {
             allow_err!(msg_channel.sender.send(data.clone()));
         }
-    }
-}
-
-#[inline]
-#[cfg(feature = "unix-file-copy-paste")]
-fn send_data_to_all(data: ClipboardFile) {
-    // Need more tests to see if it's necessary to handle the error.
-    for msg_channel in VEC_MSG_CHANNEL.read().unwrap().iter() {
-        allow_err!(msg_channel.sender.send(data.clone()));
     }
 }

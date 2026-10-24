@@ -1,10 +1,3 @@
-#[cfg(target_os = "linux")]
-pub mod linux;
-
-#[cfg(target_os = "macos")]
-pub mod macos;
-
-#[cfg(target_os = "windows")]
 pub mod windows;
 
 #[cfg(not(debug_assertions))]
@@ -26,7 +19,6 @@ extern "C" fn breakdown_signal_handler(sig: i32) {
         });
         true // keep going to the next frame
     });
-    let mut info = String::default();
     if stack.iter().any(|s| {
         s.contains(&"nouveau_pushbuf_kick")
             || s.to_lowercase().contains("nvidia")
@@ -34,8 +26,7 @@ extern "C" fn breakdown_signal_handler(sig: i32) {
             || s.contains("glGetString")
     }) {
         Config::set_option("allow-always-software-render".to_string(), "Y".to_string());
-        info = "Always use software rendering will be set.".to_string();
-        log::info!("{}", info);
+        log::info!("Always use software rendering will be set.");
     }
     if stack.iter().any(|s| {
         s.to_lowercase().contains("nvidia")
@@ -44,23 +35,13 @@ extern "C" fn breakdown_signal_handler(sig: i32) {
             || s.contains("cuProfilerStop")
     }) {
         Config::set_option("enable-hwcodec".to_string(), "N".to_string());
-        info = "Perhaps hwcodec causing the crash, disable it first".to_string();
-        log::info!("{}", info);
+        log::info!("Perhaps hwcodec causing the crash, disable it first");
     }
     log::error!(
         "Got signal {} and exit. stack:\n{}",
         sig,
         stack.join("\n").to_string()
     );
-    if !info.is_empty() {
-        #[cfg(target_os = "linux")]
-        linux::system_message(
-            "RustDesk",
-            &format!("Got signal {} and exit.{}", sig, info),
-            true,
-        )
-        .ok();
-    }
     unsafe {
         #[allow(static_mut_refs)]
         if let Some(callback) = &GLOBAL_CALLBACK {

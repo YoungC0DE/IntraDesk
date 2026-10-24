@@ -3,47 +3,13 @@ use base::message_proto::{video_frame, Chroma, VideoFrame};
 use hbb_common::{bail, log, ResultType};
 use std::{ffi::c_void, slice};
 
-cfg_if! {
-    if #[cfg(quartz)] {
-        mod quartz;
-        pub use self::quartz::*;
-    } else if #[cfg(x11)] {
-        cfg_if! {
-            if #[cfg(feature="wayland")] {
-                mod linux;
-                mod wayland;
-                mod x11;
-                #[cfg(all(target_os = "linux", feature = "drm"))]
-                pub mod drmtap_dl;
-                #[cfg(all(target_os = "linux", feature = "drm"))]
-                pub mod drm_reader;
-                #[cfg(all(target_os = "linux", feature = "drm"))]
-                pub mod drm_render;
-                pub use self::linux::*;
-                pub use self::wayland::set_map_err;
-                pub use self::x11::PixelBuffer;
-            } else {
-                mod x11;
-                pub use self::x11::*;
-            }
-        }
-    } else if #[cfg(dxgi)] {
-        mod dxgi;
-        pub use self::dxgi::*;
-    } else if #[cfg(target_os = "android")] {
-        mod android;
-        pub use self::android::*;
-    }else {
-        //TODO: Fallback implementation.
-    }
-}
+mod dxgi;
+pub use self::dxgi::*;
 
 pub mod codec;
 pub mod convert;
 #[cfg(feature = "hwcodec")]
 pub mod hwcodec;
-#[cfg(feature = "mediacodec")]
-pub mod mediacodec;
 pub mod vpxcodec;
 #[cfg(feature = "vram")]
 pub mod vram;
@@ -261,23 +227,6 @@ pub struct EncodeYuvFormat {
     pub v: usize,
 }
 
-#[cfg(x11)]
-#[inline]
-pub fn is_x11() -> bool {
-    base::platform::linux::is_x11_or_headless()
-}
-
-#[cfg(x11)]
-#[inline]
-pub fn is_cursor_embedded() -> bool {
-    if is_x11() {
-        x11::IS_CURSOR_EMBEDDED
-    } else {
-        false
-    }
-}
-
-#[cfg(not(x11))]
 #[inline]
 pub fn is_cursor_embedded() -> bool {
     false
@@ -536,14 +485,4 @@ pub trait GoogleImage {
             (y, u, v)
         }
     }
-}
-
-#[cfg(target_os = "android")]
-pub fn screen_size() -> (u16, u16, u16) {
-    SCREEN_SIZE.lock().unwrap().clone()
-}
-
-#[cfg(target_os = "android")]
-pub fn is_start() -> Option<bool> {
-    android::is_start()
 }

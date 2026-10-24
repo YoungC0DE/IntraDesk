@@ -34,36 +34,8 @@ use video_service::VideoSource;
 use crate::ipc::Data;
 
 pub mod audio_service;
-cfg_if::cfg_if! {
-if #[cfg(not(target_os = "ios"))] {
 mod clipboard_service;
-#[cfg(target_os = "android")]
-pub use clipboard_service::is_clipboard_service_ok;
-#[cfg(target_os = "linux")]
-pub(crate) mod wayland;
-#[cfg(all(target_os = "linux", feature = "drm"))]
-pub(crate) mod drm_capturer;
-#[cfg(target_os = "linux")]
-pub mod uinput;
-#[cfg(target_os = "linux")]
-pub mod rdp_input;
-#[cfg(target_os = "linux")]
-pub mod dbus;
-#[cfg(not(target_os = "android"))]
 pub mod input_service;
-} else {
-mod clipboard_service {
-pub const NAME: &'static str = "";
-}
-}
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-pub mod input_service {
-    pub const NAME_CURSOR: &'static str = "";
-    pub const NAME_POS: &'static str = "";
-    pub const NAME_WINDOW_FOCUS: &'static str = "";
-}
 
 mod connection;
 pub mod display_service;

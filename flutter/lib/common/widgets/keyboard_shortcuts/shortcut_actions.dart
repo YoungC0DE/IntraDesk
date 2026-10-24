@@ -94,10 +94,6 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
       KeyboardShortcutActionEntry(kShortcutActionCodecH264, 'H264'),
       KeyboardShortcutActionEntry(kShortcutActionCodecH265, 'H265'),
     ]),
-    KeyboardShortcutActionSubgroup('Virtual display', [
-      KeyboardShortcutActionEntry(
-          kShortcutActionPlugOutAllVirtualDisplays, 'Plug out all'),
-    ]),
     // Direct items: cursorToggles + display toggles, in toolbar order.
     KeyboardShortcutActionEntry(
         kShortcutActionToggleShowRemoteCursor, 'Show remote cursor'),

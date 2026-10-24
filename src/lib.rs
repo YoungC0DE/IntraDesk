@@ -36,6 +36,5 @@ mod ui_session_interface;
 
 pub mod clipboard_file;
 
-pub mod virtual_display_manager;
 
 mod kcp_stream;

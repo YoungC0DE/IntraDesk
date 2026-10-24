@@ -4,8 +4,6 @@ import 'package:flutter_hbb/common.dart';
 
 export 'common/widgets/keyboard_shortcuts/shortcut_constants.dart';
 
-const int kMaxVirtualDisplayCount = 4;
-const int kAllVirtualDisplay = -1;
 
 const double kDesktopRemoteTabBarHeight = 28.0;
 const int kInvalidWindowId = -1;
@@ -19,11 +17,6 @@ const kKeyTranslateMode = 'translate';
 
 const String kPlatformAdditionsIsWayland = "is_wayland";
 const String kPlatformAdditionsIsInstalled = "is_installed";
-const String kPlatformAdditionsIddImpl = "idd_impl";
-const String kPlatformAdditionsRustDeskVirtualDisplays =
-    "rustdesk_virtual_displays";
-const String kPlatformAdditionsAmyuniVirtualDisplays =
-    "amyuni_virtual_displays";
 const String kPlatformAdditionsHasFileClipboard = "has_file_clipboard";
 
 const String kPeerPlatformWindows = "Windows";

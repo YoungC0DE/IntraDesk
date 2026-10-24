@@ -76,26 +76,10 @@ pub struct Remote<T: InvokeUiSession> {
     data_count: Arc<AtomicUsize>,
     video_format: CodecFormat,
     elevation_requested: bool,
-    peer_info: ParsedPeerInfo,
     video_threads: HashMap<usize, VideoThread>,
     chroma: Arc<RwLock<Option<Chroma>>>,
     sent_close_reason: bool,
     cursor_dedupe: CursorDedupe,
-}
-
-#[derive(Default)]
-struct ParsedPeerInfo {
-    platform: String,
-    is_installed: bool,
-    idd_impl: String,
-}
-
-impl ParsedPeerInfo {
-    fn is_support_virtual_display(&self) -> bool {
-        self.is_installed
-            && self.platform == "Windows"
-            && (self.idd_impl == "rustdesk_idd" || self.idd_impl == "amyuni_idd")
-    }
 }
 
 impl<T: InvokeUiSession> Remote<T> {
@@ -121,7 +105,6 @@ impl<T: InvokeUiSession> Remote<T> {
             data_count: Arc::new(AtomicUsize::new(0)),
             video_format: CodecFormat::Unknown,
             elevation_requested: false,
-            peer_info: Default::default(),
             video_threads: Default::default(),
             chroma: Default::default(),
             sent_close_reason: false,
@@ -1063,27 +1046,6 @@ impl<T: InvokeUiSession> Remote<T> {
         true
     }
 
-    async fn send_toggle_virtual_display_msg(&self, peer: &mut Stream) {
-        if !self.peer_info.is_support_virtual_display() {
-            return;
-        }
-        let lc = self.handler.lc.read().unwrap();
-        let displays = lc.get_option("virtual-display");
-        for d in displays.split(',') {
-            if let Ok(index) = d.parse::<i32>() {
-                let mut misc = Misc::new();
-                misc.set_toggle_virtual_display(ToggleVirtualDisplay {
-                    display: index,
-                    on: true,
-                    ..Default::default()
-                });
-                let mut msg_out = Message::new();
-                msg_out.set_misc(misc);
-                allow_err!(peer.send(&msg_out).await);
-            }
-        }
-    }
-
     fn contains_key_frame(vf: &VideoFrame) -> bool {
         use video_frame::Union::*;
         match &vf.union {
@@ -1214,7 +1176,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::VideoFrame(vf)) => {
                     if !self.first_frame {
                         self.first_frame = true;
-                        self.send_toggle_virtual_display_msg(peer).await;
                     }
                     self.video_format = CodecFormat::from(&vf);
 
@@ -1260,7 +1221,6 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     Some(login_response::Union::PeerInfo(pi)) => {
-                        self.set_peer_info(&pi);
                         self.handler.handle_peer_info(pi);
                         if self.handler.is_default() {
                             // Startup notifications must see the current sessions' clipboard requirements.
@@ -1763,26 +1723,6 @@ impl<T: InvokeUiSession> Remote<T> {
             }
         }
         true
-    }
-
-    fn set_peer_info(&mut self, pi: &PeerInfo) {
-        self.peer_info.platform = pi.platform.clone();
-
-        if let Ok(platform_additions) =
-            serde_json::from_str::<HashMap<String, serde_json::Value>>(&pi.platform_additions)
-        {
-            self.peer_info.is_installed = platform_additions
-                .get("is_installed")
-                .map(|v| v.as_bool())
-                .flatten()
-                .unwrap_or(false);
-            self.peer_info.idd_impl = platform_additions
-                .get("idd_impl")
-                .map(|v| v.as_str())
-                .flatten()
-                .unwrap_or_default()
-                .to_string();
-        }
     }
 
     async fn handle_cliprdr_msg(&mut self, clip: base::message_proto::Cliprdr, _peer: &mut Stream) {

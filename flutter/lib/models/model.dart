@@ -125,8 +125,6 @@ class FfiModel with ChangeNotifier {
   Rect? get rect => _rect;
   bool get isOriginalResolutionSet =>
       _pi.tryGetDisplayIfNotAllDisplay()?.isOriginalResolutionSet ?? false;
-  bool get isVirtualDisplayResolution =>
-      _pi.tryGetDisplayIfNotAllDisplay()?.isVirtualDisplayResolution ?? false;
   bool get isOriginalResolution =>
       _pi.tryGetDisplayIfNotAllDisplay()?.isOriginalResolution ?? false;
 
@@ -1294,22 +1292,11 @@ class FfiModel with ChangeNotifier {
       return;
     }
 
-    if (updateData.isEmpty) {
-      _pi.platformAdditions.remove(kPlatformAdditionsRustDeskVirtualDisplays);
-      _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
-    } else {
+    if (updateData.isNotEmpty) {
       try {
         final updateJson = json.decode(updateData) as Map<String, dynamic>;
         for (final key in updateJson.keys) {
           _pi.platformAdditions[key] = updateJson[key];
-        }
-        if (!updateJson
-            .containsKey(kPlatformAdditionsRustDeskVirtualDisplays)) {
-          _pi.platformAdditions
-              .remove(kPlatformAdditionsRustDeskVirtualDisplays);
-        }
-        if (!updateJson.containsKey(kPlatformAdditionsAmyuniVirtualDisplays)) {
-          _pi.platformAdditions.remove(kPlatformAdditionsAmyuniVirtualDisplays);
         }
       } catch (e) {
         debugPrint('Failed to decode platformAdditions $e');
@@ -3742,7 +3729,6 @@ class FFI {
 }
 
 const kInvalidResolutionValue = -1;
-const kVirtualDisplayResolutionValue = 0;
 
 class Display {
   double x = 0;
@@ -3776,9 +3762,6 @@ class Display {
   bool get isOriginalResolutionSet =>
       originalWidth != kInvalidResolutionValue &&
       originalHeight != kInvalidResolutionValue;
-  bool get isVirtualDisplayResolution =>
-      originalWidth == kVirtualDisplayResolutionValue &&
-      originalHeight == kVirtualDisplayResolutionValue;
   bool get isOriginalResolution =>
       width == (originalWidth * scale).round() &&
       height == (originalHeight * scale).round();
@@ -3817,21 +3800,12 @@ class PeerInfo with ChangeNotifier {
   bool get isInstalled =>
       platform != kPeerPlatformWindows ||
       platformAdditions[kPlatformAdditionsIsInstalled] == true;
-  List<int> get RustDeskVirtualDisplays => List<int>.from(
-      platformAdditions[kPlatformAdditionsRustDeskVirtualDisplays] ?? []);
-  int get amyuniVirtualDisplayCount =>
-      platformAdditions[kPlatformAdditionsAmyuniVirtualDisplays] ?? 0;
 
   bool get isSupportMultiDisplay =>
       isSupportMultiUiSession;
   bool get forceTextureRender => currentDisplay == kAllDisplayValue;
 
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
-
-  bool get isRustDeskIdd =>
-      platformAdditions[kPlatformAdditionsIddImpl] == 'rustdesk_idd';
-  bool get isAmyuniIdd =>
-      platformAdditions[kPlatformAdditionsIddImpl] == 'amyuni_idd';
 
   Display? tryGetDisplay({int? display}) {
     if (displays.isEmpty) {

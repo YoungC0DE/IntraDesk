@@ -7,7 +7,6 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/shared_state.dart';
 import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/consts.dart';
-import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/shortcut_model.dart';
@@ -1162,98 +1161,3 @@ void registerToolbarShortcuts(BuildContext context, String id, FFI ffi) {
   unawaited(toolbarCodec(context, id, ffi));
 }
 
-bool showVirtualDisplayMenu(FFI ffi) {
-  if (ffi.ffiModel.pi.platform != kPeerPlatformWindows) {
-    return false;
-  }
-  if (!ffi.ffiModel.pi.isInstalled) {
-    return false;
-  }
-  if (ffi.ffiModel.pi.isRustDeskIdd || ffi.ffiModel.pi.isAmyuniIdd) {
-    return true;
-  }
-  return false;
-}
-
-List<Widget> getVirtualDisplayMenuChildren(
-    FFI ffi, String id, VoidCallback? clickCallBack) {
-  if (!showVirtualDisplayMenu(ffi)) {
-    return [];
-  }
-  final pi = ffi.ffiModel.pi;
-  if (pi.isRustDeskIdd) {
-    final virtualDisplays = ffi.ffiModel.pi.RustDeskVirtualDisplays;
-    final children = <Widget>[];
-    for (var i = 0; i < kMaxVirtualDisplayCount; i++) {
-      children.add(CkbMenuButton(
-        value: virtualDisplays.contains(i + 1),
-        onChanged: (bool? value) async {
-          if (value != null) {
-            bind.sessionToggleVirtualDisplay(
-                sessionId: ffi.sessionId, index: i + 1, on: value);
-            clickCallBack?.call();
-          }
-        },
-        child: Text('${translate('Virtual display')} ${i + 1}'),
-        ffi: ffi,
-      ));
-    }
-    children.add(Divider());
-    children.add(MenuButton(
-      onPressed: () {
-        bind.sessionToggleVirtualDisplay(
-            sessionId: ffi.sessionId, index: kAllVirtualDisplay, on: false);
-        clickCallBack?.call();
-      },
-      ffi: ffi,
-      child: Text(translate('Plug out all')),
-    ));
-    return children;
-  }
-  if (pi.isAmyuniIdd) {
-    final count = ffi.ffiModel.pi.amyuniVirtualDisplayCount;
-    final children = <Widget>[
-      Row(
-        children: [
-          TextButton(
-            onPressed: count == 0
-                ? null
-                : () {
-                    bind.sessionToggleVirtualDisplay(
-                        sessionId: ffi.sessionId, index: 0, on: false);
-                    clickCallBack?.call();
-                  },
-            child: Icon(Icons.remove),
-          ),
-          Text(count.toString()),
-          TextButton(
-            onPressed: count == 4
-                ? null
-                : () {
-                    bind.sessionToggleVirtualDisplay(
-                        sessionId: ffi.sessionId, index: 0, on: true);
-                    clickCallBack?.call();
-                  },
-            child: Icon(Icons.add),
-          ),
-        ],
-      ),
-      Divider(),
-      MenuButton(
-        onPressed: count == 0
-            ? null
-            : () {
-                bind.sessionToggleVirtualDisplay(
-                    sessionId: ffi.sessionId,
-                    index: kAllVirtualDisplay,
-                    on: false);
-                clickCallBack?.call();
-              },
-        ffi: ffi,
-        child: Text(translate('Plug out all')),
-      ),
-    ];
-    return children;
-  }
-  return [];
-}

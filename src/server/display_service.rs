@@ -221,15 +221,7 @@ pub(super) fn get_original_resolution(
     w: usize,
     h: usize,
 ) -> MessageField<Resolution> {
-    let is_rustdesk_virtual_display =
-        crate::virtual_display_manager::rustdesk_idd::is_virtual_display(&display_name);
-    Some(if is_rustdesk_virtual_display {
-        Resolution {
-            width: 0,
-            height: 0,
-            ..Default::default()
-        }
-    } else {
+    Some({
         let changed_resolutions = CHANGED_RESOLUTIONS.write().unwrap();
         let (width, height) = match changed_resolutions.get(display_name) {
             Some(res) => {

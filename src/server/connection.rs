@@ -39,7 +39,6 @@ use std::{
 };
 use system_shutdown;
 
-use crate::virtual_display_manager;
 pub type Sender = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
 
 const FAILURE_IDX_ID_WHITELIST: usize = 2;
@@ -2308,9 +2307,6 @@ impl Connection {
                         let set = displays.set.iter().map(|d| *d as usize).collect::<Vec<_>>();
                         self.capture_displays(&add, &sub, &set).await;
                     }
-                    Some(misc::Union::ToggleVirtualDisplay(t)) => {
-                        self.toggle_virtual_display(t).await;
-                    }
                     Some(misc::Union::TogglePrivacyMode(t)) => {
                         self.send(crate::common::make_privacy_mode_msg(
                             back_notification::PrivacyModeState::PrvNotSupported,
@@ -2744,80 +2740,18 @@ impl Connection {
         }
     }
 
-    async fn toggle_virtual_display(&mut self, t: ToggleVirtualDisplay) {
-        let make_msg = |text: String| {
-            let mut msg_out = Message::new();
-            let res = MessageBox {
-                msgtype: "nook-nocancel-hasclose".to_owned(),
-                title: "Virtual display".to_owned(),
-                text,
-                link: "".to_owned(),
-                ..Default::default()
-            };
-            msg_out.set_message_box(res);
-            msg_out
-        };
-
-        if t.on {
-            if !virtual_display_manager::is_virtual_display_supported() {
-                self.send(make_msg("idd_not_support_under_win10_2004_tip".to_string()))
-                    .await;
-            } else {
-                if let Err(e) = virtual_display_manager::plug_in_monitor(t.display as _, Vec::new())
-                {
-                    log::error!("Failed to plug in virtual display: {}", e);
-                    self.send(make_msg(format!(
-                        "Failed to plug in virtual display: {}",
-                        e
-                    )))
-                    .await;
-                }
-            }
-        } else {
-            if let Err(e) = virtual_display_manager::plug_out_monitor(t.display, false, true) {
-                log::error!("Failed to plug out virtual display {}: {}", t.display, e);
-                self.send(make_msg(format!(
-                    "Failed to plug out virtual displays: {}",
-                    e
-                )))
-                .await;
-            }
-        }
-    }
-
-
     fn change_resolution(&mut self, d: Option<usize>, r: &Resolution) {
         if self.keyboard {
             if let Ok(displays) = display_service::try_get_displays() {
                 let display_idx = d.unwrap_or(self.display_idx);
                 if let Some(display) = displays.get(display_idx) {
                     let name = display.name();
-                    if let Some(_ok) =
-                        virtual_display_manager::rustdesk_idd::change_resolution_if_is_virtual_display(
-                            &name,
-                            r.width as _,
-                            r.height as _,
-                        )
-                    {
-                        return;
-                    }
-                    #[allow(unused_mut)]
-                    let mut record_changed = true;
-                    if virtual_display_manager::amyuni_idd::is_my_display(&name) {
-                        record_changed = false;
-                    }
-                    let scale = 1.0;
-                    let original = (
-                        ((display.width() as f64) / scale).round() as _,
-                        (display.height() as f64 / scale).round() as _,
+                    let original = (display.width() as _, display.height() as _);
+                    display_service::set_last_changed_resolution(
+                        &name,
+                        original,
+                        (r.width, r.height),
                     );
-                    if record_changed {
-                        display_service::set_last_changed_resolution(
-                            &name,
-                            original,
-                            (r.width, r.height),
-                        );
-                    }
                     if let Err(e) =
                         crate::platform::change_resolution(&name, r.width as _, r.height as _)
                     {
@@ -4260,7 +4194,6 @@ mod raii {
                     *WALLPAPER_REMOVER.lock().unwrap() = None;
                 }
                 display_service::restore_resolutions();
-                let _ = virtual_display_manager::reset_all();
             }
             Self::check_wake_lock();
         }

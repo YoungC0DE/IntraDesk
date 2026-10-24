@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import '../common.dart';
 import '../common/widgets/keyboard_shortcuts/shortcut_utils.dart';
 import '../common/widgets/keyboard_shortcuts/shortcut_actions.dart';
-import '../common/widgets/toolbar.dart' show showVirtualDisplayMenu;
 import '../consts.dart';
 import '../desktop/widgets/remote_toolbar.dart' show ToolbarState;
 import '../desktop/widgets/tabbar_widget.dart' show DesktopTabController;
@@ -401,8 +400,6 @@ void registerSessionShortcutActions(
   //     auto-registers; the desktop session-start handler below registers
   //     first and the helper's auto-register on mobile takes over after its
   //     unawaited future resolves.)
-  //   * Plug out all virtual displays — built in `getVirtualDisplayMenuChildren`
-  //     as a MenuButton, not a TToggleMenu.
   //   * Toggle Input Source — cycle action; the toolbar exposes per-source
   //     radios but no single "cycle to next source" entry.
 
@@ -453,23 +450,6 @@ void registerSessionShortcutActions(
   registerKeyboardMode(kShortcutActionKeyboardModeMap, kKeyMapMode);
   registerKeyboardMode(kShortcutActionKeyboardModeTranslate, kKeyTranslateMode);
   registerKeyboardMode(kShortcutActionKeyboardModeLegacy, kKeyLegacyMode);
-
-  // Plug out all virtual displays (Windows + IDD only). Mirrors the toolbar's
-  // "Plug out all" button — present in both IDD modes (RustDesk + Amyuni),
-  // built as a MenuButton inside `getVirtualDisplayMenuChildren`.
-  ffi.shortcutModel.register(kShortcutActionPlugOutAllVirtualDisplays, () {
-    if (ffi.connType != ConnType.defaultConn ||
-        !showVirtualDisplayMenu(ffi) ||
-        (ffi.ffiModel.pi.isAmyuniIdd &&
-            ffi.ffiModel.pi.amyuniVirtualDisplayCount == 0)) {
-      return;
-    }
-    bind.sessionToggleVirtualDisplay(
-      sessionId: sessionId,
-      index: kAllVirtualDisplay,
-      on: false,
-    );
-  });
 
   // View Only — desktop toolbar exposes this inline in `_KeyboardMenu.viewMode`
   // (mobile is in toolbarDisplayToggle and goes through helper auto-register).

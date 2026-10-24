@@ -3,7 +3,6 @@
 import os
 import contextlib
 import platform
-import shutil
 import argparse
 import sys
 
@@ -77,8 +76,6 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('flutter')
     system2('flutter build windows --release')
     os.chdir('..')
-    shutil.copy2('target/release/deps/dylib_virtual_display.dll',
-                 flutter_build_dir_2)
     if skip_portable_pack:
         return
     os.chdir('libs/portable')
@@ -120,11 +117,6 @@ def main():
         sys.exit('IntraDesk builds on Windows only.')
     version = get_version()
     features = ','.join(get_features(args))
-    # build virtual display dynamic library
-    os.chdir('libs/virtual_display/dylib')
-    system2('cargo build --locked --release')
-    os.chdir('../../..')
-
     build_flutter_windows(version, features, args.skip_portable_pack)
 
 

@@ -47,7 +47,6 @@ pub mod action_id {
     pub const CODEC_AV1: &str                 = "codec_av1";
     pub const CODEC_H264: &str                = "codec_h264";
     pub const CODEC_H265: &str                = "codec_h265";
-    pub const PLUG_OUT_ALL_VIRTUAL_DISPLAYS: &str = "plug_out_all_virtual_displays";
     pub const TOGGLE_RELATIVE_MOUSE_MODE: &str = "toggle_relative_mouse_mode";
     pub const TOGGLE_FOLLOW_REMOTE_CURSOR: &str = "toggle_follow_remote_cursor";
     pub const TOGGLE_FOLLOW_REMOTE_WINDOW: &str = "toggle_follow_remote_window";

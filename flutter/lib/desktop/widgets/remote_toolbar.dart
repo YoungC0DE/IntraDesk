@@ -1616,12 +1616,6 @@ class _DisplayMenuState extends State<_DisplayMenu> {
             ffi: widget.ffi,
             screenAdjustor: _screenAdjustor,
           ),
-        if (showVirtualDisplayMenu(ffi) && ffi.connType == ConnType.defaultConn)
-          _SubmenuButton(
-            ffi: widget.ffi,
-            menuChildren: getVirtualDisplayMenuChildren(ffi, id, null),
-            child: Text(translate("Virtual display")),
-          ),
         if (ffi.connType == ConnType.defaultConn) cursorToggles(),
         Divider(),
         toggles(),
@@ -2091,9 +2085,8 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final isVirtualDisplay = ffiModel.isVirtualDisplayResolution;
     final visible = ffiModel.keyboard &&
-        (isVirtualDisplay || resolutions.length > 1) &&
+        resolutions.length > 1 &&
         pi.currentDisplay != kAllDisplayValue;
     if (!visible) return Offstage();
     final showOriginalBtn =
@@ -2105,8 +2098,7 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
       menuChildren: <Widget>[
             _OriginalResolutionMenuButton(context, showOriginalBtn),
             _FitLocalResolutionMenuButton(context, showFitLocalBtn),
-            _customResolutionMenuButton(context, isVirtualDisplay),
-            _menuDivider(showOriginalBtn, showFitLocalBtn, isVirtualDisplay),
+            _menuDivider(showOriginalBtn, showFitLocalBtn),
           ] +
           _supportedResolutionMenuButtons(),
       child: Text(translate("Resolution")),
@@ -2127,10 +2119,9 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
     }
   }
 
-  _menuDivider(
-      bool showOriginalBtn, bool showFitLocalBtn, bool isVirtualDisplay) {
+  _menuDivider(bool showOriginalBtn, bool showFitLocalBtn) {
     return Offstage(
-      offstage: !(showOriginalBtn || showFitLocalBtn || isVirtualDisplay),
+      offstage: !(showOriginalBtn || showFitLocalBtn),
       child: Divider(),
     );
   }
@@ -2251,49 +2242,6 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
     );
   }
 
-  Widget _customResolutionMenuButton(BuildContext context, isVirtualDisplay) {
-    return Offstage(
-      offstage: !isVirtualDisplay,
-      child: RdoMenuButton(
-        value: _kCustomResolutionValue,
-        groupValue: _groupValue,
-        onChanged: (String? value) => _onChanged(value),
-        ffi: widget.ffi,
-        child: Row(
-          children: [
-            Text('${translate('resolution_custom_tip')} '),
-            SizedBox(
-              width: _kCustomResolutionEditingWidth,
-              child: _resolutionInput(_customWidth),
-            ),
-            Text(' x '),
-            SizedBox(
-              width: _kCustomResolutionEditingWidth,
-              child: _resolutionInput(_customHeight),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _resolutionInput(TextEditingController controller) {
-    return TextField(
-      decoration: InputDecoration(
-        border: InputBorder.none,
-        isDense: true,
-        contentPadding: EdgeInsets.fromLTRB(3, 3, 3, 3),
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: <TextInputFormatter>[
-        FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(4),
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-      ],
-      controller: controller,
-    ).workaroundFreezeLinuxMint();
-  }
-
   List<Widget> _supportedResolutionMenuButtons() => resolutions
       .map((e) => RdoMenuButton(
           value: '${e.width}x${e.height}',
@@ -2306,10 +2254,6 @@ class _ResolutionsMenuState extends State<_ResolutionsMenu> {
   Resolution? _getBestFitResolution() {
     if (_localResolution == null) {
       return null;
-    }
-
-    if (ffiModel.isVirtualDisplayResolution) {
-      return _localResolution!;
     }
 
     for (final r in resolutions) {

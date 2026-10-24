@@ -382,18 +382,6 @@ impl<T: InvokeUiSession> Session<T> {
         }
     }
 
-    pub fn toggle_virtual_display(&self, index: i32, on: bool) {
-        let mut misc = Misc::new();
-        misc.set_toggle_virtual_display(ToggleVirtualDisplay {
-            display: index,
-            on,
-            ..Default::default()
-        });
-        let mut msg_out = Message::new();
-        msg_out.set_misc(misc);
-        self.send(Data::Message(msg_out));
-    }
-
     pub fn is_screenshot_supported(&self) -> bool {
         crate::common::is_support_screenshot_num(self.lc.read().unwrap().version)
     }

@@ -54,8 +54,6 @@ const kShortcutActionCodecH265 = 'codec_h265';
 // (RustDesk IDD's 4 checkboxes) and the +/- count buttons (Amyuni-only)
 // are NOT exposed as shortcuts: per-index is too granular, and +/- has
 // no toolbar counterpart on RustDesk IDD peers.
-const kShortcutActionPlugOutAllVirtualDisplays =
-    'plug_out_all_virtual_displays';
 const kShortcutActionToggleRelativeMouseMode = 'toggle_relative_mouse_mode';
 const kShortcutActionToggleFollowRemoteCursor = 'toggle_follow_remote_cursor';
 const kShortcutActionToggleFollowRemoteWindow = 'toggle_follow_remote_window';

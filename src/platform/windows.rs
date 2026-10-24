@@ -2257,11 +2257,6 @@ impl Drop for WallPaperRemover {
     }
 }
 
-#[inline]
-pub fn is_self_service_running() -> bool {
-    is_service_running(&crate::get_app_name())
-}
-
 pub fn is_service_running(service_name: &str) -> bool {
     unsafe {
         let service_name = wide_string(service_name);

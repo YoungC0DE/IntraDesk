@@ -134,23 +134,9 @@ pub fn core_main() -> Option<CoreMainAction> {
         std::thread::spawn(move || crate::start_server(false, no_server));
     } else {
 
-        {
-            if args[0] == "--install-idd" {
-                if crate::virtual_display_manager::is_virtual_display_supported() {
-                    hbb_common::allow_err!(
-                        crate::virtual_display_manager::rustdesk_idd::install_update_driver()
-                    );
-                }
-                return None;
-            } else if args[0] == "--portable-service" {
-                crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
-                return None;
-            } else if args[0] == "--uninstall-amyuni-idd" {
-                hbb_common::allow_err!(
-                    crate::virtual_display_manager::amyuni_idd::uninstall_driver()
-                );
-                return None;
-            }
+        if args[0] == "--portable-service" {
+            crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
+            return None;
         }
         if args[0] == "--remove" {
             if args.len() == 2 {

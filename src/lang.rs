@@ -1,248 +1,38 @@
 use hbb_common::regex::Regex;
 use std::ops::Deref;
 
-mod ar;
-mod az;
-mod be;
-mod bg;
-mod ca;
-mod cn;
-mod cs;
-mod da;
-mod de;
-mod el;
 mod en;
-mod eo;
-mod es;
-mod et;
-mod eu;
-mod fa;
-mod gu;
-mod fr;
-mod he;
-mod hi;
-mod hr;
-mod hu;
-mod id;
-mod it;
-mod ja;
-mod ko;
-mod kz;
-mod lt;
-mod lv;
-mod nb;
-mod nl;
-mod pl;
 mod pt_BR;
-mod pt_PT;
-mod ro;
-mod ru;
-mod sc;
-mod sk;
-mod sl;
-mod sq;
-mod sr;
-mod sv;
-mod th;
-mod tr;
-mod tw;
-mod uk;
-mod ur;
-mod vi;
-mod ta;
-mod ge;
-mod fi;
-mod ml;
-mod gl;
 
-pub const LANGS: &[(&str, &str)] = &[
-    ("en", "English"),
-    ("it", "Italiano"),
-    ("fr", "Français"),
-    ("de", "Deutsch"),
-    ("nl", "Nederlands"),
-    ("nb", "Norsk bokmål"),
-    ("zh-cn", "简体中文"),
-    ("zh-tw", "繁體中文"),
-    ("pt-pt", "Português (Portugal)"),
-    ("pt-br", "Português (Brasil)"),
-    ("es", "Español"),
-    ("et", "Eesti keel"),
-    ("eu", "Euskara"),
-    ("hu", "Magyar"),
-    ("bg", "Български"),
-    ("be", "Беларуская"),
-    ("ru", "Русский"),
-    ("sk", "Slovenčina"),
-    ("id", "Indonesia"),
-    ("cs", "Čeština"),
-    ("da", "Dansk"),
-    ("eo", "Esperanto"),
-    ("tr", "Türkçe"),
-    ("vi", "Tiếng Việt"),
-    ("pl", "Polski"),
-    ("ja", "日本語"),
-    ("ko", "한국어"),
-    ("kz", "Қазақ"),
-    ("uk", "Українська"),
-    ("ur", "اردو"),
-    ("fa", "فارسی"),
-    ("ca", "Català"),
-    ("gl", "Galego"),
-    ("el", "Ελληνικά"),
-    ("sv", "Svenska"),
-    ("sq", "Shqip"),
-    ("sr", "Srpski"),
-    ("th", "ภาษาไทย"),
-    ("sl", "Slovenščina"),
-    ("ro", "Română"),
-    ("lt", "Lietuvių"),
-    ("lv", "Latviešu"),
-    ("ar", "العربية"),
-    ("he", "עברית"),
-    ("hr", "Hrvatski"),
-    ("sc", "Sardu"),
-    ("ta", "தமிழ்"),
-    ("ge", "ქართული"),
-    ("fi", "Suomi"),
-    ("ml", "മലയാളം"),
-    ("hi", "हिंदी"),
-    ("gu", "ગુજરાતી"),
-    ("az", "Azərbaycan dili"),
-];
+pub const LANGS: &[(&str, &str)] = &[("en", "English"), ("pt-br", "Português (Brasil)")];
 
-pub(crate) fn cjk_ui_unavailable() -> bool {
-    cfg!(all(
-        target_os = "linux",
-        target_arch = "aarch64",
-        feature = "flutter"
-    ))
-}
-
-pub(crate) fn is_cjk_lang(lang_or_locale: &str) -> bool {
-    let lang = lang_or_locale
-        .split(|c| c == '-' || c == '_')
-        .next()
-        .unwrap_or_default()
-        .to_lowercase();
-    matches!(lang.as_str(), "zh" | "ja" | "ko")
-}
-
-fn resolve_lang(saved_lang: &str, locale: &str, cjk_fallback: bool) -> String {
-    let locale = locale.to_lowercase();
-    let mut lang = saved_lang.to_lowercase();
-    if cjk_fallback && is_cjk_lang(&lang) {
-        return "en".to_owned();
-    }
-    if lang.is_empty() {
-        // zh_CN on Linux, zh-Hans-CN on mac, zh_CN_#Hans on Android
-        if locale.starts_with("zh") {
-            lang = (if locale.contains("tw") {
-                "zh-tw"
-            } else {
-                "zh-cn"
-            })
-            .to_owned();
-        }
-    }
-    if lang.is_empty() {
-        // pt_PT on Linux, pt-PT on mac, pt_PT on Android.
-        // Per CLDR locale inheritance, every Portuguese-speaking locale
-        // besides bare "pt" and Brazil's own variants (pt-BR/pt_BR) has
-        // pt-PT as its parent (Angola, Mozambique, Cape Verde, etc.),
-        // so it should resolve to European Portuguese.
-        if locale.starts_with("pt") {
-            lang = (if locale == "pt" || locale.starts_with("pt-br") || locale.starts_with("pt_br") {
-                "pt-br"
-            } else {
-                "pt-pt"
-            })
-            .to_owned();
-        }
-    }
-    if lang.is_empty() {
-        lang = locale
-            .split("-")
-            .next()
-            .map(|x| x.split("_").next().unwrap_or_default())
-            .unwrap_or_default()
-            .to_owned();
-    }
-    if cjk_fallback && is_cjk_lang(&lang) {
-        "en".to_owned()
+/// Only pt-BR and English are shipped; any Portuguese setting or locale maps to pt-BR, the rest
+/// (including languages saved by older builds) falls back to English.
+fn resolve_lang(saved_lang: &str, locale: &str) -> &'static str {
+    let saved_lang = saved_lang.to_lowercase();
+    let lang = if saved_lang.is_empty() {
+        locale.to_lowercase()
     } else {
-        lang
+        saved_lang
+    };
+    if lang == "br" || lang.starts_with("pt") {
+        "pt-br"
+    } else {
+        "en"
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn translate(name: String) -> String {
     let locale = sys_locale::get_locale().unwrap_or_default();
     translate_locale(name, &locale)
 }
 
 pub fn translate_locale(name: String, locale: &str) -> String {
-    let lang = resolve_lang(
-        &hbb_common::config::LocalConfig::get_option("lang"),
-        locale,
-        cjk_ui_unavailable(),
-    );
-    let m = match lang.as_str() {
-        "fr" => fr::T.deref(),
-        "zh-cn" => cn::T.deref(),
-        "it" => it::T.deref(),
-        "zh-tw" => tw::T.deref(),
-        "de" => de::T.deref(),
-        "nb" => nb::T.deref(),
-        "nl" => nl::T.deref(),
-        "es" => es::T.deref(),
-        "et" => et::T.deref(),
-        "eu" => eu::T.deref(),
-        "hu" => hu::T.deref(),
-        "ru" => ru::T.deref(),
-        "eo" => eo::T.deref(),
-        "id" => id::T.deref(),
-        "br" => pt_BR::T.deref(),
-        "pt" => pt_BR::T.deref(),
-        "pt-br" => pt_BR::T.deref(),
-        "pt-pt" => pt_PT::T.deref(),
-        "tr" => tr::T.deref(),
-        "cs" => cs::T.deref(),
-        "da" => da::T.deref(),
-        "sk" => sk::T.deref(),
-        "vi" => vi::T.deref(),
-        "pl" => pl::T.deref(),
-        "ja" => ja::T.deref(),
-        "ko" => ko::T.deref(),
-        "kz" => kz::T.deref(),
-        "uk" => uk::T.deref(),
-        "fa" => fa::T.deref(),
-        "fi" => fi::T.deref(),
-        "ca" => ca::T.deref(),
-        "el" => el::T.deref(),
-        "sv" => sv::T.deref(),
-        "sq" => sq::T.deref(),
-        "sr" => sr::T.deref(),
-        "th" => th::T.deref(),
-        "sl" => sl::T.deref(),
-        "ro" => ro::T.deref(),
-        "lt" => lt::T.deref(),
-        "lv" => lv::T.deref(),
-        "ar" => ar::T.deref(),
-        "bg" => bg::T.deref(),
-        "be" => be::T.deref(),
-        "he" => he::T.deref(),
-        "hr" => hr::T.deref(),
-        "ur" => ur::T.deref(),
-        "sc" => sc::T.deref(),
-        "ta" => ta::T.deref(),
-        "ge" => ge::T.deref(),
-        "ml" => ml::T.deref(),
-        "hi" => hi::T.deref(),
-        "gu" => gu::T.deref(),
-        "gl" => gl::T.deref(),
-        "az" => az::T.deref(),
-        _ => en::T.deref(),
+    let lang = resolve_lang(&hbb_common::config::LocalConfig::get_option("lang"), locale);
+    let m = if lang == "pt-br" {
+        pt_BR::T.deref()
+    } else {
+        en::T.deref()
     };
     let (name, placeholder_value) = extract_placeholder(&name);
     let replace = |s: &&str| {
@@ -337,32 +127,15 @@ mod test {
     }
 
     #[test]
-    fn test_resolve_lang_forces_english_for_cjk_locale_when_target_disables_cjk() {
+    fn test_resolve_lang_maps_portuguese_to_pt_br_and_rest_to_english() {
         use super::resolve_lang as f;
 
-        assert_eq!(f("", "zh_CN", true), "en");
-        assert_eq!(f("", "ja-JP", true), "en");
-        assert_eq!(f("", "ko_KR", true), "en");
-    }
-
-    #[test]
-    fn test_resolve_lang_preserves_cjk_when_target_allows_cjk() {
-        use super::resolve_lang as f;
-
-        assert_eq!(f("zh-cn", "en-US", false), "zh-cn");
-        assert_eq!(f("", "zh_TW", false), "zh-tw");
-        assert_eq!(f("", "ja-JP", false), "ja");
-    }
-
-    #[test]
-    fn test_resolve_lang_detects_pt_pt_and_pt_br_from_locale() {
-        use super::resolve_lang as f;
-
-        assert_eq!(f("", "pt-PT", false), "pt-pt");
-        assert_eq!(f("", "pt_PT", false), "pt-pt");
-        assert_eq!(f("", "pt-BR", false), "pt-br");
-        assert_eq!(f("", "pt_BR", false), "pt-br");
-        assert_eq!(f("", "pt-AO", false), "pt-pt");
-        assert_eq!(f("", "pt-MZ", false), "pt-pt");
+        assert_eq!(f("", "pt-BR"), "pt-br");
+        assert_eq!(f("", "pt_PT"), "pt-br");
+        assert_eq!(f("pt-pt", "en-US"), "pt-br");
+        assert_eq!(f("br", "en-US"), "pt-br");
+        assert_eq!(f("", "en-US"), "en");
+        assert_eq!(f("", "zh_CN"), "en");
+        assert_eq!(f("fr", "pt-BR"), "en");
     }
 }

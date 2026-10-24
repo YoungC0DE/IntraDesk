@@ -124,8 +124,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T1.11 · Área: os arquivos citados · @dono:
 - [x] **T1.12** Remover o modo privacidade (`src/privacy_mode*`, `RuntimeBroker_intradesk.exe`/`WindowInjection.dll`, opção na barra e nas configurações) e o "bloquear entrada do usuário" (D4).
   dep: D4 · Área: `src/privacy_mode*`, `src/server/connection.rs` (handlers), `remote_toolbar.dart`, `libs/portable` (cópia do RuntimeBroker) · @dono: claude
-- [ ] **T1.13** Traduções: manter só os idiomas de D8 em `src/lang` e apagar chaves sem uso (após T1.5–T1.12).
-  dep: D8, T1.5–T1.12 · Área: `src/lang/`, `src/lang.rs` · @dono:
+- [x] **T1.13** Traduções: só `en.rs`, `pt_BR.rs` e `template.rs` em `src/lang` (51 idiomas removidos); `LANGS` com en/pt-BR; qualquer idioma/locale português → pt-BR, o resto → inglês (idiomas salvos por versões antigas caem no inglês); `supportedLocales` do Flutter = en-US/pt-BR; lógica de CJK/pt-PT removida. 261 chaves sem uso apagadas (814 → 553): busca conservadora do texto da chave em `src/`, `libs/` e `flutter/lib` (chaves com `{}` como padrão, inclusive interpolação Dart). Teste novo `test_resolve_lang_maps_portuguese_to_pt_br_and_rest_to_english`.
+  Checagem: `cargo check` e `flutter analyze` ok.
+  dep: D8, T1.5–T1.12 · Área: `src/lang/`, `src/lang.rs` · @dono: claude
 
 ## Fase 2 — Funcionamento só na LAN (trilha C)
 

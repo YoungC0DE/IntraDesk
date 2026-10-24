@@ -32,6 +32,8 @@ const MIN_REQUESTED_INTERVAL: Duration = Duration::from_secs(3);
 /// Long enough to survive a lost broadcast without the peer blinking offline.
 const OFFLINE_AFTER_SECS: u64 = 25;
 const FORGET_AFTER_SECS: u64 = 7 * 24 * 3600;
+/// Tags our discovery packets, so RustDesk pings and pongs on the same port are ignored.
+const DISCOVERY_APP: &str = "IntraDesk";
 
 static DISCOVERY_RUNNING: AtomicBool = AtomicBool::new(false);
 static DISCOVERY_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -51,6 +53,7 @@ pub(super) fn start_listening() -> ResultType<()> {
                 match msg_in.union {
                     Some(rendezvous_message::Union::PeerDiscovery(p)) => {
                         if p.cmd == "ping"
+                            && is_from_intradesk(&p)
                             && config::option2bool(
                                 "enable-lan-discovery",
                                 &Config::get_option("enable-lan-discovery"),
@@ -74,6 +77,8 @@ pub(super) fn start_listening() -> ResultType<()> {
                                     hostname,
                                     username: crate::platform::get_active_username(),
                                     platform: whoami::platform().to_string(),
+                                    app: DISCOVERY_APP.to_owned(),
+                                    version: crate::VERSION.to_owned(),
                                     ..Default::default()
                                 };
                                 msg_out.set_peer_discovery(peer);
@@ -169,6 +174,11 @@ fn get_broadcast_port() -> u16 {
     (RENDEZVOUS_PORT + 3) as _
 }
 
+#[inline]
+fn is_from_intradesk(p: &PeerDiscovery) -> bool {
+    p.app == DISCOVERY_APP
+}
+
 fn get_mac(_ip: &IpAddr) -> String {
     if let Ok(mac) = get_mac_by_ip(_ip) {
         mac.to_string()
@@ -258,6 +268,7 @@ fn send_query() -> ResultType<Vec<UdpSocket>> {
     let peer = PeerDiscovery {
         cmd: "ping".to_owned(),
         id,
+        app: DISCOVERY_APP.to_owned(),
         ..Default::default()
     };
     msg_out.set_peer_discovery(peer);
@@ -292,7 +303,7 @@ fn wait_response(
                 match msg_in.union {
                     Some(rendezvous_message::Union::PeerDiscovery(p)) => {
                         last_recv_time = Instant::now();
-                        if p.cmd == "pong" {
+                        if p.cmd == "pong" && is_from_intradesk(&p) {
                             if !crate::common::is_valid_untrusted_peer_id(&p.id) {
                                 log::warn!(
                                     "Ignoring LAN discovery response from {} with invalid peer id",
@@ -332,6 +343,7 @@ fn wait_response(
                                     hostname: p.hostname.clone(),
                                     platform: p.platform.clone(),
                                     online: true,
+                                    version: p.version.clone(),
                                     ..Default::default()
                                 }));
                             }
@@ -431,5 +443,41 @@ mod tests {
         let (onlines, offlines) = split_by_online(ids, &peers);
         assert_eq!(onlines, ["111", "192.168.0.10", "192.168.0.10:21118"]);
         assert_eq!(offlines, ["222", "192.168.0.20", "333"]);
+    }
+
+    fn parse_discovery(bytes: &[u8]) -> PeerDiscovery {
+        match Message::parse_from_bytes(bytes).unwrap().union {
+            Some(rendezvous_message::Union::PeerDiscovery(p)) => p,
+            other => panic!("not a discovery packet: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn discovery_packets_from_other_apps_are_ignored() {
+        let mut msg = Message::new();
+        msg.set_peer_discovery(PeerDiscovery {
+            cmd: "pong".to_owned(),
+            id: "111".to_owned(),
+            hostname: "PC-01".to_owned(),
+            username: "maria".to_owned(),
+            app: DISCOVERY_APP.to_owned(),
+            version: "1.5.1".to_owned(),
+            ..Default::default()
+        });
+        let ours = parse_discovery(&msg.write_to_bytes().unwrap());
+        assert!(is_from_intradesk(&ours));
+        assert_eq!(
+            (ours.hostname.as_str(), ours.username.as_str(), ours.version.as_str()),
+            ("PC-01", "maria", "1.5.1")
+        );
+
+        // A RustDesk pong has no `app` field.
+        let mut msg = Message::new();
+        msg.set_peer_discovery(PeerDiscovery {
+            cmd: "pong".to_owned(),
+            id: "222".to_owned(),
+            ..Default::default()
+        });
+        assert!(!is_from_intradesk(&parse_discovery(&msg.write_to_bytes().unwrap())));
     }
 }

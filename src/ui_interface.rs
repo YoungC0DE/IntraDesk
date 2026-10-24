@@ -488,6 +488,8 @@ pub fn get_lan_peers() -> Vec<HashMap<&'static str, String>> {
                 ("username", peer.username.clone()),
                 ("hostname", peer.hostname.clone()),
                 ("platform", peer.platform.clone()),
+                ("ip", peer.ip_mac.keys().min().cloned().unwrap_or_default()),
+                ("version", peer.version.clone()),
             ])
         })
         .collect()

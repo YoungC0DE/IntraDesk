@@ -222,6 +222,9 @@ message PeerDiscovery {
   string hostname = 5;
   string platform = 6;
   string misc = 7;
+  // Set by IntraDesk; packets from other apps (e.g. RustDesk) leave it empty.
+  string app = 8;
+  string version = 9;
 }
 
 message OnlineRequest {

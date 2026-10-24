@@ -2080,6 +2080,8 @@ pub struct DiscoveryPeer {
     /// Unix time (seconds) of the last discovery response from this peer.
     #[serde(default, deserialize_with = "deserialize_u64")]
     pub last_seen: u64,
+    #[serde(default, deserialize_with = "deserialize_string")]
+    pub version: String,
 }
 
 impl DiscoveryPeer {

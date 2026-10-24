@@ -186,6 +186,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   Checagem: `cargo check --workspace --lib --tests` ok; `flutter analyze` sem erros/avisos; `cargo test --lib client::` 20 ok; `cargo test -p hbb_common --lib` 90 ok; `flutter test test/autocomplete_peer_merge_test.dart` 2 ok.
   dep: T2.3 · Área: `src/client.rs` (`LoginConfigHandler`), `src/flutter_ffi.rs`, `src/flutter.rs`, `flutter/lib/common.dart`, `flutter/lib/models/model.dart`, páginas de sessão · @dono: claude
 
+**Fim da Fase 2 (24/10/2026):** ver o registro do fim da Fase 3 (testes rodados juntos).
+
 ## Fase 3 — Segurança (trilha D) — obrigatória antes de qualquer release
 
 - [x] **T3.1** Sessão sempre criptografada, sem servidor, com chave fixada no primeiro contato (TOFU). O computador acessado manda um `SignedId` com uma chave `box` efêmera assinada pela sua chave de longo prazo (ed25519, o par que já existia em `Config::get_key_pair`) e, no campo novo `SignedId.pk` (proto, campo 2), essa chave pública. O cliente verifica a assinatura, confere o ID quando o destino é um ID (por IP, qualquer ID vale), sela a chave da sessão para a chave efêmera e compara a chave de longo prazo com a fixada no `PeerConfig.host_key` (campo novo) do destino: sem chave fixada → fixa; igual → segue; diferente → diálogo "A chave do computador mudou" (continuar fixa a nova; fechar encerra) antes de qualquer senha ir. Nenhum caminho em texto puro: o cliente recusa quem não assina, e o servidor (`identity_handshake`, sempre ativo na escuta direta; o parâmetro `secure` saiu) recusa quem não responde com a chave da sessão (antes seguia sem criptografia). Saíram: o diálogo "Conexão insegura" (`conn-e2ee-unavailable-tip`), a verificação via chave do rendezvous (`RS_PUB_KEY`, `decode_id_pk`), `key_confirmed`/`keys_confirmed` (`get/set_key_confirmed`, `get/set_host_key_confirmed`, IPC `ConfirmedKey`; a impressão digital local agora é sempre exibida). Chaves novas: "Computer key changed", "host-key-changed-tip".
@@ -209,6 +211,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 - [x] **T3.5** A escuta direta só aceita endereços da rede local (`is_lan_addr` em `src/server.rs`): IPv4 privados (RFC 1918), link-local (169.254/16), loopback e os equivalentes IPv6 (fc00::/7, fe80::/10, ::1); IPv4 mapeado em IPv6 é convertido antes. Outros endereços (inclusive CGNAT 100.64/10) são fechados logo no `accept`, antes do handshake, com log limitado a 1 por minuto. Teste novo `server::lan_addr_tests::only_local_network_addresses_are_accepted`.
   Checagem: `cargo test --lib lan_addr` 1 ok.
   dep: T2.2 · Área: `src/server.rs` / `src/server/connection.rs` · @dono: claude
+
+**Fim das Fases 2 e 3 (24/10/2026):** `cargo test --lib --features flutter,hwcodec,vram` 150 ok, 0 falhas, 1 ignorado (o de detecção do firewall); `cargo test --package hbb_common --lib` 90 ok; `flutter test` 96 ok, 1 pulado. Pendentes manuais: teste em 2 PCs com o build novo (descoberta, conexão por clique/IP, aviso de chave alterada) e o botão do firewall com UAC visível.
 
 ## Fase 4 — Sessão remota
 

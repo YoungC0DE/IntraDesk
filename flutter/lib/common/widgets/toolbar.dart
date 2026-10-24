@@ -340,25 +340,7 @@ void showWaylandKeyboardInputWarningDialog(
             'wayland-keyboard-input-disabled-tip',
             'wayland-keyboard-input-consent-tip',
           ),
-          SizedBox(height: isMobile ? 2 : 6),
-          if (isMobile) ...[
-            Text(
-              translate('wayland-keyboard-input-applies-to-tip'),
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ).marginOnly(bottom: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                waylandKeyboardScopeChip(
-                    context, translate('Send clipboard keystrokes')),
-                waylandKeyboardScopeChip(
-                    context, translate('wayland-soft-keyboard-input-label')),
-              ],
-            ).marginOnly(bottom: 10),
-          ],
+          SizedBox(height: 6),
           TextButton(
             onPressed: consentInProgress
                 ? null
@@ -454,15 +436,12 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           Text(translate('OS Password')),
         ]),
         trailingIcon: Transform.scale(
-          scale: (isDesktop || isWebDesktop) ? 0.8 : 1,
+          scale: 0.8,
           child: IconButton(
             onPressed: () {
-              if (isMobile && Navigator.canPop(context)) {
-                Navigator.pop(context);
-              }
               handleOsPasswordEditIcon(sessionId, ffi.dialogManager);
             },
-            icon: Icon(Icons.edit, color: isMobile ? MyTheme.accent : null),
+            icon: Icon(Icons.edit, color: null),
           ),
         ),
         onPressed: () => handleOsPasswordAction(sessionId, ffi.dialogManager),
@@ -526,20 +505,11 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
             clearWaylandKeyboardPromptSuppressedForConnection(
                 sessionId.toString());
             ffi.inputModel.keyboardInputAllowed = false;
-            if (isMobile) {
-              await ffi.invokeMethod("enable_soft_keyboard", false);
-            }
           }
           showToast(translate(persistedCleared ? 'Successful' : 'Failed'));
         }));
   }
   // reset canvas
-  if (isDefaultConn && isMobile) {
-    v.add(TTextMenu(
-        child: Text(translate('Reset canvas')),
-        onPressed: () => ffi.cursorModel.reset(),
-        actionId: kShortcutActionResetCanvas));
-  }
 
   // https://github.com/rustdesk/rustdesk/pull/9731
   // Does not work for connection established by "accept".
@@ -548,7 +518,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     connect(context, id, isFileTransfer: isFileTransfer, connToken: connToken);
   }
 
-  if (isDefaultConn && isDesktop) {
+  if (isDefaultConn) {
     v.add(
       TTextMenu(
           child: Text(translate('Transfer file')),
@@ -556,7 +526,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // divider
-  if (isDefaultConn && (isDesktop || isWebDesktop)) {
+  if (isDefaultConn) {
     v.add(TTextMenu(child: Offstage(), onPressed: () {}, divider: true));
   }
   // ctrlAltDel
@@ -595,12 +565,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // switchSides
-  if (isDefaultConn &&
-      isDesktop &&
-      ffiModel.keyboard &&
-      pi.platform != kPeerPlatformAndroid &&
-      versionCmp(pi.version, '1.2.0') >= 0 &&
-      bind.peerGetSessionsCount(id: id, connType: ffi.connType.index) == 1) {
+  if (isDefaultConn && ffiModel.keyboard && pi.platform != kPeerPlatformAndroid && versionCmp(pi.version, '1.2.0') >= 0 && bind.peerGetSessionsCount(id: id, connType: ffi.connType.index) == 1) {
     v.add(TTextMenu(
         child: Text(translate('Switch Sides')),
         onPressed: () =>
@@ -618,7 +583,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
   // to-do:
   // 1. Web desktop
   // 2. Mobile, copy the image to the clipboard
-  if (isDefaultConn && isDesktop) {
+  if (isDefaultConn) {
     final isScreenshotSupported = bind.sessionGetCommonSync(
         sessionId: sessionId, key: 'is_screenshot_supported', param: '');
     if ('true' == isScreenshotSupported) {
@@ -659,12 +624,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     }
   }
   // fingerprint
-  if (!(isDesktop || isWebDesktop)) {
-    v.add(TTextMenu(
-      child: Text(translate('Copy Fingerprint')),
-      onPressed: () => onCopyFingerprint(FingerprintState.find(id).value),
-    ));
-  }
   // Register tagged TTextMenu callbacks. The else-unregister is defense in
   // depth for actionIds tagged but missing from `_kToolbarOwnedActionIds`.
   for (final menu in v) {
@@ -910,9 +869,7 @@ Future<List<TToggleMenu>> toolbarCursor(
   }
   // zoom cursor
   final viewStyle = await bind.sessionGetViewStyle(sessionId: sessionId) ?? '';
-  if (!isMobile &&
-      pi.platform != kPeerPlatformAndroid &&
-      viewStyle != kRemoteViewStyleOriginal) {
+  if (pi.platform != kPeerPlatformAndroid && viewStyle != kRemoteViewStyleOriginal) {
     final option = 'zoom-cursor';
     final peerState = PeerBoolOption.find(id, option);
     v.add(TToggleMenu(
@@ -967,9 +924,7 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
   }
   // file copy and paste
   // If the version is less than 1.2.4, file copy and paste is supported on Windows only.
-  final isSupportIfPeer_1_2_3 = versionCmp(pi.version, '1.2.4') < 0 &&
-      isWindows &&
-      pi.platform == kPeerPlatformWindows;
+  final isSupportIfPeer_1_2_3 = versionCmp(pi.version, '1.2.4') < 0 && pi.platform == kPeerPlatformWindows;
   // If the version is 1.2.4 or later, file copy and paste is supported when kPlatformAdditionsHasFileClipboard is set.
   final isSupportIfPeer_1_2_4 = versionCmp(pi.version, '1.2.4') >= 0 &&
       bind.mainHasFileClipboard() &&
@@ -1045,7 +1000,7 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         child: Text(translate('Show displays as individual windows'))));
   }
 
-  final isMultiScreens = !isWeb && (await getScreenRectList()).length > 1;
+  final isMultiScreens = (await getScreenRectList()).length > 1;
   if (pi.isSupportMultiDisplay && isMultiScreens) {
     final value = bind.sessionGetUseAllMyDisplaysForTheRemoteSession(
             sessionId: ffi.sessionId) ==
@@ -1078,22 +1033,8 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         child: Text(translate('True color (4:4:4)'))));
   }
 
-  if (isDefaultConn && isMobile) {
-    v.addAll(toolbarKeyboardToggles(ffi));
-  }
 
   // view mode (mobile only, desktop is in keyboard menu)
-  if (isDefaultConn && isMobile && versionCmp(pi.version, '1.2.0') >= 0) {
-    v.add(TToggleMenu(
-        value: ffiModel.viewOnly,
-        onChanged: (value) async {
-          if (value == null) return;
-          await bind.sessionToggleOption(
-              sessionId: ffi.sessionId, value: kOptionToggleViewOnly);
-          ffiModel.setViewOnly(id, value);
-        },
-        child: Text(translate('View Mode'))));
-  }
   return _registerToggleMenuShortcuts(ffi, v,
       ownedActionIds: _kToolbarDisplayToggleActionIds);
 }
@@ -1106,9 +1047,7 @@ List<TToggleMenu> toolbarKeyboardToggles(FFI ffi) {
   List<TToggleMenu> v = [];
 
   // swap key
-  if (ffiModel.keyboard &&
-      ((isMacOS && pi.platform != kPeerPlatformMacOS) ||
-          (!isMacOS && pi.platform == kPeerPlatformMacOS))) {
+  if (ffiModel.keyboard && pi.platform == kPeerPlatformMacOS) {
     final option = 'allow_swap_key';
     final value =
         bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
@@ -1131,14 +1070,7 @@ List<TToggleMenu> toolbarKeyboardToggles(FFI ffi) {
   // Web client is not supported yet due to Pointer Lock API integration complexity with Flutter's input system.
   // Wayland is not supported due to cursor warping limitations.
   // Mobile: This option is now in GestureHelp widget, shown only when joystick is visible.
-  final isWayland = isDesktop && isLinux && bind.mainCurrentIsWayland();
-  if (isDesktop &&
-      isDefaultConn &&
-      !isWeb &&
-      !isWayland &&
-      ffiModel.keyboard &&
-      !ffiModel.viewOnly &&
-      ffi.inputModel.isRelativeMouseModeSupported) {
+  if (isDefaultConn && ffiModel.keyboard && !ffiModel.viewOnly && ffi.inputModel.isRelativeMouseModeSupported) {
     v.add(TToggleMenu(
         value: ffi.inputModel.relativeMouseMode.value,
         onChanged: (value) {
@@ -1222,7 +1154,7 @@ void registerToolbarShortcuts(BuildContext context, String id, FFI ffi) {
       () => toolbarImageQuality(context, id, ffi));
   register(_kToolbarCodecActionIds, () => toolbarCodec(context, id, ffi));
 
-  if (isDesktop) toolbarKeyboardToggles(ffi);
+  toolbarKeyboardToggles(ffi);
   unawaited(toolbarCursor(context, id, ffi));
   unawaited(toolbarDisplayToggle(context, id, ffi));
   unawaited(toolbarViewStyle(context, id, ffi));

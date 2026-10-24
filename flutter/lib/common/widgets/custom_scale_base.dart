@@ -7,7 +7,6 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
-import 'package:flutter_hbb/common.dart';
 
 /// Base class providing shared custom scale control logic for both mobile and desktop widgets.
 /// Implementations must provide [ffi] and [onScaleChanged] getters.
@@ -115,9 +114,6 @@ abstract class CustomScaleControls<T extends StatefulWidget> extends State<T> {
             sessionId: ffi.sessionId, value: kRemoteViewStyleCustom);
       }
       await ffi.canvasModel.updateViewStyle();
-      if (isMobile) {
-        HapticFeedback.selectionClick();
-      }
       onScaleChanged?.call(v);
     } catch (e, st) {
       debugPrint('[CustomScale] Apply failed: $e');

@@ -192,31 +192,19 @@ class ShortcutModel {
   ///   * Reset Canvas: only the mobile toolbar builds the menu entry
   ///     (`isDefaultConn && isMobile` in `toolbarControls`).
   static ShortcutPlatformCapabilities currentPlatformCapabilities() {
-    final desktopLayout = isDesktop || isWeb;
     return ShortcutPlatformCapabilities(
-      includeFullscreenShortcut: desktopLayout,
-      includeScreenshotShortcut: isDesktop,
+      includeFullscreenShortcut: true,
+      includeScreenshotShortcut: true,
       includeRelativeMouseModeShortcut:
-          isDesktop && !(isLinux && bind.mainCurrentIsWayland()),
-      includeTabShortcuts: isDesktop,
-      includeToolbarShortcut: desktopLayout,
-      includeCloseTabShortcut: isDesktop,
-      includeSwitchSidesShortcut: isDesktop,
-      includeResetCanvasShortcut: isMobile,
-      includePinToolbarShortcut: desktopLayout,
+          true,
+      includeTabShortcuts: true,
+      includeToolbarShortcut: true,
+      includeCloseTabShortcut: true,
+      includeSwitchSidesShortcut: true,
+      includeResetCanvasShortcut: false,
+      includePinToolbarShortcut: true,
       includeViewModeShortcut: true,
       excludedActions: Set.unmodifiable({
-        if (!isDesktop) ...[
-          kShortcutActionSwitchDisplayAll,
-          kShortcutActionToggleEnableFileCopyPaste,
-        ],
-        if (isMobile) ...[
-          kShortcutActionKeyboardModeLegacy,
-          kShortcutActionKeyboardModeMap,
-          kShortcutActionKeyboardModeTranslate,
-          kShortcutActionToggleShowMyCursor,
-          kShortcutActionToggleZoomCursor,
-        ],
       }),
     );
   }
@@ -302,16 +290,12 @@ void registerSessionShortcutActions(
   // RemotePage). `stateGlobal.setFullscreen` handles native window vs.
   // browser fullscreen. Native mobile is permanently full-screen, so the
   // action is intentionally not registered there.
-  if (isDesktop || isWeb) {
-    ffi.shortcutModel.register(kShortcutActionToggleFullscreen, () {
-      stateGlobal.setFullscreen(!stateGlobal.fullscreen.value);
-    });
-  }
+  ffi.shortcutModel.register(kShortcutActionToggleFullscreen, () {
+    stateGlobal.setFullscreen(!stateGlobal.fullscreen.value);
+  });
 
   void openDisplay(int display, PeerInfo pi, {bool updateCursorPos = true}) {
-    if (isDesktop &&
-        pi.isSupportMultiDisplay &&
-        bind.sessionGetDisplaysAsIndividualWindows(sessionId: sessionId) ==
+    if (pi.isSupportMultiDisplay && bind.sessionGetDisplaysAsIndividualWindows(sessionId: sessionId) ==
             'Y') {
       openMonitorInNewTabOrWindow(display, ffi.id, pi);
     } else {
@@ -335,7 +319,7 @@ void registerSessionShortcutActions(
     } else {
       next = ((current + delta) % count + count) % count;
     }
-    openDisplay(next, pi, updateCursorPos: isMobile);
+    openDisplay(next, pi, updateCursorPos: false);
   }
 
   ffi.shortcutModel.register(kShortcutActionSwitchDisplayNext, () {
@@ -454,7 +438,7 @@ void registerSessionShortcutActions(
           (ffi.ffiModel.pi.isWayland && mode != kKeyMapMode)) {
         return;
       }
-      if (isInputSourceFlutter && isDesktop) {
+      if (isInputSourceFlutter) {
         final modeOnly = bind.sessionIsKeyboardModeSupported(
                 sessionId: sessionId, mode: kKeyMapMode)
             ? kKeyMapMode
@@ -517,9 +501,7 @@ void registerSessionShortcutActions(
   });
 
   // Toggle Relative mouse mode (gaming mode). Desktop only.
-  if (isDesktop && !isWeb) {
-    ffi.shortcutModel.register(kShortcutActionToggleRelativeMouseMode, () {
-      ffi.inputModel.toggleRelativeMouseMode();
-    });
-  }
+  ffi.shortcutModel.register(kShortcutActionToggleRelativeMouseMode, () {
+    ffi.inputModel.toggleRelativeMouseMode();
+  });
 }

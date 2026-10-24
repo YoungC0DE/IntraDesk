@@ -105,16 +105,14 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
           selectedBorderColor: MyTheme.accent,
           labelGetter: DesktopTab.tablabelGetter,
         ));
-    final tabWidget = isLinux
-        ? buildVirtualWindowFrame(context, child)
-        : workaroundWindowBorder(
+    final tabWidget = workaroundWindowBorder(
             context,
             Container(
               decoration: BoxDecoration(
                   border: Border.all(color: MyTheme.color(context).border!)),
               child: child,
             ));
-    return isMacOS || kUseCompatibleUiMode
+    return kUseCompatibleUiMode
         ? tabWidget
         : SubWindowDragToResizeArea(
             child: tabWidget,

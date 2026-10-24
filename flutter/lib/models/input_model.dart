@@ -342,51 +342,13 @@ class InputModel {
   // matching up event is routed there even if the pointer has left the view
   // or a different button was pressed in between.
   static final Map<MouseButtons, InputModel> _sideButtonDownModels = {};
-  static bool _sideButtonChannelInitialized = false;
 
   /// Each Flutter engine (main window + sub-windows from desktop_multi_window)
   /// runs its own Dart isolate with its own statics. Called from initEnv()
   /// which runs per-engine, so each isolate registers its own handler tied
   /// to its own set of InputModels.
   static void initSideButtonChannel() {
-    if (!isLinux) return;
-    if (_sideButtonChannelInitialized) return;
-    _sideButtonChannelInitialized = true;
-
-    const channel = MethodChannel('org.rustdesk.rustdesk/side_buttons');
-    channel.setMethodCallHandler((call) async {
-      if (call.method == 'onSideMouseButton') {
-        final args = call.arguments as Map<dynamic, dynamic>;
-        final button = args['button'] as String;
-        final type = args['type'] as String;
-        final mb = button == 'back' ? MouseButtons.back : MouseButtons.forward;
-
-        if (type == 'down') {
-          final model = _activeSideButtonModel;
-          if (model != null &&
-              !(model.isViewOnly && !model.showMyCursor) &&
-              model.keyboardPerm) {
-            _sideButtonDownModels[mb] = model;
-            // Fire-and-forget to avoid blocking the platform channel handler.
-            unawaited(model._sendMouseUnchecked(type, mb).catchError((Object e) {
-              debugPrint('[InputModel] failed to send side button $type for $mb: $e');
-            }));
-          }
-        } else {
-          // Only route 'up' when we recorded the matching 'down';
-          // dropping avoids sending unpaired 'up' to an unrelated session.
-          // Use _sendMouseUnchecked to bypass permission checks so the
-          // release always goes through even if permissions changed.
-          final model = _sideButtonDownModels.remove(mb);
-          if (model != null) {
-            unawaited(model._sendMouseUnchecked(type, mb).catchError((Object e) {
-              debugPrint('[InputModel] failed to send side button $type for $mb: $e');
-            }));
-          }
-        }
-      }
-      return null;
-    });
+    return;
   }
 
   /// Clear any static references to this model (prevents stale routing).
@@ -435,7 +397,6 @@ class InputModel {
   final _flingBaseDelay = 30;
   final _trackpadAdjustPeerLinux = 0.06;
   // This is an experience value.
-  final _trackpadAdjustMacToWin = 2.50;
   // Ignore directional locking for very small deltas on both axes (including
   // tiny single-axis movement) to avoid over-filtering near zero.
   static const double _trackpadAxisNoiseThreshold = 0.2;
@@ -532,17 +493,12 @@ class InputModel {
   // This is needed because Flutter's HardwareKeyboard.lockModesEnabled may report
   // incorrect CapsLock state on iOS.
   bool _getIosCapsFromCharacter(KeyEvent e) {
-    if (!isIOS) return false;
-    final ch = e.character;
-    return _getIosCapsFromCharacterImpl(
-        ch, HardwareKeyboard.instance.isShiftPressed);
+    return false;
   }
 
   // RawKeyEvent version of _getIosCapsFromCharacter.
   bool _getIosCapsFromRawCharacter(RawKeyEvent e) {
-    if (!isIOS) return false;
-    final ch = e.character;
-    return _getIosCapsFromCharacterImpl(ch, e.isShiftPressed);
+    return false;
   }
 
   // Shared implementation for inferring CapsLock state from character.
@@ -573,24 +529,17 @@ class InputModel {
     const numlock = 2;
     const scrolllock = 3;
     int lockModes = 0;
-    if (isIOS) {
-      if (iosCapsLock) {
-        lockModes |= (1 << capslock);
-      }
-      // Ignore "NumLock/ScrollLock" on iOS for now.
-    } else {
-      if (HardwareKeyboard.instance.lockModesEnabled
-          .contains(KeyboardLockMode.capsLock)) {
-        lockModes |= (1 << capslock);
-      }
-      if (HardwareKeyboard.instance.lockModesEnabled
-          .contains(KeyboardLockMode.numLock)) {
-        lockModes |= (1 << numlock);
-      }
-      if (HardwareKeyboard.instance.lockModesEnabled
-          .contains(KeyboardLockMode.scrollLock)) {
-        lockModes |= (1 << scrolllock);
-      }
+    if (HardwareKeyboard.instance.lockModesEnabled
+        .contains(KeyboardLockMode.capsLock)) {
+      lockModes |= (1 << capslock);
+    }
+    if (HardwareKeyboard.instance.lockModesEnabled
+        .contains(KeyboardLockMode.numLock)) {
+      lockModes |= (1 << numlock);
+    }
+    if (HardwareKeyboard.instance.lockModesEnabled
+        .contains(KeyboardLockMode.scrollLock)) {
+      lockModes |= (1 << scrolllock);
     }
     return lockModes;
   }
@@ -599,10 +548,8 @@ class InputModel {
   // Because `sessionGetKeyboardMode` relies on the peer version.
   updateKeyboardMode() async {
     // * Currently mobile does not enable map mode
-    if (isDesktop || isWebDesktop) {
-      keyboardMode = await bind.sessionGetKeyboardMode(sessionId: sessionId) ??
-          kKeyLegacyMode;
-    }
+    keyboardMode = await bind.sessionGetKeyboardMode(sessionId: sessionId) ??
+        kKeyLegacyMode;
   }
 
   /// Updates the trackpad speed based on the session value.
@@ -747,16 +694,11 @@ class InputModel {
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
     if (_localFlutterShortcuts.tryDispatchRaw(e)) return KeyEventResult.handled;
     if (isViewOnly) {
-      if (isWeb && !isInputSourceFlutter) return KeyEventResult.ignored;
       _tryDispatchRawFlutterShortcut(e, releaseModifiers: false);
       return KeyEventResult.handled;
     }
     if (!isInputSourceFlutter) {
-      if (isDesktop) {
-        return KeyEventResult.handled;
-      } else if (isWeb) {
-        return KeyEventResult.ignored;
-      }
+      return KeyEventResult.handled;
     }
     _syncFlutterShortcutModifiersAfterViewOnly(e.physicalKey, raw: true);
 
@@ -765,9 +707,6 @@ class InputModel {
     }
 
     bool iosCapsLock = false;
-    if (isIOS && e is RawKeyDownEvent) {
-      iosCapsLock = _getIosCapsFromRawCharacter(e);
-    }
 
     final key = e.logicalKey;
     if (e is RawKeyDownEvent) {
@@ -805,9 +744,8 @@ class InputModel {
 
     // On some mobile soft-keyboard paths, Flutter may leave cached Shift state
     // set even though the current raw key event is not shifted anymore.
-    if (e is RawKeyDownEvent &&
-        shouldReleaseStaleMobileShift(
-          isMobile: isMobile,
+    if (e is RawKeyDownEvent && shouldReleaseStaleMobileShift(
+          isMobile: false,
           cachedShiftPressed: shift,
           actualShiftPressed: e.isShiftPressed,
           logicalKey: e.logicalKey,
@@ -825,7 +763,7 @@ class InputModel {
     }
 
     // * Currently mobile does not enable map mode
-    if ((isDesktop || isWebDesktop) && keyboardMode == kKeyMapMode) {
+    if (keyboardMode == kKeyMapMode) {
       _restoreRawFlutterShortcutModifiers(e);
       mapKeyboardModeRaw(e, iosCapsLock);
     } else {
@@ -842,27 +780,17 @@ class InputModel {
   KeyEventResult handleKeyEvent(KeyEvent e) {
     if (_localFlutterShortcuts.tryDispatch(e)) return KeyEventResult.handled;
     if (isViewOnly) {
-      if (isWeb && !isInputSourceFlutter) return KeyEventResult.ignored;
       _tryDispatchFlutterShortcut(e, releaseModifiers: false);
       return KeyEventResult.handled;
     }
     if (!isInputSourceFlutter) {
-      if (isDesktop) {
-        return KeyEventResult.handled;
-      } else if (isWeb) {
-        return KeyEventResult.ignored;
-      }
-    }
-    _syncFlutterShortcutModifiersAfterViewOnly(e.physicalKey);
-    if (isWeb && _tryDispatchFlutterShortcut(e)) {
       return KeyEventResult.handled;
     }
-    if (isWindows || isLinux) {
-      // Ignore meta keys. Because flutter window will loose focus if meta key is pressed.
-      if (e.physicalKey == PhysicalKeyboardKey.metaLeft ||
-          e.physicalKey == PhysicalKeyboardKey.metaRight) {
-        return KeyEventResult.handled;
-      }
+    _syncFlutterShortcutModifiersAfterViewOnly(e.physicalKey);
+    // Ignore meta keys. Because flutter window will loose focus if meta key is pressed.
+    if (e.physicalKey == PhysicalKeyboardKey.metaLeft ||
+        e.physicalKey == PhysicalKeyboardKey.metaRight) {
+      return KeyEventResult.handled;
     }
 
     if (_relativeMouse.handleKeyEvent(
@@ -876,9 +804,6 @@ class InputModel {
     }
 
     bool iosCapsLock = false;
-    if (isIOS && (e is KeyDownEvent || e is KeyRepeatEvent)) {
-      iosCapsLock = _getIosCapsFromCharacter(e);
-    }
 
     // Update cached modifier state before sending the event. The stale mobile
     // Shift release check below relies on this cached state.
@@ -888,43 +813,11 @@ class InputModel {
       handleKeyDownEventModifiers(e);
     }
 
-    bool isMobileAndMapMode = false;
-    if (isMobile) {
-      // Do not use map mode if mobile -> Android. Android does not support map mode for now.
-      // Because simulating the physical key events(uhid) which requires root permission is not supported.
-      if (peerPlatform != kPeerPlatformAndroid) {
-        if (isIOS) {
-          isMobileAndMapMode = true;
-        } else {
-          // The physicalKey.usbHidUsage may be not correct for soft keyboard on Android.
-          // iOS does not have this issue.
-          // 1. Open the soft keyboard on Android
-          // 2. Switch to input method like zh/ko/ja
-          // 3. Click Backspace and Enter on the soft keyboard or physical keyboard
-          // 4. The physicalKey.usbHidUsage is not correct.
-          // PhysicalKeyboardKey#8ac83(usbHidUsage: "0x1100000042", debugName: "Key with ID 0x1100000042")
-          // LogicalKeyboardKey#2604c(keyId: "0x10000000d", keyLabel: "Enter", debugName: "Enter")
-          //
-          // The correct PhysicalKeyboardKey should be
-          // PhysicalKeyboardKey#e14a9(usbHidUsage: "0x00070028", debugName: "Enter")
-          // https://github.com/flutter/flutter/issues/157771
-          // We cannot use the debugName to determine the key is correct or not, because it's null in release mode.
-          // The normal `usbHidUsage` for keyboard shoud be between [0x00000010, 0x000c029f]
-          // https://github.com/flutter/flutter/blob/c051b69e2a2224300e20d93dbd15f4b91e8844d1/packages/flutter/lib/src/services/keyboard_key.g.dart#L5332 - 5600
-          final isNormalHsbHidUsage = (e.physicalKey.usbHidUsage >> 20) == 0;
-          isMobileAndMapMode = isNormalHsbHidUsage &&
-              // No need to check `!['Backspace', 'Enter'].contains(e.logicalKey.keyLabel)`
-              // But we still add it for more reliability.
-              !['Backspace', 'Enter'].contains(e.logicalKey.keyLabel);
-        }
-      }
-    }
 
     // On some mobile soft-keyboard paths, Flutter may leave cached Shift state
     // set even though the current key event is not shifted anymore.
-    if (e is KeyDownEvent &&
-        shouldReleaseStaleMobileShift(
-          isMobile: isMobile,
+    if (e is KeyDownEvent && shouldReleaseStaleMobileShift(
+          isMobile: false,
           cachedShiftPressed: shift,
           actualShiftPressed: HardwareKeyboard.instance.isShiftPressed,
           logicalKey: e.logicalKey,
@@ -934,31 +827,15 @@ class InputModel {
       _releaseTrackedShiftKeyEventIfNeeded();
     }
 
-    final isDesktopAndMapMode =
-        isDesktop || (isWebDesktop && keyboardMode == kKeyMapMode);
-    if (isMobileAndMapMode || isDesktopAndMapMode) {
-      _restoreFlutterShortcutModifiers(e);
-      // Native map input is matched and tracked by Rust before forwarding.
-      if (isWeb) {
-        _trackFlutterShortcutKey(e.physicalKey, e.logicalKey,
-            down: e is KeyDownEvent || e is KeyRepeatEvent,
-            up: e is KeyUpEvent,
-            mapMode: true);
-      }
-      // FIXME: e.character is wrong for dead keys, eg: ^ in de
-      newKeyboardMode(
-          e.character ?? '',
-          e.physicalKey.usbHidUsage & 0xFFFF,
-          // Show repeat event be converted to "release+press" events?
-          e is KeyDownEvent || e is KeyRepeatEvent,
-          iosCapsLock);
-    } else {
-      if (!isWeb && _tryDispatchFlutterShortcut(e)) return KeyEventResult.handled;
-      _restoreFlutterShortcutModifiers(e, mapMode: false);
-      _trackFlutterShortcutKey(e.physicalKey, e.logicalKey,
-          down: e is KeyDownEvent, up: e is KeyUpEvent);
-      legacyKeyboardMode(e);
-    }
+    _restoreFlutterShortcutModifiers(e);
+    // Native map input is matched and tracked by Rust before forwarding.
+    // FIXME: e.character is wrong for dead keys, eg: ^ in de
+    newKeyboardMode(
+        e.character ?? '',
+        e.physicalKey.usbHidUsage & 0xFFFF,
+        // Show repeat event be converted to "release+press" events?
+        e is KeyDownEvent || e is KeyRepeatEvent,
+        iosCapsLock);
 
     return KeyEventResult.handled;
   }
@@ -998,8 +875,7 @@ class InputModel {
       viewOnly: isViewOnly,
       match: () {
         // AltGraph is text input on Windows/Linux; Apple Option stays bindable.
-        if (!(isMacOS || isIOS || isWebOnMacOs) &&
-            keyboard.logicalKeysPressed.contains(LogicalKeyboardKey.altGraph)) {
+        if (keyboard.logicalKeysPressed.contains(LogicalKeyboardKey.altGraph)) {
           return null;
         }
         return _matchFlutterShortcut(e.physicalKey,
@@ -1062,31 +938,17 @@ class InputModel {
       LogicalKeyboardKey.metaRight: PhysicalKeyboardKey.metaRight,
     }.entries) {
       if (!pressed.contains(entry.key)) continue;
-      if (isWebDesktop) {
-        // The action can switch from Legacy to Map while modifiers stay held.
-        _localFlutterShortcuts.recordReleasedModifiers([entry.value]);
-      }
-      if (isWebDesktop && keyboardMode == kKeyMapMode) {
-        releases.add(bind.sessionHandleFlutterKeyEvent(
-          sessionId: sessionId,
-          character: '',
-          usbHid: entry.value.usbHidUsage & 0xFFFF,
-          lockModes: _buildLockModes(false),
-          downOrUp: false,
-        ));
-      } else {
-        final label = physicalKeyMap[entry.value.usbHidUsage] ?? entry.key.keyLabel;
-        releases.add(bind.sessionInputKey(
-          sessionId: sessionId,
-          name: label,
-          down: false,
-          press: false,
-          alt: false,
-          ctrl: false,
-          shift: false,
-          command: false,
-        ));
-      }
+      final label = physicalKeyMap[entry.value.usbHidUsage] ?? entry.key.keyLabel;
+      releases.add(bind.sessionInputKey(
+        sessionId: sessionId,
+        name: label,
+        down: false,
+        press: false,
+        alt: false,
+        ctrl: false,
+        shift: false,
+        command: false,
+      ));
     }
     await Future.wait(releases).whenComplete(() => neutralizeMenu
         ? _sendShortcutMenuControl(false, pressed, swapCtrlCmd)
@@ -1098,7 +960,7 @@ class InputModel {
     if (peerPlatform != kPeerPlatformWindows) return false;
     // Web's legacy key-name API does not swap the key itself.
     final swapped =
-        swapCtrlCmd && (!isWebDesktop || keyboardMode == kKeyMapMode);
+        swapCtrlCmd;
     return pressed.any({
           LogicalKeyboardKey.altLeft,
           LogicalKeyboardKey.altRight,
@@ -1124,19 +986,6 @@ class InputModel {
   Future<void> _sendShortcutMenuControl(
       bool down, Set<LogicalKeyboardKey> pressed, bool swapCtrlCmd) {
     // Choose the pre-swap key that reaches Windows as Ctrl.
-    if (isWebDesktop) {
-      return bind.sessionHandleFlutterKeyEvent(
-        sessionId: sessionId,
-        character: '',
-        usbHid: (swapCtrlCmd
-                    ? PhysicalKeyboardKey.metaLeft
-                    : PhysicalKeyboardKey.controlLeft)
-                .usbHidUsage &
-            0xFFFF,
-        lockModes: _buildLockModes(false),
-        downOrUp: down,
-      );
-    }
     return bind.sessionInputKey(
       sessionId: sessionId,
       name: swapCtrlCmd ? 'Meta' : 'VK_CONTROL',
@@ -1208,10 +1057,7 @@ class InputModel {
     final config = ShortcutModel.config(active: true);
     if (!config.enabled || config.passThrough) return null;
     final mods = <String>[];
-    if (isMacOS || isIOS || isWebOnMacOs) {
-      if (commandPressed) mods.add('primary');
-      if (ctrlPressed) mods.add('ctrl');
-    } else if (ctrlPressed) {
+    if (ctrlPressed) {
       mods.add('primary');
     }
     if (altPressed) mods.add('alt');
@@ -1382,7 +1228,7 @@ class InputModel {
       }
     }
     _lastButtons = hasStaleButtonsOnMouseUp ? 0 : evt.buttons;
-    if (isDesktop && _relativeMouse.enabled.value && type == _kMouseEventUp) {
+    if (_relativeMouse.enabled.value && type == _kMouseEventUp) {
       // A relative up can finish a press sent before the mode switch.
       _pressedMouseButtons &= ~buttons;
     }
@@ -1467,7 +1313,7 @@ class InputModel {
     if (!isInputSourceFlutter) {
       bind.sessionEnterOrLeave(sessionId: sessionId, enter: enter);
     }
-    if (!isWeb && enter) {
+    if (enter) {
       bind.setCurSessionId(sessionId: sessionId);
     }
   }
@@ -1596,12 +1442,6 @@ class InputModel {
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     // May fix https://github.com/rustdesk/rustdesk/issues/13009
-    if (isIOS && e.synthesized && e.position == Offset.zero && e.buttons == 0) {
-      // iOS may emit a synthesized hover event at (0,0) when the mouse is disconnected.
-      // Ignore this event to prevent cursor jumping.
-      debugPrint('Ignored synthesized hover at (0,0) on iOS');
-      return;
-    }
 
     // Only update pointer region when relative mouse mode is enabled.
     // This avoids unnecessary tracking when not in relative mode.
@@ -1648,9 +1488,6 @@ class InputModel {
     }
 
     var delta = e.panDelta * _trackpadSpeedInner;
-    if (isMacOS && peerPlatform == kPeerPlatformWindows) {
-      delta *= _trackpadAdjustMacToWin;
-    }
     delta = _filterTrackpadDeltaAxis(delta);
     _trackpadLastDelta = delta;
 
@@ -1768,9 +1605,6 @@ class InputModel {
 
     // 2.0 is an experience value
     double minFlingValue = 2.0 * _trackpadSpeedInner;
-    if (isMacOS && peerPlatform == kPeerPlatformWindows) {
-      minFlingValue *= _trackpadAdjustMacToWin;
-    }
     if (_trackpadLastDelta.dx.abs() > minFlingValue ||
         _trackpadLastDelta.dy.abs() > minFlingValue) {
       _fling = true;
@@ -1783,22 +1617,10 @@ class InputModel {
   // iOS Magic Mouse duplicate event detection.
   // When using Magic Mouse on iPad, iOS may emit both mouse and touch events
   // for the same click in certain areas (like top-left corner).
-  int _lastMouseDownTimeMs = 0;
-  ui.Offset _lastMouseDownPos = ui.Offset.zero;
 
   /// Check if a touch tap event should be ignored because it's a duplicate
   /// of a recent mouse event (iOS Magic Mouse issue).
   bool shouldIgnoreTouchTap(ui.Offset pos) {
-    if (!isIOS) return false;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final dt = nowMs - _lastMouseDownTimeMs;
-    final distance = (_lastMouseDownPos - pos).distance;
-    // If touch tap is within 2000ms and 80px of the last mouse down,
-    // it's likely a duplicate event from the same Magic Mouse click.
-    if (dt >= 0 && dt < 2000 && distance < 80.0) {
-      debugPrint("shouldIgnoreTouchTap: IGNORED (dt=$dt, dist=$distance)");
-      return true;
-    }
     return false;
   }
 
@@ -1806,16 +1628,13 @@ class InputModel {
   /// This helper ignores touch-down events that arrive shortly after a mouse down,
   /// even when the position is far (e.g., near the top edge).
   bool _shouldIgnoreTouchAfterMouse(int nowMs) {
-    if (!isIOS) return false;
-    const int kTouchAfterMouseWindowMs = 700;
-    final dt = nowMs - _lastMouseDownTimeMs;
-    return dt >= 0 && dt < kTouchAfterMouseWindowMs;
+    return false;
   }
 
   void onPointDownImage(PointerDownEvent e) {
     debugPrint("onPointDownImage ${e.kind}");
     _stopFling = true;
-    if (isDesktop) _queryOtherWindowCoords = true;
+    _queryOtherWindowCoords = true;
     _remoteWindowCoords = [];
     _windowRect = null;
     if (isViewOnly && !showMyCursor) return;
@@ -1826,8 +1645,6 @@ class InputModel {
       if (!isPhysicalMouse.value) {
         isPhysicalMouse.value = true;
       }
-      _lastMouseDownTimeMs = nowMs;
-      _lastMouseDownPos = e.position;
     }
 
     if (_relativeMouse.enabled.value) {
@@ -1857,7 +1674,7 @@ class InputModel {
   }
 
   void onPointUpImage(PointerUpEvent e) {
-    if (isDesktop) _queryOtherWindowCoords = false;
+    _queryOtherWindowCoords = false;
     if (isViewOnly && !showMyCursor) return;
 
     if (_relativeMouse.enabled.value) {
@@ -1916,16 +1733,7 @@ class InputModel {
   /// Desktop and web desktop continue to use the global position directly
   /// because their pointer mapping is window-based.
   Offset _pointerPositionForRemoteCanvas(PointerEvent event) {
-    if (isDesktop || isWebDesktop) {
-      return event.position;
-    }
-    final mediaData = MediaQueryData.fromView(
-        WidgetsBinding.instance.platformDispatcher.views.first);
-    final adjustY = parent.target?.canvasModel.getAdjustY() ?? 0.0;
-    return Offset(
-      event.localPosition.dx - mediaData.padding.left,
-      event.localPosition.dy - mediaData.padding.top - adjustY,
-    );
+    return event.position;
   }
 
   static Future<Rect?> fillRemoteCoordsAndGetCurFrame(
@@ -1964,11 +1772,7 @@ class InputModel {
       final dtUs = _lastWheelTsUs == 0 ? 0 : nowUs - _lastWheelTsUs;
       _lastWheelTsUs = nowUs;
       int accel = 1;
-      if (!isSmooth &&
-          dtUs > 0 &&
-          dtUs <= _wheelAccelMediumThresholdUs &&
-          (isWindows || isLinux) &&
-          peerPlatform == kPeerPlatformMacOS) {
+      if (!isSmooth && dtUs > 0 && dtUs <= _wheelAccelMediumThresholdUs && peerPlatform == kPeerPlatformMacOS) {
         final velocity = dominantDelta / dtUs;
         if (velocity >= _wheelBurstVelocityThreshold) {
           if (dtUs < _wheelAccelFastThresholdUs) {
@@ -2118,11 +1922,7 @@ class InputModel {
     bool edgeScroll = false,
   }) {
     final buttons = evt['buttons'];
-    final isMatchingMouseUp = (isDesktop || isWebDesktop) &&
-        evt['type'] == _kMouseEventUp &&
-        buttons is int &&
-        mouseButtonsToPeer(buttons).isNotEmpty &&
-        _pressedMouseButtons & buttons != 0;
+    final isMatchingMouseUp = evt['type'] == _kMouseEventUp && buttons is int && mouseButtonsToPeer(buttons).isNotEmpty && _pressedMouseButtons & buttons != 0;
     double x = offset.dx;
     double y = max(0.0, offset.dy);
     // Cursor ownership may change between a forwarded down and its up.
@@ -2181,9 +1981,7 @@ class InputModel {
 
     if (buttons is int) {
       evt['buttons'] = mouseButtonsToPeer(buttons);
-      if ((isDesktop || isWebDesktop) &&
-          type == kMouseEventTypeDown &&
-          evt['buttons'] != '') {
+      if (type == kMouseEventTypeDown && evt['buttons'] != '') {
         _pressedMouseButtons |= buttons;
       }
     } else {
@@ -2240,12 +2038,8 @@ class InputModel {
           isMove = false;
           canvas = coords.canvas;
           rect = coords.remoteRect;
-          x -= isWindows
-              ? coords.relativeOffset.dx / devicePixelRatio
-              : coords.relativeOffset.dx;
-          y -= isWindows
-              ? coords.relativeOffset.dy / devicePixelRatio
-              : coords.relativeOffset.dy;
+          x -= coords.relativeOffset.dx / devicePixelRatio;
+          y -= coords.relativeOffset.dy / devicePixelRatio;
         }
       }
     }
@@ -2280,19 +2074,15 @@ class InputModel {
   bool _isInCurrentWindow(double x, double y) {
     var w = _windowRect!.width;
     var h = _windowRect!.height;
-    if (isWindows) {
-      w /= devicePixelRatio;
-      h /= devicePixelRatio;
-    }
+    w /= devicePixelRatio;
+    h /= devicePixelRatio;
     return x >= 0 && y >= 0 && x <= w && y <= h;
   }
 
   static RemoteWindowCoords? findRemoteCoords(double x, double y,
       List<RemoteWindowCoords> remoteWindowCoords, double devicePixelRatio) {
-    if (isWindows) {
-      x *= devicePixelRatio;
-      y *= devicePixelRatio;
-    }
+    x *= devicePixelRatio;
+    y *= devicePixelRatio;
     for (final c in remoteWindowCoords) {
       if (x >= c.relativeOffset.dx &&
           y >= c.relativeOffset.dy &&

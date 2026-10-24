@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
-import 'package:flutter_hbb/common.dart';
 
 Future<ui.Image?> decodeImageFromPixels(
   Uint8List pixels,
@@ -119,9 +118,6 @@ class ImagePainter extends CustomPainter {
     }
     // It's strange that if (scale < 0.5 && paint.filterQuality == FilterQuality.medium)
     // The canvas.drawImage will not work on web
-    if (isWeb) {
-      paint.filterQuality = FilterQuality.high;
-    }
     canvas.drawImage(
         image!, Offset(x.toInt().toDouble(), y.toInt().toDouble()), paint);
   }

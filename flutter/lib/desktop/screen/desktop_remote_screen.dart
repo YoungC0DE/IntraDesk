@@ -26,7 +26,7 @@ class DesktopRemoteScreen extends StatelessWidget {
         child: Scaffold(
           // Set transparent background for padding the resize area out of the flutter view.
           // This allows the wallpaper goes through our resize area. (Linux only now).
-          backgroundColor: isLinux ? Colors.transparent : null,
+          backgroundColor: null,
           body: ConnectionTabPage(
             params: params,
           ),

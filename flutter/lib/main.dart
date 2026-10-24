@@ -39,9 +39,7 @@ Future<void> main(List<String> args) async {
   if (args.isNotEmpty && args.first == 'multi_window') {
     kWindowId = int.parse(args[1]);
     stateGlobal.setWindowId(kWindowId!);
-    if (!isMacOS) {
-      WindowController.fromWindowId(kWindowId!).showTitleBar(false);
-    }
+    WindowController.fromWindowId(kWindowId!).showTitleBar(false);
     final argument = args[2].isEmpty
         ? <String, dynamic>{}
         : jsonDecode(args[2]) as Map<String, dynamic>;
@@ -77,9 +75,6 @@ Future<void> main(List<String> args) async {
     desktopType = DesktopType.main;
     await windowManager.ensureInitialized();
     windowManager.setPreventClose(true);
-    if (isMacOS) {
-      disableWindowMovable(kWindowId);
-    }
     runMainApp(true);
   }
 }
@@ -108,10 +103,8 @@ void runMainApp(bool startService) async {
   runApp(App());
 
   bool? alwaysOnTop;
-  if (isDesktop) {
-    alwaysOnTop =
-        bind.mainGetBuildinOption(key: "main-window-always-on-top") == 'Y';
-  }
+  alwaysOnTop =
+      bind.mainGetBuildinOption(key: "main-window-always-on-top") == 'Y';
 
   // Set window option.
   WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
@@ -145,9 +138,6 @@ void runMultiWindow(
   final title = getWindowName();
   // set prevent close to true, we handle close event manually
   WindowController.fromWindowId(kWindowId!).setPreventClose(true);
-  if (isMacOS) {
-    disableWindowMovable(kWindowId);
-  }
   late Widget widget;
   switch (appType) {
     case kAppTypeDesktopRemote:
@@ -314,7 +304,7 @@ WindowOptions getHiddenTitleBarWindowOptions(
   return WindowOptions(
     size: size,
     center: center,
-    backgroundColor: (isMacOS && isMainWindow) ? null : Colors.transparent,
+    backgroundColor: Colors.transparent,
     skipTaskbar: false,
     titleBarStyle: defaultTitleBarStyle,
     alwaysOnTop: alwaysOnTop,
@@ -366,18 +356,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   void _updateOrientation() {
-    if (isDesktop) return;
-
-    // Don't use `MediaQuery.of(context).orientation` in `didChangeMetrics()`,
-    // my test (Flutter 3.19.6, Android 14) is always the reverse value.
-    // https://github.com/flutter/flutter/issues/60899
-    // stateGlobal.isPortrait.value =
-    //     MediaQuery.of(context).orientation == Orientation.portrait;
-
-    final orientation = View.of(context).physicalSize.aspectRatio > 1
-        ? Orientation.landscape
-        : Orientation.portrait;
-    stateGlobal.isPortrait.value = orientation == Orientation.portrait;
+    return;
   }
 
   @override
@@ -413,27 +392,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             // FirebaseAnalyticsObserver(analytics: analytics),
             BotToastNavigatorObserver(),
           ],
-          builder: isAndroid
-              ? (context, child) => AccessibilityListener(
-                    child: MediaQuery(
-                      data: MediaQuery.of(context).copyWith(
-                        textScaler: TextScaler.linear(1.0),
-                      ),
-                      child: child ?? Container(),
-                    ),
-                  )
-              : (context, child) {
+          builder: (context, child) {
                   child = _keepScaleBuilder(context, child);
                   child = botToastBuilder(context, child);
-                  if ((isDesktop && desktopType == DesktopType.main) ||
-                      isWebDesktop) {
+                  if (desktopType == DesktopType.main) {
                     child = keyListenerBuilder(context, child);
                   }
-                  if (isLinux) {
-                    return buildVirtualWindowFrame(context, child);
-                  } else {
-                    return workaroundWindowBorder(context, child);
-                  }
+                  return workaroundWindowBorder(context, child);
                 },
         ),
       );
@@ -451,7 +416,7 @@ Widget _keepScaleBuilder(BuildContext context, Widget? child) {
 }
 
 _registerEventHandler() {
-  if (isDesktop && desktopType != DesktopType.main) {
+  if (desktopType != DesktopType.main) {
     platformFFI.registerEventHandler('theme', 'theme', (evt) async {
       String? dark = evt['dark'];
       if (dark != null) {
@@ -467,7 +432,7 @@ _registerEventHandler() {
 Widget keyListenerBuilder(BuildContext context, Widget? child) {
   return RawKeyboardListener(
     // `skipTraversal: isWeb` is to fix "Bad state: RenderBox was not laid out: minified:aeL#c19e4"
-    focusNode: FocusNode(skipTraversal: isWeb),
+    focusNode: FocusNode(skipTraversal: false),
     child: child ?? Container(),
     onKey: (RawKeyEvent event) {
       if (event.logicalKey == LogicalKeyboardKey.shiftLeft) {

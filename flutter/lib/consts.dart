@@ -1,8 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
-import 'package:flutter_hbb/models/state_model.dart';
-import 'package:get/get.dart';
 
 export 'common/widgets/keyboard_shortcuts/shortcut_constants.dart';
 
@@ -281,20 +279,10 @@ const int kRelativeMouseModeToggleDebounceMs = 150;
 
 // incomming (should be incoming) is kept, because change it will break the previous setting.
 
-double kNewWindowOffset = isWindows
-    ? 56.0
-    : isLinux
-        ? 50.0
-        : isMacOS
-            ? 30.0
-            : 50.0;
+double kNewWindowOffset = 56.0;
 
 const kDragToResizeAreaPaddingSize = 5.0;
-EdgeInsets get kDragToResizeAreaPadding => !kUseCompatibleUiMode && isLinux
-    ? stateGlobal.fullscreen.isTrue || stateGlobal.isMaximized.value
-        ? EdgeInsets.zero
-        : EdgeInsets.all(kDragToResizeAreaPaddingSize)
-    : EdgeInsets.zero;
+EdgeInsets get kDragToResizeAreaPadding => EdgeInsets.zero;
 // https://en.wikipedia.org/wiki/Non-breaking_space
 const int $nbsp = 0x00A0;
 
@@ -316,7 +304,7 @@ const kFullScreenEdgeSize = 0.0;
 const kMaximizeEdgeSize = 0.0;
 // Do not use kWindowResizeEdgeSize directly. Use `windowResizeEdgeSize` in `common.dart` instead.
 const kWindowResizeEdgeSize = 5.0;
-final kWindowBorderWidth = isWindows ? 0.0 : 1.0;
+final kWindowBorderWidth = 0.0;
 const kDesktopMenuPadding = EdgeInsets.only(left: 12.0, right: 3.0);
 const kFrameBorderRadius = 12.0;
 const kFrameClipRRectBorderRadius = 12.0;

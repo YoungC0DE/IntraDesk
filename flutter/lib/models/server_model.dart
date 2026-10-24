@@ -186,9 +186,6 @@ class ServerModel with ChangeNotifier {
     }
 
     // Initial keyboard status is off on mobile
-    if (isMobile) {
-      bind.mainSetOption(key: kOptionEnableKeyboard, value: 'N');
-    }
   }
 
   /// 1. check android permission
@@ -564,7 +561,7 @@ class ServerModel with ChangeNotifier {
       if (!hideCm) windowOnTop(null);
     });
     // Only do the hidden task when on Desktop.
-    if (client.authorized && isDesktop) {
+    if (client.authorized) {
       cmHiddenTimer = Timer(const Duration(seconds: 3), () {
         if (!hideCm) windowManager.minimize();
         cmHiddenTimer = null;
@@ -573,12 +570,7 @@ class ServerModel with ChangeNotifier {
   }
 
   scrollToBottom() {
-    if (isDesktop) return;
-    Future.delayed(Duration(milliseconds: 200), () {
-      controller.animateTo(controller.position.maxScrollExtent,
-          duration: Duration(milliseconds: 200),
-          curve: Curves.fastLinearToSlowEaseIn);
-    });
+    return;
   }
 
   void sendLoginResponse(Client client, bool res) async {

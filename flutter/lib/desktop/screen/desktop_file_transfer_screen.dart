@@ -20,7 +20,7 @@ class DesktopFileTransferScreen extends StatelessWidget {
         ChangeNotifierProvider.value(value: gFFI.canvasModel),
       ],
       child: Scaffold(
-        backgroundColor: isLinux ? Colors.transparent : null,
+        backgroundColor: null,
         body: FileManagerTabPage(
           params: params,
         ),

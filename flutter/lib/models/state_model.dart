@@ -67,9 +67,7 @@ class StateGlobal {
         isMaximized.value = v;
         refreshResizeEdgeSize();
       }
-      if (!isMacOS) {
-        _windowBorderWidth.value = v ? 0 : kWindowBorderWidth;
-      }
+      _windowBorderWidth.value = v ? 0 : kWindowBorderWidth;
     }
   }
 
@@ -79,11 +77,7 @@ class StateGlobal {
     if (_fullscreen.value != v) {
       _fullscreen.value = v;
       _showTabBar.value = !_fullscreen.value;
-      if (isWebDesktop) {
-        procFullscreenWeb();
-      } else {
-        procFullscreenNative(procWnd);
-      }
+      procFullscreenNative(procWnd);
     }
   }
 
@@ -132,11 +126,6 @@ class StateGlobal {
   }
 
   StateGlobal._() {
-    if (isWebDesktop) {
-      platformFFI.setFullscreenCallback((v) {
-        _fullscreen.value = v;
-      });
-    }
   }
 
   static final StateGlobal instance = StateGlobal._();

@@ -58,10 +58,7 @@ class DesktopSettingPage extends StatefulWidget {
   static final List<SettingsTabKey> tabKeys = [
     if (bind.mainGetBuildinOption(key: kOptionHideGeneralSetting) != 'Y')
       SettingsTabKey.general,
-    if (!isWeb &&
-        !bind.isOutgoingOnly() &&
-        !bind.isDisableSettings() &&
-        bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
+    if (!bind.isOutgoingOnly() && !bind.isDisableSettings() && bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       SettingsTabKey.safety,
     if (!bind.isDisableSettings() &&
         bind.mainGetBuildinOption(key: kOptionHideNetworkSetting) != 'Y')
@@ -290,25 +287,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     );
     return Row(
       children: [
-        if (isWeb)
-          IconButton(
-            onPressed: () {
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context);
-              }
-            },
-            icon: Icon(Icons.arrow_back),
-          ).marginOnly(left: 5),
-        if (isWeb)
-          SizedBox(
-            height: 62,
-            child: Align(
-              alignment: Alignment.center,
-              child: settingsText,
-            ),
-          ).marginOnly(left: 20),
-        if (!isWeb)
-          SizedBox(
+        SizedBox(
             height: 62,
             child: settingsText,
           ).marginOnly(left: 20, top: 10),
@@ -378,7 +357,7 @@ class _General extends StatefulWidget {
 
 class _GeneralState extends State<_General> {
   final RxBool serviceStop =
-      isWeb ? RxBool(false) : Get.find<RxBool>(tag: 'stop-service');
+      Get.find<RxBool>(tag: 'stop-service');
   RxBool serviceBtnEnabled = true.obs;
   final GlobalKey _minToolbarOptionKey = GlobalKey();
 
@@ -388,12 +367,12 @@ class _GeneralState extends State<_General> {
     return ListView(
       controller: scrollController,
       children: [
-        if (!isWeb) service(),
+        service(),
         theme(),
         _Card(title: 'Language', children: [language()]),
-        if (!isWeb) hwcodec(),
-        if (!isWeb) audio(context),
-        if (!isWeb) WaylandCard(),
+        hwcodec(),
+        audio(context),
+        WaylandCard(),
         other(),
         if (!bind.isIncomingOnly()) keyboardShortcuts(),
       ],
@@ -497,7 +476,7 @@ class _GeneralState extends State<_General> {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
     final children = <Widget>[
-      if (!isWeb && !incomingOnly)
+      if (!incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
             kOptionEnableConfirmClosingTabs,
             isServer: false),
@@ -511,10 +490,10 @@ class _GeneralState extends State<_General> {
             reloadAllWindows();
           },
         ),
-      if (!isWeb && !outgoingOnly)
+      if (!outgoingOnly)
         _OptionCheckBox(context, 'Adaptive bitrate', kOptionEnableAbr),
-      if (!isWeb) wallpaper(),
-      if (!isWeb && !incomingOnly) ...[
+      wallpaper(),
+      if (!incomingOnly) ...[
         _OptionCheckBox(
           context,
           'Open connection in new tab',
@@ -522,17 +501,7 @@ class _GeneralState extends State<_General> {
           isServer: false,
         ),
         // though this is related to GUI, but opengl problem affects all users, so put in config rather than local
-        if (isLinux)
-          Tooltip(
-            message: translate('software_render_tip'),
-            child: _OptionCheckBox(
-              context,
-              "Always use software rendering",
-              kOptionAllowAlwaysSoftwareRender,
-            ),
-          ),
-        if (!isWeb)
-          Tooltip(
+        Tooltip(
             message: translate('texture_render_tip'),
             child: _OptionCheckBox(
               context,
@@ -543,8 +512,7 @@ class _GeneralState extends State<_General> {
                   await bind.mainSetLocalOption(key: k, value: v ? 'Y' : 'N'),
             ),
           ),
-        if (isWindows)
-          Tooltip(
+        Tooltip(
             message: translate('d3d_render_tip'),
             child: _OptionCheckBox(
               context,
@@ -554,13 +522,13 @@ class _GeneralState extends State<_General> {
             ),
           ),
       ],
-      if (isWindows && !outgoingOnly)
+      if (!outgoingOnly)
         _OptionCheckBox(
           context,
           'Capture screen using DirectX',
           kOptionDirectxCapture,
         ),
-      if (!isWeb && !incomingOnly) ...[
+      if (!incomingOnly) ...[
         _OptionCheckBox(
           context,
           'Enable TCP hole punching',
@@ -581,7 +549,7 @@ class _GeneralState extends State<_General> {
         ),
       ],
       if (!incomingOnly) ...webrtcOptions(context),
-      if (!isWeb && !incomingOnly)
+      if (!incomingOnly)
         Tooltip(
           message: translate('sync-clipboard-between-sessions-tip'),
           child: _OptionCheckBox(
@@ -750,9 +718,8 @@ class _GeneralState extends State<_General> {
         initialKey: currentKey,
         onChanged: (key) async {
           await bind.mainSetLocalOption(key: kCommConfKeyLang, value: key);
-          if (isWeb) reloadCurrentWindow();
-          if (!isWeb) reloadAllWindows();
-          if (!isWeb) bind.mainChangeLanguage(lang: key);
+          reloadAllWindows();
+          bind.mainChangeLanguage(lang: key);
         },
         enabled: !isOptFixed,
       ).marginOnly(left: _kContentHMargin);
@@ -1548,9 +1515,8 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
 
   Widget network(BuildContext context) {
     final hideProxy =
-        isWeb || bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
-    final hideWebSocket = isWeb ||
-        bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y';
+        bind.mainGetBuildinOption(key: kOptionHideProxySetting) == 'Y';
+    final hideWebSocket = bind.mainGetBuildinOption(key: kOptionHideWebSocketSetting) == 'Y';
 
     if (hideProxy && hideWebSocket) {
       return Offstage();
@@ -1653,8 +1619,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                     'Use WebSocket',
                     '${translate('websocket_tip')}\n\n${translate('server-oss-not-support-tip')}',
                     kOptionAllowWebSocket),
-              if (!isWeb)
-                futureBuilder(
+              futureBuilder(
                   future: bind.mainIsUsingPublicServer(),
                   hasData: (isUsingPublicServer) {
                     if (isUsingPublicServer) {
@@ -1721,7 +1686,7 @@ class _DisplayState extends State<_Display> {
       scrollStyle(context),
       imageQuality(context),
       codec(context),
-      if (isDesktop) trackpadSpeed(context),
+      trackpadSpeed(context),
       other(context),
     ]).marginOnly(bottom: _kListViewBottomMargin);
   }
@@ -1775,7 +1740,7 @@ class _DisplayState extends State<_Display> {
           groupValue: groupValue,
           label: 'Scrollbar',
           onChanged: isOptFixed ? null : onChanged),
-      if (!isWeb) ...[
+      ...[
         _Radio(context,
             value: kRemoteScrollStyleEdge,
             groupValue: groupValue,
@@ -2036,8 +2001,7 @@ class _AboutState extends State<_About> {
               SelectionArea(
                   child: Text('${translate('Build Date')}: $buildDate')
                       .marginSymmetric(vertical: 4.0)),
-              if (!isWeb)
-                SelectionArea(
+              SelectionArea(
                     child: Text('${translate('Fingerprint')}: $fingerprint')
                         .marginSymmetric(vertical: 4.0)),
               SelectionArea(
@@ -2718,8 +2682,7 @@ void changeSocks5Proxy() async {
           children: [
             Row(
               children: [
-                if (!isMobile)
-                  ConstrainedBox(
+                ConstrainedBox(
                     constraints: const BoxConstraints(minWidth: 140),
                     child: Align(
                         alignment: Alignment.centerRight,
@@ -2748,10 +2711,10 @@ void changeSocks5Proxy() async {
                   child: TextField(
                     decoration: InputDecoration(
                       errorText: proxyMsg.isNotEmpty ? proxyMsg : null,
-                      labelText: isMobile ? translate('Server') : null,
+                      labelText: null,
                       helperText:
-                          isMobile ? translate("default_proxy_tip") : null,
-                      helperMaxLines: isMobile ? 3 : null,
+                          null,
+                      helperMaxLines: null,
                     ),
                     controller: proxyController,
                     autofocus: true,
@@ -2762,8 +2725,7 @@ void changeSocks5Proxy() async {
             ).marginOnly(bottom: 8),
             Row(
               children: [
-                if (!isMobile)
-                  ConstrainedBox(
+                ConstrainedBox(
                       constraints: const BoxConstraints(minWidth: 140),
                       child: Text(
                         '${translate("Username")}:',
@@ -2773,7 +2735,7 @@ void changeSocks5Proxy() async {
                   child: TextField(
                     controller: userController,
                     decoration: InputDecoration(
-                      labelText: isMobile ? translate('Username') : null,
+                      labelText: null,
                     ),
                     enabled: !isOptFixed,
                   ).workaroundFreezeLinuxMint(),
@@ -2782,8 +2744,7 @@ void changeSocks5Proxy() async {
             ).marginOnly(bottom: 8),
             Row(
               children: [
-                if (!isMobile)
-                  ConstrainedBox(
+                ConstrainedBox(
                       constraints: const BoxConstraints(minWidth: 140),
                       child: Text(
                         '${translate("Password")}:',
@@ -2793,7 +2754,7 @@ void changeSocks5Proxy() async {
                   child: Obx(() => TextField(
                         obscureText: obscure.value,
                         decoration: InputDecoration(
-                            labelText: isMobile ? translate('Password') : null,
+                            labelText: null,
                             suffixIcon: IconButton(
                                 onPressed: () => obscure.value = !obscure.value,
                                 icon: Icon(obscure.value

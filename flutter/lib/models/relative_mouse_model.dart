@@ -42,33 +42,17 @@ class RelativeMouseModel {
 
   // Native relative mouse mode support (macOS only)
   // Uses CGAssociateMouseAndMouseCursorPosition to lock cursor and NSEvent monitor for raw delta.
-  static MethodChannel? _hostChannel;
   // The currently active model receiving native mouse delta events.
   // Note: Race condition between multiple sessions is not a concern here because
   // when relative mouse mode is active, the cursor is locked and the user cannot
   // switch to another session window. The user must first exit relative mouse mode
   // (via Cmd+G on macOS or Ctrl+Alt on Windows/Linux) before they can interact
   // with a different session.
-  static RelativeMouseModel? _activeNativeModel;
-  static bool _hostChannelInitialized = false;
 
   /// Initialize the host channel for native relative mouse mode.
   /// This should be called once when the app starts on macOS.
   static void initHostChannel() {
-    if (!isMacOS) return;
-    if (_hostChannelInitialized) return;
-    _hostChannelInitialized = true;
-
-    _hostChannel = const MethodChannel('org.rustdesk.rustdesk/host');
-    _hostChannel!.setMethodCallHandler((call) async {
-      if (call.method == 'onMouseDelta') {
-        final args = call.arguments as Map<dynamic, dynamic>;
-        final dx = args['dx'] as int;
-        final dy = args['dy'] as int;
-        _activeNativeModel?._onNativeMouseDelta(dx, dy);
-      }
-      return null;
-    });
+    return;
   }
 
   // TODO(perf): Consider routing native delta through RelativeMouseAccumulator/throttle
@@ -84,60 +68,16 @@ class RelativeMouseModel {
   }
 
   Future<bool> _enableNativeRelativeMouseMode() async {
-    if (!isMacOS) return false;
-    if (_hostChannel == null) {
-      initHostChannel();
-      if (_hostChannel == null) return false;
-    }
-
-    // Defensive guard: prevent overwriting an already-active native session.
-    // In practice, this should not happen because when relative mouse mode is active,
-    // the cursor is locked and the user cannot switch to another session window.
-    // The user must first exit relative mouse mode (via Cmd+G on macOS or Ctrl+Alt on
-    // Windows/Linux) before interacting with a different session.
-    if (_activeNativeModel != null && _activeNativeModel != this) {
-      debugPrint(
-          '[RelMouse] Another model already has native relative mouse mode active');
-      return false;
-    }
-
-    try {
-      final result =
-          await _hostChannel!.invokeMethod('enableNativeRelativeMouseMode');
-      if (result == true) {
-        _activeNativeModel = this;
-        return true;
-      }
-    } catch (e) {
-      debugPrint('[RelMouse] Failed to enable native relative mouse mode: $e');
-    }
     return false;
   }
 
   Future<void> _disableNativeRelativeMouseMode() async {
-    if (!isMacOS) return;
-    if (_hostChannel == null) return;
-
-    // Only the owning model should disable native mode to avoid
-    // one session inadvertently disrupting another's native relative mouse state.
-    if (_activeNativeModel != this) {
-      return;
-    }
-
-    try {
-      await _hostChannel!.invokeMethod('disableNativeRelativeMouseMode');
-    } catch (e) {
-      debugPrint('[RelMouse] Failed to disable native relative mouse mode: $e');
-    } finally {
-      if (_activeNativeModel == this) {
-        _activeNativeModel = null;
-      }
-    }
+    return;
   }
 
   // Whether native relative mouse mode is currently active for this model
   bool get _isNativeRelativeMouseModeActive =>
-      isMacOS && _activeNativeModel == this;
+      false;
 
   // Pointer lock center in LOCAL widget coordinates (for delta calculation)
   Offset? _pointerLockCenterLocal;
@@ -187,9 +127,6 @@ class RelativeMouseModel {
 
   bool get isSupported {
     // On Linux/Wayland, cursor warping is not supported, hide the option entirely.
-    if (isDesktop && isLinux && bind.mainCurrentIsWayland()) {
-      return false;
-    }
     // Relative mouse mode is unsupported on remote Linux:
     // 1. Long-press key events are unsupported.
     // 2. The Wayland display server lacks cursor warping support.
@@ -234,7 +171,7 @@ class RelativeMouseModel {
     required bool altPressed,
     required bool commandPressed,
   }) {
-    if (!isDesktop || !keyboardPerm()) return false;
+    if (!keyboardPerm()) return false;
 
     // Only handle exit shortcuts when relative mouse mode is active
     if (!enabled.value) return false;
@@ -248,15 +185,6 @@ class RelativeMouseModel {
     if (!isKeyDown) return false;
 
     // macOS: Cmd+G to exit
-    if (isMacOS) {
-      final isGKey = logicalKey == LogicalKeyboardKey.keyG;
-      if (isGKey && commandPressed) {
-        _exitShortcutKeyDown = true;
-        setRelativeMouseMode(false);
-        return true;
-      }
-      return false;
-    }
 
     // Windows/Linux: Ctrl+Alt to exit
     // Triggered when both modifiers are pressed (check on either Ctrl or Alt key down)
@@ -379,16 +307,13 @@ class RelativeMouseModel {
 
   bool setRelativeMouseMode(bool value) {
     // Web is not supported due to Pointer Lock API integration complexity with Flutter's input system
-    if (isWeb) {
-      return false;
-    }
 
     if (value) {
       if (!keyboardPerm()) {
         return false;
       }
 
-      if (isDesktop && _imageWidgetSize == null) {
+      if (_imageWidgetSize == null) {
         // Desktop only: Ensure image widget size is available for proper center calculation.
         showToast(translate('rel-mouse-not-ready-tip'));
         return false;
@@ -403,45 +328,24 @@ class RelativeMouseModel {
 
     if (value) {
       try {
-        if (isDesktop) {
-          final requestId = ++_enableRequestId;
-          if (isMacOS) {
-            // macOS: Use native relative mouse mode with CGAssociateMouseAndMouseCursorPosition
-            // This locks the cursor in place and provides raw delta via NSEvent monitor.
-            _enableNativeRelativeMouseMode().then((success) {
-              // Guard against stale callback: user may have toggled off relative mode
-              // while the async enable was in progress.
-              if (_enableRequestId != requestId) {
-                return;
-              }
-              if (success) {
-                _completeEnableRelativeMouseMode();
-              }
-              // Note: _enableNativeRelativeMouseMode already handles its own cleanup on failure
-            });
-          } else {
-            // Windows/Linux: Use Flutter-based cursor recenter approach
-            if (!getPointerInsideImage()) {
-              _releaseCursorClip();
-            }
-
-            updatePointerLockCenter().then((_) => _recenterMouse()).then((_) {
-              if (_enableRequestId != requestId) {
-                return;
-              }
-              _completeEnableRelativeMouseMode();
-            }).catchError((e) {
-              if (_enableRequestId != requestId) {
-                return;
-              }
-              debugPrint('[RelMouse] Platform setup failed: $e');
-              _resetState();
-            });
-          }
-        } else {
-          // Mobile: enable immediately (no platform-specific setup needed)
-          _completeEnableRelativeMouseMode();
+        final requestId = ++_enableRequestId;
+        // Windows/Linux: Use Flutter-based cursor recenter approach
+        if (!getPointerInsideImage()) {
+          _releaseCursorClip();
         }
+
+        updatePointerLockCenter().then((_) => _recenterMouse()).then((_) {
+          if (_enableRequestId != requestId) {
+            return;
+          }
+          _completeEnableRelativeMouseMode();
+        }).catchError((e) {
+          if (_enableRequestId != requestId) {
+            return;
+          }
+          debugPrint('[RelMouse] Platform setup failed: $e');
+          _resetState();
+        });
       } catch (e) {
         _disableWithCleanup();
         return false;
@@ -459,15 +363,7 @@ class RelativeMouseModel {
       );
 
       // Desktop only: cursor manipulation
-      if (isDesktop) {
-        if (isMacOS) {
-          // macOS: Disable native relative mouse mode
-          // This already calls CGAssociateMouseAndMouseCursorPosition(1) to re-associate mouse
-          _disableNativeRelativeMouseMode();
-        } else {
-          _releaseCursorClip();
-        }
-      }
+      _releaseCursorClip();
       enabled.value = false;
       _resetState();
       onDisabled?.call();
@@ -481,11 +377,9 @@ class RelativeMouseModel {
     enabled.value = true;
 
     // Show toast notification so user knows how to exit relative mouse mode (desktop only).
-    if (isDesktop) {
-      showToast(
-          translate('rel-mouse-exit-{${isMacOS ? "Cmd+G" : "Ctrl+Alt"}}-tip'),
-          alignment: Alignment.center);
-    }
+    showToast(
+        translate('rel-mouse-exit-{${"Ctrl+Alt"}}-tip'),
+        alignment: Alignment.center);
 
     // Best-effort marker for Rust rdev grab loop (ESC behavior) and peer/server state.
     // This uses a no-op delta so it does not move the remote cursor.
@@ -535,9 +429,6 @@ class RelativeMouseModel {
     // On Linux, we don't have clip_cursor, so if the cursor moves too fast
     // it may escape the window before _recenterIfNearEdge can catch it.
     // Check now and recenter immediately if needed.
-    if (isLinux) {
-      _recenterIfNearEdgeLinux(localPosition);
-    }
 
     // Calculate delta from last position (not from center).
     // This avoids issues with CGWarpMouseCursorPosition integer rounding.
@@ -570,7 +461,6 @@ class RelativeMouseModel {
   }
 
   void sendRelativeMouseMove(double dx, double dy) {
-    if (!isDesktop) return;
 
     final delta = _accumulator.add(dx, dy, maxDelta: kMaxRelativeMouseDelta);
     if (delta == null) return;
@@ -586,7 +476,6 @@ class RelativeMouseModel {
   }
 
   Future<void> _flushPendingDelta() async {
-    if (!isDesktop) return;
     if (_pendingDeltaX == 0 && _pendingDeltaY == 0) return;
 
     final x = _pendingDeltaX;
@@ -617,22 +506,10 @@ class RelativeMouseModel {
   // Linux-specific edge threshold parameters (more aggressive to prevent cursor escape).
   // On Linux, we don't have clip_cursor capability, so we need to recenter earlier
   // to prevent the cursor from escaping the window when moving fast.
-  static const double _edgeThresholdFractionLinux =
-      0.25; // 25% of smaller dimension
-  static const double _edgeThresholdMaxLinux =
-      200.0; // Larger maximum threshold for Linux
-  static const double _edgeThresholdMinLinux =
-      50.0; // Larger minimum threshold for Linux
 
   /// Calculate dynamic edge threshold based on widget size.
   double _calculateEdgeThreshold(Size size) {
     final smallerDimension = math.min(size.width, size.height);
-    if (isLinux) {
-      // Use more aggressive thresholds on Linux to prevent cursor escape.
-      final dynamicThreshold = smallerDimension * _edgeThresholdFractionLinux;
-      return dynamicThreshold.clamp(
-          _edgeThresholdMinLinux, _edgeThresholdMaxLinux);
-    }
     final dynamicThreshold = smallerDimension * _edgeThresholdFraction;
     // Clamp between min and max thresholds
     return dynamicThreshold.clamp(_edgeThresholdMin, _edgeThresholdMax);
@@ -762,7 +639,6 @@ class RelativeMouseModel {
   }
 
   Future<void> updatePointerLockCenter({Offset? localCenter}) async {
-    if (!isDesktop) return;
 
     // Null safety check for kWindowId.
     if (kWindowId == null) {
@@ -822,46 +698,36 @@ class RelativeMouseModel {
         // macOS: Window frame and CGWarpMouseCursorPosition both use points (not pixels).
         // We convert clientPhysical (pixels) to points via `/ scale` to compute titleBarHeight,
         // which is the difference between the total window height and the Flutter view height.
-        if (isMacOS) {
-          final clientHeightPoints = clientPhysical.height / scale;
-          final titleBarHeight = frame.height - clientHeightPoints;
+        // Windows/Linux: Use pixel coordinates. We estimate the client-area offset using
+        // a heuristic based on the difference between frame size and client physical size.
+        // This assumes symmetric horizontal borders (extraW / 2) and that the remaining
+        // vertical space (extraH - borderBottom) is the title bar height.
+        // Limitation: This heuristic may be inaccurate for maximized windows, custom window
+        // decorations, or when the OS uses different border styles.
+        // TODO: Replace this heuristic with platform API calls (e.g., GetClientRect on Windows)
+        //       if precise client-area offsets are required.
+        final extraW = frame.width - clientPhysical.width;
+        final extraH = frame.height - clientPhysical.height;
+        final borderX = extraW > 0 ? extraW / 2 : 0.0;
+        final borderBottom = borderX;
+        final borderTop = extraH > borderBottom ? extraH - borderBottom : 0.0;
+        final clientTopLeftScreen =
+            Offset(frame.left + borderX, frame.top + borderTop);
 
-          _pointerLockCenterScreen = Offset(
-            frame.left + centerInView.dx,
-            frame.top + titleBarHeight + centerInView.dy,
-          );
-        } else {
-          // Windows/Linux: Use pixel coordinates. We estimate the client-area offset using
-          // a heuristic based on the difference between frame size and client physical size.
-          // This assumes symmetric horizontal borders (extraW / 2) and that the remaining
-          // vertical space (extraH - borderBottom) is the title bar height.
-          // Limitation: This heuristic may be inaccurate for maximized windows, custom window
-          // decorations, or when the OS uses different border styles.
-          // TODO: Replace this heuristic with platform API calls (e.g., GetClientRect on Windows)
-          //       if precise client-area offsets are required.
-          final extraW = frame.width - clientPhysical.width;
-          final extraH = frame.height - clientPhysical.height;
-          final borderX = extraW > 0 ? extraW / 2 : 0.0;
-          final borderBottom = borderX;
-          final borderTop = extraH > borderBottom ? extraH - borderBottom : 0.0;
-          final clientTopLeftScreen =
-              Offset(frame.left + borderX, frame.top + borderTop);
-
-          // Calculate tentative center, then validate it's within frame bounds.
-          // This guards against heuristic inaccuracies (e.g., maximized windows).
-          final tentativeCenter = Offset(
-            clientTopLeftScreen.dx + centerInView.dx * scale,
-            clientTopLeftScreen.dy + centerInView.dy * scale,
-          );
-          final withinFrame = tentativeCenter.dx >= frame.left &&
-              tentativeCenter.dx <= frame.left + frame.width &&
-              tentativeCenter.dy >= frame.top &&
-              tentativeCenter.dy <= frame.top + frame.height;
-          _pointerLockCenterScreen = withinFrame
-              ? tentativeCenter
-              : Offset(
-                  frame.left + frame.width / 2, frame.top + frame.height / 2);
-        }
+        // Calculate tentative center, then validate it's within frame bounds.
+        // This guards against heuristic inaccuracies (e.g., maximized windows).
+        final tentativeCenter = Offset(
+          clientTopLeftScreen.dx + centerInView.dx * scale,
+          clientTopLeftScreen.dy + centerInView.dy * scale,
+        );
+        final withinFrame = tentativeCenter.dx >= frame.left &&
+            tentativeCenter.dx <= frame.left + frame.width &&
+            tentativeCenter.dy >= frame.top &&
+            tentativeCenter.dy <= frame.top + frame.height;
+        _pointerLockCenterScreen = withinFrame
+            ? tentativeCenter
+            : Offset(
+                frame.left + frame.width / 2, frame.top + frame.height / 2);
       } else {
         _pointerLockCenterScreen = Offset(
           frame.left + frame.width / 2,
@@ -869,9 +735,9 @@ class RelativeMouseModel {
         );
       }
 
-      if (enabled.value && isWindows && getPointerInsideImage()) {
+      if (enabled.value && getPointerInsideImage()) {
         _applyCursorClipForFrame(frame);
-      } else if (enabled.value && isWindows && _cursorClipApplied) {
+      } else if (enabled.value && _cursorClipApplied) {
         // Only release if we actually have a clip applied to avoid redundant FFI calls.
         _releaseCursorClip();
       }
@@ -889,14 +755,13 @@ class RelativeMouseModel {
 
   void _ensurePointerLockEngaged() {
     if (!enabled.value) return;
-    if (!isDesktop) return;
 
     setPointerInsideImage(true);
 
     final needsCenter =
         _pointerLockCenterLocal == null || _pointerLockCenterScreen == null;
     // Windows only: cursor clip
-    final needsClip = isWindows && !_cursorClipApplied;
+    final needsClip = !_cursorClipApplied;
     if (needsCenter || needsClip) {
       updatePointerLockCenter()
           .then((_) => _recenterMouse())
@@ -908,7 +773,6 @@ class RelativeMouseModel {
   }
 
   void _applyCursorClipForFrame(Rect frame) {
-    if (!isWindows) return;
 
     // Use PlatformDispatcher to get the device pixel ratio for proper scaling.
     final view = ui.PlatformDispatcher.instance.views.firstOrNull;
@@ -968,7 +832,6 @@ class RelativeMouseModel {
   void _releaseCursorClip() {
     if (!_cursorClipApplied) return;
     _cursorClipApplied = false;
-    if (!isWindows) return;
 
     bind.mainClipCursor(
       left: 0,
@@ -1025,11 +888,7 @@ class RelativeMouseModel {
 
     // macOS: Disable native relative mouse mode
     // This already calls CGAssociateMouseAndMouseCursorPosition(1) to re-associate mouse
-    if (isMacOS) {
-      _disableNativeRelativeMouseMode();
-    } else {
-      _releaseCursorClip();
-    }
+    _releaseCursorClip();
 
     _resetState();
   }

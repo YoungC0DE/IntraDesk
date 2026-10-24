@@ -103,7 +103,6 @@ class DesktopTabController {
   int get length => state.value.tabs.length;
 
   void add(TabInfo tab) {
-    if (!isDesktop) return;
     final index = state.value.tabs.indexWhere((e) => e.key == tab.key);
     int toIndex;
     if (index >= 0) {
@@ -126,7 +125,6 @@ class DesktopTabController {
   }
 
   void remove(int index) {
-    if (!isDesktop) return;
     final len = state.value.tabs.length;
     if (index < 0 || index > len - 1) return;
     final key = state.value.tabs[index].key;
@@ -146,7 +144,7 @@ class DesktopTabController {
   /// For addTab, tabPage has not been initialized, set [callOnSelected] to false,
   /// and call [onSelected] at the end of initState
   bool jumpTo(int index, {bool callOnSelected = true}) {
-    if (!isDesktop || index < 0) {
+    if (index < 0) {
       return false;
     }
     state.update((val) {
@@ -165,8 +163,7 @@ class DesktopTabController {
         }));
       }
     });
-    if ((isDesktop && (bind.isIncomingOnly() || bind.isOutgoingOnly())) ||
-        callOnSelected) {
+    if (((bind.isIncomingOnly() || bind.isOutgoingOnly())) || callOnSelected) {
       if (state.value.tabs.length > index) {
         final key = state.value.tabs[index].key;
         onSelected?.call(key);
@@ -193,7 +190,6 @@ class DesktopTabController {
   }
 
   void closeBy(String? key) {
-    if (!isDesktop) return;
     assert(onRemoved != null);
     if (key == null) {
       if (state.value.selected < state.value.tabs.length) {
@@ -417,7 +413,7 @@ class _DesktopTabState extends State<DesktopTab>
   // turns it off to quit, so the window can no longer be saved or hidden.
   // https://github.com/rustdesk/rustdesk/issues/16512
   Future<bool> _isLinuxWindowClosed() async =>
-      isLinux && isMainWindow && !await windowManager.isPreventClose();
+      false;
 
   @override
   void onWindowMoved() {
@@ -437,12 +433,10 @@ class _DesktopTabState extends State<DesktopTab>
     notMainWindowClose(WindowController windowController) async {
       if (controller.length != 0) {
         debugPrint("close not empty multiwindow from taskbar");
-        if (isWindows) {
-          await windowController.show();
-          await windowController.focus();
-          final res = await onWindowCloseButton?.call() ?? true;
-          if (!res) return;
-        }
+        await windowController.show();
+        await windowController.focus();
+        final res = await onWindowCloseButton?.call() ?? true;
+        if (!res) return;
         controller.clear();
       }
       await windowController.hide();
@@ -477,37 +471,11 @@ class _DesktopTabState extends State<DesktopTab>
       }
       if (await _isLinuxWindowClosed()) return;
       // macOS specific workaround, the window is not hiding when in fullscreen.
-      if (isMacOS && await windowManager.isFullScreen()) {
-        await windowManager.setFullScreen(false);
-        await macOSWindowClose(
-          () async => await windowManager.isFullScreen(),
-          mainWindowClose,
-        );
-      } else {
-        await mainWindowClose();
-      }
+      await mainWindowClose();
     } else {
       // it's safe to hide the subwindow
       final controller = WindowController.fromWindowId(kWindowId!);
-      if (isMacOS) {
-        // onWindowClose() maybe called multiple times because of loopCloseWindow() in remote_tab_page.dart.
-        // use ??=  to make sure the value is set on first call.
-
-        if (await onWindowCloseButton?.call() ?? true) {
-          if (await controller.isFullScreen()) {
-            await controller.setFullscreen(false);
-            stateGlobal.setFullscreen(false, procWnd: false);
-            await macOSWindowClose(
-              () async => await controller.isFullScreen(),
-              () async => await notMainWindowClose(controller),
-            );
-          } else {
-            await notMainWindowClose(controller);
-          }
-        }
-      } else {
-        await notMainWindowClose(controller);
-      }
+      await notMainWindowClose(controller);
     }
     super.onWindowClose();
   }
@@ -619,24 +587,18 @@ class _DesktopTabState extends State<DesktopTab>
                 onPanCancel: () {
                   // We want to disable dragging of the tab area in the tab bar.
                   // Disable dragging is needed because macOS handles dragging by default.
-                  if (isMacOS) {
-                    setMovable(isMainWindow, false);
-                  }
                 },
                 onPanEnd: (_) {
-                  if (isMacOS) {
-                    setMovable(isMainWindow, false);
-                  }
                 },
                 child: Row(
                   children: [
                     Offstage(
-                        offstage: !isMacOS,
+                        offstage: true,
                         child: const SizedBox(
                           width: 78,
                         )),
                     Offstage(
-                      offstage: kUseCompatibleUiMode || isMacOS,
+                      offstage: kUseCompatibleUiMode,
                       child: Row(children: [
                         Offstage(
                           offstage: !showLogo,
@@ -771,7 +733,7 @@ class WindowActionPanelState extends State<WindowActionPanel> {
         if (!kUseCompatibleUiMode)
           Row(
             children: [
-              if (widget.showMinimize && !isMacOS)
+              if (widget.showMinimize)
                 ActionIcon(
                   message: 'Minimize',
                   icon: IconFont.min,
@@ -784,7 +746,7 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                   },
                   isClose: false,
                 ),
-              if (widget.showMaximize && !isMacOS)
+              if (widget.showMaximize)
                 Obx(() => ActionIcon(
                       message: stateGlobal.isMaximized.isTrue
                           ? 'Restore'
@@ -797,7 +759,7 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                           : _toggleMaximize,
                       isClose: false,
                     )),
-              if (widget.showClose && !isMacOS)
+              if (widget.showClose)
                 ActionIcon(
                   message: 'Close',
                   icon: IconFont.close,

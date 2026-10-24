@@ -106,7 +106,7 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
                 ),
               ),
             )));
-    return isMacOS || kUseCompatibleUiMode
+    return kUseCompatibleUiMode
         ? tabWidget
         : Obx(
             () => DragToResizeArea(

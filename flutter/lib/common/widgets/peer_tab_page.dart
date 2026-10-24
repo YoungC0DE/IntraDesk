@@ -28,7 +28,7 @@ class PeerTabPage extends StatefulWidget {
 }
 
 EdgeInsets? _menuPadding() {
-  return (isDesktop || isWebDesktop) ? kDesktopMenuPadding : null;
+  return kDesktopMenuPadding;
 }
 
 class _PeerTabPageState extends State<PeerTabPage>
@@ -137,7 +137,7 @@ class _PeerTabPageState extends State<PeerTabPage>
               child: Obx(() => Tooltip(
                     preferBelow: false,
                     message: model.tabTooltip(t),
-                    onTriggered: isMobile ? mobileShowTabVisibilityMenu : null,
+                    onTriggered: null,
                     child: InkWell(
                       child: Container(
                         decoration: (hover.value
@@ -179,7 +179,7 @@ class _PeerTabPageState extends State<PeerTabPage>
     }
     return Expanded(
         child: child.marginSymmetric(
-            vertical: (isDesktop || isWebDesktop) ? 12.0 : 6.0));
+            vertical: 12.0));
   }
 
   Widget _createPeerViewTypeSwitch(BuildContext context) {
@@ -194,9 +194,6 @@ class _PeerTabPageState extends State<PeerTabPage>
       context: context,
       onTap: () {
         model.setMultiSelectionMode(true);
-        if (isMobile && Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
       },
       child: SvgPicture.asset(
         "assets/checkbox-outline.svg",
@@ -242,35 +239,21 @@ class _PeerTabPageState extends State<PeerTabPage>
   }
 
   Widget visibleContextMenuListener(Widget child) {
-    if (!(isDesktop || isWebDesktop)) {
-      return GestureDetector(
-        onLongPressDown: (e) {
-          final x = e.globalPosition.dx;
-          final y = e.globalPosition.dy;
-          mobileTabContextMenuPos = RelativeRect.fromLTRB(x, y, x, y);
+    return Listener(
+        onPointerDown: (e) {
+          if (e.kind != ui.PointerDeviceKind.mouse) {
+            return;
+          }
+          if (e.buttons == 2) {
+            showRightMenu(
+              (CancelFunc cancelFunc) {
+                return visibleContextMenu(cancelFunc);
+              },
+              target: e.position,
+            );
+          }
         },
-        onLongPressUp: () {
-          mobileShowTabVisibilityMenu();
-        },
-        child: child,
-      );
-    } else {
-      return Listener(
-          onPointerDown: (e) {
-            if (e.kind != ui.PointerDeviceKind.mouse) {
-              return;
-            }
-            if (e.buttons == 2) {
-              showRightMenu(
-                (CancelFunc cancelFunc) {
-                  return visibleContextMenu(cancelFunc);
-                },
-                target: e.position,
-              );
-            }
-          },
-          child: child);
-    }
+        child: child);
   }
 
   Widget visibleContextMenu(CancelFunc cancelFunc) {
@@ -390,7 +373,7 @@ class _PeerTabPageState extends State<PeerTabPage>
           showToast(translate('Successful'));
         },
         child: Icon(PeerTabModel.icons[PeerTabIndex.fav.index]),
-      ).marginOnly(left: !(isDesktop || isWebDesktop) ? 11 : 6),
+      ).marginOnly(left: 6),
     );
   }
 

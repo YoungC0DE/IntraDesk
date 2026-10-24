@@ -129,7 +129,7 @@ class DraggableKeyPosition {
     if (x + w > size.width) {
       x = size.width - w;
     }
-    final tabBarHeight = isDesktop ? kDesktopRemoteTabBarHeight : 0;
+    final tabBarHeight = kDesktopRemoteTabBarHeight;
     if (y + h > (size.height - tabBarHeight)) {
       y = size.height - tabBarHeight - h;
     }

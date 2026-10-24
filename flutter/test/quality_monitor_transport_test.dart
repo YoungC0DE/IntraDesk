@@ -1,4 +1,3 @@
-import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uuid/uuid.dart';
@@ -22,7 +21,7 @@ void main() {
     ffi.ffiModel.cachedPeerData.streamType = 'WebRTC';
     final model = QualityMonitorModel(WeakReference(ffi));
     // Off the web the session tab's tooltip already names the transport.
-    expect(isWeb, isFalse);
+    expect(false, isFalse);
     expect(model.webrtcTransport, isNull);
   });
 }

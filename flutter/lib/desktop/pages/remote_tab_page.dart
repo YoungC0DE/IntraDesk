@@ -207,9 +207,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
         }),
       ),
     );
-    final tabWidget = isLinux
-        ? buildVirtualWindowFrame(context, child)
-        : workaroundWindowBorder(
+    final tabWidget = workaroundWindowBorder(
             context,
             Obx(() => Container(
                   decoration: BoxDecoration(
@@ -219,7 +217,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
                   ),
                   child: child,
                 )));
-    return isMacOS || kUseCompatibleUiMode
+    return kUseCompatibleUiMode
         ? tabWidget
         : Obx(() => SubWindowDragToResizeArea(
               key: contentKey,
@@ -422,7 +420,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
         }
         await setNewConnectWindowFrame(windowId(), id!, prePeerCount,
             WindowType.RemoteDesktop, display, screenRect);
-        Future.delayed(Duration(milliseconds: isWindows ? 100 : 0), () async {
+        Future.delayed(Duration(milliseconds: 100), () async {
           await windowOnTop(windowId());
         });
       });
@@ -585,7 +583,7 @@ class _RelativeMouseModeHint extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               translate(
-                  'rel-mouse-exit-{${isMacOS ? "Cmd+G" : "Ctrl+Alt"}}-tip'),
+                  'rel-mouse-exit-{${"Ctrl+Alt"}}-tip'),
               style: TextStyle(
                 fontSize: 11,
                 color: Colors.orange[700],

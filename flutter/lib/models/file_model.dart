@@ -30,10 +30,8 @@ class JobID {
   int _count = 0;
   int next() {
     try {
-      if (!isWeb) {
-        String v = bind.mainGetCommonSync(key: 'transfer-job-id');
-        return int.parse(v);
-      }
+      String v = bind.mainGetCommonSync(key: 'transfer-job-id');
+      return int.parse(v);
     } catch (e) {
       debugPrint("Failed to get transfer job id: $e");
     }
@@ -91,7 +89,7 @@ class FileModel {
   Future<void> onReady() async {
     fileFetcher.beginRemoteSession();
     await evtLoop.onReady();
-    if (!isWeb) await localController.onReady();
+    await localController.onReady();
     await remoteController.onReady();
   }
 
@@ -103,7 +101,7 @@ class FileModel {
   }
 
   Future<void> refreshAll() async {
-    if (!isWeb) await localController.refresh();
+    await localController.refresh();
     await remoteController.refresh();
   }
 
@@ -331,11 +329,7 @@ class FileController {
   OverlayDialogManager? get dialogManager => rootState.target?.dialogManager;
 
   bool _isPathAllowed(String candidate) {
-    if (!isAndroid || !isLocal) return true;
-    if (homePath.isEmpty || candidate.isEmpty) return false;
-    final home = PathUtil.posixContext.normalize(homePath);
-    final target = PathUtil.posixContext.normalize(candidate);
-    return target == home || PathUtil.posixContext.isWithin(home, target);
+    return true;
   }
 
   String get shortPath {
@@ -605,9 +599,7 @@ class FileController {
           "path: ${from.path}, toPath: $toPath, to: ${PathUtil.join(toPath, from.name, isWindows)}");
     }
 
-    if (isWeb ||
-        (!isLocal &&
-            versionCmp(rootState.target!.ffiModel.pi.version, '1.3.3') < 0)) {
+    if ((!isLocal && versionCmp(rootState.target!.ffiModel.pi.version, '1.3.3') < 0)) {
       return;
     }
 
@@ -1292,11 +1284,6 @@ class JobController {
     }
 
     if (!isAutoStart) {
-      if (!(isDesktop || isWebDesktop)) {
-        // Don't add to job table if not auto start on mobile.
-        // Because mobile does not support job list view now.
-        return;
-      }
 
       // Add to job table if not auto start on desktop.
       String fileName = path.basename(isRemote ? remote : to);

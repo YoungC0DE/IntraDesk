@@ -78,9 +78,7 @@ void changeIdDialog() {
       final Iterable violations = rules.where((r) => !r.validate(newId));
       if (violations.isNotEmpty) {
         setState(() {
-          msg = (isDesktop || isWebDesktop)
-              ? '${translate('Prompt')}:  ${violations.map((r) => r.name).join(', ')}'
-              : violations.map((r) => r.name).join(', ');
+          msg = '${translate('Prompt')}:  ${violations.map((r) => r.name).join(', ')}';
         });
         return;
       }
@@ -103,9 +101,7 @@ void changeIdDialog() {
       }
       setState(() {
         isInProgress = false;
-        msg = (isDesktop || isWebDesktop)
-            ? '${translate('Prompt')}: ${translate(status)}'
-            : translate(status);
+        msg = '${translate('Prompt')}: ${translate(status)}';
       });
     }
 
@@ -140,8 +136,7 @@ void changeIdDialog() {
           const SizedBox(
             height: 8.0,
           ),
-          (isDesktop || isWebDesktop)
-              ? Obx(() => Wrap(
+          Obx(() => Wrap(
                     runSpacing: 8,
                     spacing: 4,
                     children: rules.map((e) {
@@ -158,8 +153,7 @@ void changeIdDialog() {
                               ? const Color(0xFFD0F7ED)
                               : Color.fromARGB(255, 247, 205, 232));
                     }).toList(),
-                  )).marginOnly(bottom: 8)
-              : SizedBox.shrink(),
+                  )).marginOnly(bottom: 8),
           // NOT use Offstage to wrap LinearProgressIndicator
           if (isInProgress) const LinearProgressIndicator(),
         ],
@@ -763,15 +757,6 @@ class _DialogVerificationCodeField extends State<DialogVerificationCodeField> {
 
     // software secure keyboard will take the focus since flutter 3.13
     // request focus again when android account password obtain focus
-    if (isAndroid && widget.reRequestFocus) {
-      _focusNode.addListener(() {
-        if (_focusNode.hasFocus) {
-          _timerReRequestFocus?.cancel();
-          _timerReRequestFocus = Timer(
-              Duration(milliseconds: 100), () => _focusNode.requestFocus());
-        }
-      });
-    }
   }
 
   @override
@@ -836,15 +821,6 @@ class _PasswordWidgetState extends State<PasswordWidget> {
     }
     // software secure keyboard will take the focus since flutter 3.13
     // request focus again when android account password obtain focus
-    if (isAndroid && widget.reRequestFocus) {
-      _focusNode.addListener(() {
-        if (_focusNode.hasFocus) {
-          _timerReRequestFocus?.cancel();
-          _timerReRequestFocus = Timer(
-              Duration(milliseconds: 100), () => _focusNode.requestFocus());
-        }
-      });
-    }
   }
 
   @override

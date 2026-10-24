@@ -1,4 +1,3 @@
-import 'package:flutter_hbb/common.dart';
 import 'package:get/get.dart';
 
 import '../consts.dart';
@@ -278,7 +277,7 @@ initSharedStates(String id) {
   RemoteCursorMovedState.init(id);
   FingerprintState.init(id);
   PeerBoolOption.init(id, kOptionZoomCursor, () => false);
-  if (isMobile) ConnectionTypeState.init(id); // desktop in other places
+   // desktop in other places
 }
 
 removeSharedStates(String id) {
@@ -289,5 +288,4 @@ removeSharedStates(String id) {
   RemoteCursorMovedState.delete(id);
   FingerprintState.delete(id);
   PeerBoolOption.delete(id, kOptionZoomCursor);
-  if (isMobile) ConnectionTypeState.delete(id);
 }

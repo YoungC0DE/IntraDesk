@@ -89,7 +89,7 @@ class _PeersViewState extends State<_PeersView>
     LoadEvent.favorite: 'empty_favorite_tip',
     LoadEvent.lan: 'empty_lan_tip',
   });
-  final space = (isDesktop || isWebDesktop) ? 12.0 : 8.0;
+  final space = 12.0;
   final _curPeers = <String>{};
   var _lastChangeTime = DateTime.now();
   var _lastQueryPeers = <String>{};
@@ -133,8 +133,7 @@ class _PeersViewState extends State<_PeersView>
     //
     // Although `onWindowRestore()` is called after `onWindowBlur()` in my test,
     // we need the following comparison to ensure that `_isActive` is true in the end.
-    if (isWindows &&
-        DateTime.now().difference(_lastWindowRestoreTime) <
+    if (DateTime.now().difference(_lastWindowRestoreTime) <
             const Duration(milliseconds: 300)) {
       return;
     }
@@ -146,7 +145,6 @@ class _PeersViewState extends State<_PeersView>
   void onWindowRestore() {
     // Window restore (on MacOS and Linux) also triggers `onWindowFocus()`.
     // But on Windows, it triggers `onWindowBlur()`, mybe it's a bug of the window manager.
-    if (!isWindows) return;
     _queryCount = 0;
     _isActive = true;
     _lastWindowRestoreTime = DateTime.now();
@@ -162,13 +160,7 @@ class _PeersViewState extends State<_PeersView>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (isDesktop || isWebDesktop) return;
-    if (state == AppLifecycleState.resumed) {
-      _isActive = true;
-      _queryCount = 0;
-    } else if (state == AppLifecycleState.inactive) {
-      _isActive = false;
-    }
+    return;
   }
 
   @override
@@ -319,11 +311,7 @@ class _PeersViewState extends State<_PeersView>
             _queryOnlines(false);
           }
         } else {
-          final skipIfIsWeb =
-              isWeb && !(stateGlobal.isWebVisible && stateGlobal.isInMainPage);
-          final skipIfMobile =
-              (isAndroid || isIOS) && !stateGlobal.isInMainPage;
-          final skipIfNotActive = skipIfIsWeb || skipIfMobile || !_isActive;
+          final skipIfNotActive = !_isActive;
           if (!skipIfNotActive && (_queryCount < _maxQueryCount || !p)) {
             if (now.difference(_lastQueryTime) >= _queryInterval) {
               if (_curPeers.isNotEmpty) {

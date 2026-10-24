@@ -259,7 +259,7 @@ class _ConnectionPageState extends State<ConnectionPage>
     if (eventName == 'minimize') {
       isWindowMinimized = true;
     } else if (eventName == 'maximize' || eventName == 'restore') {
-      if (isWindowMinimized && isWindows) {
+      if (isWindowMinimized) {
         // windows can't update when minimized.
         Get.forceAppUpdate();
       }

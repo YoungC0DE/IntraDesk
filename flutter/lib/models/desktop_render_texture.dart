@@ -181,7 +181,6 @@ class TextureModel {
   }
 
   updateCurrentDisplay(int curDisplay) {
-    if (isWeb) return;
     final ffi = parent.target;
     if (ffi == null) return;
     tryCreateTexture(int idx) {

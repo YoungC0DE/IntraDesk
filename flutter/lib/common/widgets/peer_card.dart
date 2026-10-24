@@ -66,11 +66,7 @@ class _PeerCardState extends State<_PeerCard>
           if (peerTabModel.multiSelectionMode) {
             peerTabModel.select(peer);
           } else {
-            if (isMobile) {
-              widget.connect(context, peer.id);
-            } else {
-              peerTabModel.select(peer);
-            }
+            peerTabModel.select(peer);
           }
         },
         onLongPress: () => peerTabModel.select(peer),
@@ -736,16 +732,10 @@ class RecentPeerCard extends BasePeerCard {
     final List favs = (await bind.mainGetFav()).toList();
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
-    }
+    menuItems.add(await _forceAlwaysRelayAction(peer.id));
+    menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
-    if (isMobile || isDesktop || isWebDesktop) {
-      menuItems.add(_renameAction(peer.id));
-    }
+    menuItems.add(_renameAction(peer.id));
     if (await bind.mainPeerHasPassword(id: peer.id)) {
       menuItems.add(_unrememberPasswordAction(peer.id));
     }
@@ -783,16 +773,10 @@ class FavoritePeerCard extends BasePeerCard {
     ];
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
-    if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
-    }
+    menuItems.add(await _forceAlwaysRelayAction(peer.id));
+    menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
-    if (isMobile || isDesktop || isWebDesktop) {
-      menuItems.add(_renameAction(peer.id));
-    }
+    menuItems.add(_renameAction(peer.id));
     if (await bind.mainPeerHasPassword(id: peer.id)) {
       menuItems.add(_unrememberPasswordAction(peer.id));
     }
@@ -829,13 +813,9 @@ class DiscoveredPeerCard extends BasePeerCard {
     final List favs = (await bind.mainGetFav()).toList();
 
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    if (!isWeb) {
-      menuItems.add(await _forceAlwaysRelayAction(peer.id));
-    }
+    menuItems.add(await _forceAlwaysRelayAction(peer.id));
     menuItems.add(_wolAction(peer.id));
-    if (isWindows) {
-      menuItems.add(_createShortCutAction(peer.id));
-    }
+    menuItems.add(_createShortCutAction(peer.id));
 
     if (!favs.contains(peer.id)) {
       menuItems.add(_addFavAction(peer.id));

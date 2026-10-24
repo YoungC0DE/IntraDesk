@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:extended_text/extended_text.dart';
-import 'package:flutter_hbb/common/widgets/dialog.dart';
 import 'package:flutter_hbb/desktop/widgets/dragable_divider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -106,9 +105,6 @@ class _FileManagerPageState extends State<FileManagerPage>
     });
     Get.put<FFI>(_ffi, tag: 'ft_${widget.id}');
     WakelockManager.enable(_uniqueKey);
-    if (isWeb) {
-      _ffi.ffiModel.updateEventListener(_ffi.sessionId, widget.id);
-    }
     debugPrint("File manager page init success with id ${widget.id}");
     _ffi.dialogManager.setOverlayState(_overlayKeyState);
     // Call onSelected in post frame callback, since we cannot guarantee that the callback will not call setState.
@@ -142,17 +138,7 @@ class _FileManagerPageState extends State<FileManagerPage>
   }
 
   Widget willPopScope(Widget child) {
-    if (isWeb) {
-      return WillPopScope(
-        onWillPop: () async {
-          clientClose(_ffi.sessionId, _ffi);
-          return false;
-        },
-        child: child,
-      );
-    } else {
-      return child;
-    }
+    return child;
   }
 
   @override
@@ -164,8 +150,7 @@ class _FileManagerPageState extends State<FileManagerPage>
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: Row(
             children: [
-              if (!isWeb)
-                Flexible(
+              Flexible(
                     flex: 3,
                     child: dropArea(FileManagerView(
                         model.localController, _ffi, _mouseFocusScope))),
@@ -217,11 +202,7 @@ class _FileManagerPageState extends State<FileManagerPage>
           return Icon(Icons.delete_outline, color: color);
         default:
           return Transform.rotate(
-            angle: isWeb
-                ? job.isRemoteToLocal
-                    ? pi / 2
-                    : pi / 2 * 3
-                : job.isRemoteToLocal
+            angle: job.isRemoteToLocal
                     ? pi
                     : 0,
             child: Icon(Icons.arrow_forward_ios, color: color),
@@ -899,9 +880,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                                   : Colors.white,
                             ),
                           )
-                        : isWeb
-                            ? Offstage()
-                            : RotatedBox(
+                        : RotatedBox(
                                 quarterTurns: 2,
                                 child: SvgPicture.asset(
                                   "assets/arrow.svg",
@@ -926,7 +905,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                                 : Colors.white),
                           )
                         : Text(
-                            translate(isWeb ? 'Download' : 'Receive'),
+                            translate('Receive'),
                             style: TextStyle(
                               color: selectedItems.items.isEmpty
                                   ? Theme.of(context).brightness ==

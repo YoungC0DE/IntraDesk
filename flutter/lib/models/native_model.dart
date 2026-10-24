@@ -137,19 +137,7 @@ class PlatformFFI {
   /// Init the FFI class, loads the native Rust core library.
   Future<void> init(String appType) async {
     _appType = appType;
-    final dylib = isAndroid
-        ? DynamicLibrary.open('librustdesk.so')
-        : isLinux
-            ? _openLinuxCoreLib()
-            : isWindows
-                ? DynamicLibrary.open('librustdesk.dll')
-                :
-                // Use executable itself as the dynamic library for MacOS.
-                // Multiple dylib instances will cause some global instances to be invalid.
-                // eg. `lazy_static` objects in rust side, will be created more than once, which is not expected.
-                //
-                // isMacOS? DynamicLibrary.open("liblibrustdesk.dylib") :
-                DynamicLibrary.process();
+    final dylib = DynamicLibrary.open('librustdesk.dll');
     debugPrint('initializing FFI $_appType');
     try {
       _session_get_rgba = dylib.lookupFunction<F3Dart, F3>("session_get_rgba");
@@ -161,73 +149,28 @@ class PlatformFFI {
       }
       _ffiBind = RustdeskImpl(dylib);
 
-      if (isLinux) {
-        if (isMain) {
-          // Start a dbus service for uri links, no need to await
-          _ffiBind.mainStartDbusServer();
-        }
-      } else if (isMacOS && isMain) {
-        // Start ipc service for uri links.
-        _ffiBind.mainStartIpcUrlServer();
-      }
       _startListenEvent(_ffiBind); // global event
       try {
-        if (isAndroid) {
-          // Android file transfer uses app-specific storage. User-selected
-          // files enter and leave this workspace through the system picker.
-          _homeDir = (await getExternalStorageDirectory())?.path ??
-              (await getApplicationSupportDirectory()).path;
-        } else if (isIOS) {
-          // The previous code was `_homeDir = (await getDownloadsDirectory())?.path ?? '';`,
-          // which provided the `downloads` path in the sandbox.
-          // It is unclear why we now use the `data` directory in the sandbox instead.
-          _homeDir = _ffiBind.mainGetDataDirIos(appDir: _dir);
-        } else {
-          // no need to set home dir
-        }
+        // no need to set home dir
       } catch (e) {
         debugPrintStack(label: 'initialize failed: $e');
       }
       String id = 'NA';
       String name = 'Flutter';
       DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-      if (isAndroid) {
-        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        name = '${androidInfo.brand}-${androidInfo.model}';
-        id = androidInfo.id.hashCode.toString();
-        androidVersion = androidInfo.version.sdkInt;
-      } else if (isIOS) {
-        IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-        name = iosInfo.utsname.machine;
-        id = iosInfo.identifierForVendor.hashCode.toString();
-      } else if (isLinux) {
-        LinuxDeviceInfo linuxInfo = await deviceInfo.linuxInfo;
-        name = linuxInfo.name;
-        id = linuxInfo.machineId ?? linuxInfo.id;
-      } else if (isWindows) {
-        try {
-          // request windows build number to fix overflow on win7
-          windowsBuildNumber = getWindowsTargetBuildNumber();
-          WindowsDeviceInfo winInfo = await deviceInfo.windowsInfo;
-          name = winInfo.computerName;
-          id = winInfo.computerName;
-        } catch (e) {
-          debugPrintStack(label: "get windows device info failed: $e");
-          name = "unknown";
-          id = "unknown";
-        }
-      } else if (isMacOS) {
-        MacOsDeviceInfo macOsInfo = await deviceInfo.macOsInfo;
-        name = macOsInfo.computerName;
-        id = macOsInfo.systemGUID ?? '';
+      try {
+        // request windows build number to fix overflow on win7
+        windowsBuildNumber = getWindowsTargetBuildNumber();
+        WindowsDeviceInfo winInfo = await deviceInfo.windowsInfo;
+        name = winInfo.computerName;
+        id = winInfo.computerName;
+      } catch (e) {
+        debugPrintStack(label: "get windows device info failed: $e");
+        name = "unknown";
+        id = "unknown";
       }
-      if (isAndroid || isIOS) {
-        debugPrint(
-            '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir,homeDir:$_homeDir');
-      } else {
-        debugPrint(
-            '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir');
-      }
+      debugPrint(
+          '_appType:$_appType,info1-id:$id,info2-name:$name,dir:$_dir');
       if (desktopType == DesktopType.cm) {
         await _ffiBind.cmInit();
       }
@@ -310,14 +253,12 @@ class PlatformFFI {
   }
 
   invokeMethod(String method, [dynamic arguments]) async {
-    if (!isAndroid) return Future<bool>(() => false);
-    return await _toAndroidChannel.invokeMethod(method, arguments);
+    return Future<bool>(() => false);
   }
 
   Future<T?> invokeMethodWithResult<T>(String method,
       [dynamic arguments]) async {
-    if (!isAndroid) return null;
-    return await _toAndroidChannel.invokeMethod<T>(method, arguments);
+    return null;
   }
 
   void syncAndroidServiceAppDirConfigPath() {

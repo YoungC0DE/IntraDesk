@@ -28,7 +28,6 @@ class RawKeyFocusScope extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // https://github.com/flutter/flutter/issues/154053
-    final useRawKeyEvents = isLinux && !isWeb;
     // FIXME: On Windows, `AltGr` will generate `Alt` and `Control` key events,
     // while `Alt` and `Control` are separated key events for en-US input method.
     return FocusScope(
@@ -38,13 +37,8 @@ class RawKeyFocusScope extends StatelessWidget {
             canRequestFocus: true,
             focusNode: focusNode,
             onFocusChange: onFocusChange,
-            onKey: useRawKeyEvents
-                ? (FocusNode data, RawKeyEvent event) =>
-                    inputModel.handleRawKeyEvent(event)
-                : null,
-            onKeyEvent: useRawKeyEvents
-                ? null
-                : (FocusNode node, KeyEvent event) =>
+            onKey: null,
+            onKeyEvent: (FocusNode node, KeyEvent event) =>
                     inputModel.handleKeyEvent(event),
             child: child));
   }
@@ -110,9 +104,9 @@ class _RawTouchGestureDetectorRegionState
   FFI get ffi => widget.ffi;
   FfiModel get ffiModel => widget.ffiModel;
   InputModel get inputModel => widget.inputModel;
-  bool get handleTouch => (isDesktop || isWebDesktop) || ffiModel.touchMode;
+  bool get handleTouch => true;
   SessionID get sessionId => ffi.sessionId;
-  bool get canvasLocked => isMobile && ffi.canvasModel.locked;
+  bool get canvasLocked => false;
 
   @override
   Widget build(BuildContext context) {
@@ -310,11 +304,9 @@ class _RawTouchGestureDetectorRegionState
     }
 
     // mobile mouse mode or desktop touch screen
-    final isMobileMouseMode = isMobile && !ffiModel.touchMode;
     // We can't use `d.localPosition` here because it's always (0, 0) on desktop.
-    final isDesktopInRemoteRect = (isDesktop || isWebDesktop) &&
-        ffi.cursorModel.isInRemoteRect(_doubleFinerTapPosition);
-    if (isMobileMouseMode || isDesktopInRemoteRect) {
+    final isDesktopInRemoteRect = ffi.cursorModel.isInRemoteRect(_doubleFinerTapPosition);
+    if (isDesktopInRemoteRect) {
       await inputModel.tap(MouseButtons.right);
     }
   }
@@ -369,9 +361,7 @@ class _RawTouchGestureDetectorRegionState
       }
 
       _touchModePanStarted = true;
-      if (isDesktop || isWebDesktop) {
-        ffi.cursorModel.trySetRemoteWindowCoords();
-      }
+      ffi.cursorModel.trySetRemoteWindowCoords();
 
       // Workaround for the issue that the first pan event is sent a long time after the start event.
       // If the time interval between the start event and the first pan event is less than 500ms,
@@ -424,9 +414,7 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if (isDesktop || isWebDesktop) {
-      ffi.cursorModel.clearRemoteWindowCoords();
-    }
+    ffi.cursorModel.clearRemoteWindowCoords();
     if (handleTouch) {
       // In relative mouse mode, skip mouse up - matches the skipped mouse down in onOneFingerPanStart
       if (!inputModel.relativeMouseMode.value) {
@@ -471,23 +459,15 @@ class _RawTouchGestureDetectorRegionState
 
     if (canvasLocked) return;
 
-    if ((isDesktop || isWebDesktop)) {
-      final scale = ((d.scale - _scale) * 1000).toInt();
-      _scale = d.scale;
+    final scale = ((d.scale - _scale) * 1000).toInt();
+    _scale = d.scale;
 
-      if (scale != 0) {
-        await bind.sessionSendPointer(
-            sessionId: sessionId,
-            msg: json.encode(
-                PointerEventToRust(kPointerEventKindTouch, 'scale', scale)
-                    .toJson()));
-      }
-    } else {
-      // mobile
-      ffi.canvasModel.updateScale(d.scale / _scale, d.focalPoint);
-      _scale = d.scale;
-      ffi.canvasModel.panX(d.focalPointDelta.dx);
-      ffi.canvasModel.panY(d.focalPointDelta.dy);
+    if (scale != 0) {
+      await bind.sessionSendPointer(
+          sessionId: sessionId,
+          msg: json.encode(
+              PointerEventToRust(kPointerEventKindTouch, 'scale', scale)
+                  .toJson()));
     }
   }
 
@@ -495,17 +475,10 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if ((isDesktop || isWebDesktop)) {
-      await bind.sessionSendPointer(
-          sessionId: sessionId,
-          msg: json.encode(
-              PointerEventToRust(kPointerEventKindTouch, 'scale', 0).toJson()));
-    } else {
-      // mobile
-      _scale = 1;
-      // No idea why we need to set the view style to "" here.
-      // bind.sessionSetViewStyle(sessionId: sessionId, value: "");
-    }
+    await bind.sessionSendPointer(
+        sessionId: sessionId,
+        msg: json.encode(
+            PointerEventToRust(kPointerEventKindTouch, 'scale', 0).toJson()));
     if (!isSpecialHoldDragActive) {
       await inputModel.sendMouse('up', MouseButtons.left);
     }

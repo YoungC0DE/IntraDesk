@@ -174,13 +174,7 @@ String getLocalPlatformForKBLayoutType(String peerPlatform) {
     return localPlatform;
   }
 
-  if (isWindows) {
-    localPlatform = kPeerPlatformWindows;
-  } else if (isLinux) {
-    localPlatform = kPeerPlatformLinux;
-  } else if (isWebOnWindows || isWebOnLinux) {
-    localPlatform = kPeerPlatformWebDesktop;
-  }
+  localPlatform = kPeerPlatformWindows;
   return localPlatform;
 }
 

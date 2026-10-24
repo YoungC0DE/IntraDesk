@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
-import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
 import 'package:percent_indicator/linear_percent_indicator.dart';
 import 'package:provider/provider.dart';
@@ -60,16 +59,9 @@ class _DesktopServerPageState extends State<DesktopServerPage>
 
   @override
   void onWindowClose() {
-    // Other platforms keep the old behaviour exactly: the ambiguity this guards against is a
-    // Linux session logout, which closes every window in the session.
-    final byOperator = _cmClosedByOperator || !isLinux;
-    Future.wait([gFFI.serverModel.closeAll(byOperator: byOperator), gFFI.close()]).then((_) {
-      if (isMacOS) {
-        RdPlatformChannel.instance.terminate();
-      } else {
-        windowManager.setPreventClose(false);
-        windowManager.close();
-      }
+    Future.wait([gFFI.serverModel.closeAll(byOperator: true), gFFI.close()]).then((_) {
+      windowManager.setPreventClose(false);
+      windowManager.close();
     });
     super.onWindowClose();
   }
@@ -93,9 +85,7 @@ class _DesktopServerPageState extends State<DesktopServerPage>
             backgroundColor: Theme.of(context).colorScheme.background,
             body: ConnectionManager(),
           );
-          return isLinux
-              ? buildVirtualWindowFrame(context, body)
-              : workaroundWindowBorder(
+          return workaroundWindowBorder(
                   context,
                   Container(
                     decoration: BoxDecoration(

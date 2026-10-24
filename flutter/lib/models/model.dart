@@ -110,8 +110,6 @@ class FfiModel with ChangeNotifier {
   Timer? _restartReconnectDelayTimer;
   var _reconnects = 1;
   DateTime? _offlineReconnectStartTime;
-  bool _androidDocumentPickerActive = false;
-  bool _androidDocumentPickerInterruptedConnection = false;
   bool _viewOnly = false;
   bool _showMyCursor = false;
   WeakReference<FFI> parent;
@@ -237,8 +235,6 @@ class FfiModel with ChangeNotifier {
     _direct = null;
     _timer?.cancel();
     _timer = null;
-    _androidDocumentPickerActive = false;
-    _androidDocumentPickerInterruptedConnection = false;
     resetRestartReconnectState();
     clearPermissions();
     waitForImageTimer?.cancel();
@@ -383,9 +379,7 @@ class FfiModel with ChangeNotifier {
       } else if (name == 'fingerprint') {
         FingerprintState.find(peerId).value = evt['fingerprint'] ?? '';
       } else if (name == "cm_file_transfer_log") {
-        if (isDesktop) {
-          gFFI.cmFileModel.onFileTransferLog(evt);
-        }
+        gFFI.cmFileModel.onFileTransferLog(evt);
       } else if (name == 'sync_peer_option') {
         _handleSyncPeerOption(evt, peerId);
       } else if (name == 'follow_current_display') {
@@ -528,7 +522,6 @@ class FfiModel with ChangeNotifier {
   }
 
   handleAliasChanged(Map<String, dynamic> evt) {
-    if (!(isDesktop || isWebDesktop)) return;
     final String peerId = evt['id'];
     final String alias = evt['alias'];
     String label = getDesktopTabLabel(peerId, alias);
@@ -651,13 +644,6 @@ class FfiModel with ChangeNotifier {
     // The peer-gone detector reconnects under `restarting-show` rather than an error title, so
     // it needs naming here too. By its own title, not the type: an explicitly restarted remote
     // device reaches the same type from a path this change does not touch.
-    if (isAndroid &&
-        _androidDocumentPickerActive &&
-        (title == 'Connection Error' ||
-            (type == 'restarting-show' && title == 'Connecting...'))) {
-      _androidDocumentPickerInterruptedConnection = true;
-      return;
-    }
 
     // Disable relative mouse mode on any error-type message to ensure cursor is released.
     // This includes connection errors, session-ending messages, elevation errors, etc.
@@ -726,20 +712,11 @@ class FfiModel with ChangeNotifier {
   }
 
   void beginAndroidDocumentPicker() {
-    if (!isAndroid) return;
-    _androidDocumentPickerActive = true;
-    _androidDocumentPickerInterruptedConnection = false;
+    return;
   }
 
   void endAndroidDocumentPicker() {
-    if (!isAndroid) return;
-    _androidDocumentPickerActive = false;
-    if (!_androidDocumentPickerInterruptedConnection ||
-        parent.target?.closed == true) {
-      return;
-    }
-    _androidDocumentPickerInterruptedConnection = false;
-    reconnect(parent.target!.dialogManager, sessionId, false);
+    return;
   }
 
   /// Auto-retry check for "Remote desktop is offline" error.
@@ -968,9 +945,6 @@ class FfiModel with ChangeNotifier {
     // followed by updateKeyboardMode() to sync InputModel.keyboardMode.
     // For mobile, updateKeyboardMode() is currently a no-op (only executes on desktop/web),
     // but we call it here for consistency and future-proofing.
-    if (isMobile) {
-      parent.target?.inputModel.updateKeyboardMode();
-    }
     _pi.isSupportMultiUiSession =
         bind.isSupportMultiUiSession(version: _pi.version);
     _pi.username = evt['username'];
@@ -1012,9 +986,6 @@ class FfiModel with ChangeNotifier {
             sessionId: sessionId, arg: kOptionTouchMode);
         _touchMode = optSession != '';
       }
-    }
-    if (isMobile) {
-      virtualMouseMode.loadOptions();
     }
     if (connType == ConnType.fileTransfer) {
       parent.target?.fileModel.onReady();
@@ -1083,13 +1054,11 @@ class FfiModel with ChangeNotifier {
     _pi.isSet.value = true;
     stateGlobal.resetLastResolutionGroupValues(peerId);
 
-    if (isDesktop || isWebDesktop) {
-      // checkDesktopKeyboardMode may change the keyboard mode if the current
-      // mode is not supported. Re-sync InputModel.keyboardMode afterwards.
-      // Note: updateKeyboardMode() is a no-op on mobile (early-returns).
-      await checkDesktopKeyboardMode();
-      await parent.target?.inputModel.updateKeyboardMode();
-    }
+    // checkDesktopKeyboardMode may change the keyboard mode if the current
+    // mode is not supported. Re-sync InputModel.keyboardMode afterwards.
+    // Note: updateKeyboardMode() is a no-op on mobile (early-returns).
+    await checkDesktopKeyboardMode();
+    await parent.target?.inputModel.updateKeyboardMode();
 
     notifyListeners();
 
@@ -1152,7 +1121,7 @@ class FfiModel with ChangeNotifier {
 
     // move to the first display and set fullscreen
     bind.sessionSwitchDisplay(
-      isDesktop: isDesktop,
+      isDesktop: true,
       sessionId: sessionId,
       value: Int32List.fromList([0]),
     );
@@ -1296,7 +1265,7 @@ class FfiModel with ChangeNotifier {
             final newDisplay =
                 isPeerPrimaryDisplayValid ? 0 : pi.primaryDisplay;
             bind.sessionSwitchDisplay(
-              isDesktop: isDesktop,
+              isDesktop: true,
               sessionId: sessionId,
               value: Int32List.fromList([newDisplay]),
             );
@@ -1364,7 +1333,7 @@ class FfiModel with ChangeNotifier {
         //
       }
       bind.sessionSwitchDisplay(
-        isDesktop: isDesktop,
+        isDesktop: true,
         sessionId: sessionId,
         value: Int32List.fromList([_pi.currentDisplay]),
       );
@@ -1548,7 +1517,7 @@ class ImageModel with ChangeNotifier {
       rgba,
       rect?.width.toInt() ?? 0,
       rect?.height.toInt() ?? 0,
-      isWeb | isWindows | isLinux
+      false | true | false
           ? ui.PixelFormat.rgba8888
           : ui.PixelFormat.bgra8888,
     );
@@ -1563,11 +1532,9 @@ class ImageModel with ChangeNotifier {
       {bool Function()? isCurrentSession}) async {
     if (_disposeIfStale(image, isCurrentSession)) return;
     if (_image == null && image != null) {
-      if (isDesktop || isWebDesktop) {
-        await parent.target?.canvasModel.updateViewStyle();
-        await parent.target?.canvasModel.updateScrollStyle();
-        await parent.target?.canvasModel.initializeEdgeScrollEdgeThickness();
-      }
+      await parent.target?.canvasModel.updateViewStyle();
+      await parent.target?.canvasModel.updateScrollStyle();
+      await parent.target?.canvasModel.initializeEdgeScrollEdgeThickness();
       if (parent.target != null) {
         await initializeCursorAndCanvas(parent.target!);
       }
@@ -1605,7 +1572,7 @@ class ImageModel with ChangeNotifier {
 
   updateUserTextureRender() {
     final preValue = _useTextureRender;
-    _useTextureRender = isDesktop && bind.mainGetUseTextureRender();
+    _useTextureRender = bind.mainGetUseTextureRender();
     if (preValue != _useTextureRender) {
       notifyListeners();
     }
@@ -1690,11 +1657,10 @@ class ViewStyle {
   });
 
   static defaultViewStyle() {
-    final desktop = (isDesktop || isWebDesktop);
     final w =
-        desktop ? kDesktopDefaultDisplayWidth : kMobileDefaultDisplayWidth;
+        kDesktopDefaultDisplayWidth;
     final h =
-        desktop ? kDesktopDefaultDisplayHeight : kMobileDefaultDisplayHeight;
+        kDesktopDefaultDisplayHeight;
     return ViewStyle(
       style: '',
       width: w.toDouble(),
@@ -1892,14 +1858,12 @@ class CanvasModel with ChangeNotifier {
   double get scrollY => _scrollY;
 
   static double get leftToEdge =>
-      isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.left : 0;
+      windowBorderWidth + kDragToResizeAreaPadding.left;
   static double get rightToEdge =>
-      isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.right : 0;
-  static double get topToEdge => isDesktop
-      ? tabBarHeight + windowBorderWidth + kDragToResizeAreaPadding.top
-      : 0;
+      windowBorderWidth + kDragToResizeAreaPadding.right;
+  static double get topToEdge => tabBarHeight + windowBorderWidth + kDragToResizeAreaPadding.top;
   static double get bottomToEdge =>
-      isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.bottom : 0;
+      windowBorderWidth + kDragToResizeAreaPadding.bottom;
 
   Size getSize() {
     final mediaData = MediaQueryData.fromView(ui.window);
@@ -1907,34 +1871,6 @@ class CanvasModel with ChangeNotifier {
     // If minimized, w or h may be negative here.
     double w = size.width - leftToEdge - rightToEdge;
     double h = size.height - topToEdge - bottomToEdge;
-    if (isMobile) {
-      // Account for horizontal safe area insets on both orientations.
-      w = w - mediaData.padding.left - mediaData.padding.right;
-      // Vertically, subtract the bottom keyboard inset (viewInsets.bottom) and any
-      // bottom overlay (e.g. key-help tools) so the canvas is not covered.
-      h = h -
-          mediaData.viewInsets.bottom -
-          (parent.target?.cursorModel.keyHelpToolsRectToAdjustCanvas?.bottom ??
-              0);
-      // Orientation-specific handling:
-      //  - Portrait: additionally subtract top padding (e.g. status bar / notch)
-      //  - Landscape: does not subtract mediaData.padding.top/bottom (home indicator auto-hides)
-      final isPortrait = size.height > size.width;
-      if (isPortrait) {
-        // In portrait mode, subtract the top safe-area padding (e.g. status bar / notch)
-        // so the remote image is not truncated, while keeping the bottom inset to avoid
-        // introducing unnecessary blank space around the canvas.
-        //
-        // iOS -> Android, portrait, adjust mode:
-        // h = h (no padding subtracted): top and bottom are truncated
-        //   https://github.com/user-attachments/assets/30ed4559-c27e-432b-847f-8fec23c9f998
-        // h = h - top - bottom: extra blank spaces appear
-        //   https://github.com/user-attachments/assets/12a98817-3b4e-43aa-be0f-4b03cf364b7e
-        // h = h - top (current): works fine
-        //   https://github.com/user-attachments/assets/95f047f2-7f47-4a36-8113-5023989a0c81
-        h = h - mediaData.padding.top;
-      }
-    }
     return Size(w < 0 ? 0 : w, h < 0 ? 0 : h);
   }
 
@@ -2007,7 +1943,7 @@ class CanvasModel with ChangeNotifier {
     if (notify) {
       notifyListeners();
     }
-    if (!isMobile && refreshMousePos) {
+    if (refreshMousePos) {
       parent.target?.inputModel.refreshMousePos();
     }
     tryUpdateScrollStyle(Duration.zero, style);
@@ -2016,9 +1952,6 @@ class CanvasModel with ChangeNotifier {
   _resetCanvasOffset(int displayWidth, int displayHeight) {
     _x = (size.width - displayWidth * _scale) / 2;
     _y = (size.height - displayHeight * _scale) / 2;
-    if (isMobile) {
-      _moveToCenterCursor();
-    }
   }
 
   tryUpdateScrollStyle(Duration duration, String? style) async {
@@ -2076,16 +2009,12 @@ class CanvasModel with ChangeNotifier {
       parent.target?.ffiModel._pi.cursorEmbedded ?? false;
 
   int getDisplayWidth() {
-    final defaultWidth = (isDesktop || isWebDesktop)
-        ? kDesktopDefaultDisplayWidth
-        : kMobileDefaultDisplayWidth;
+    final defaultWidth = kDesktopDefaultDisplayWidth;
     return parent.target?.ffiModel.rect?.width.toInt() ?? defaultWidth;
   }
 
   int getDisplayHeight() {
-    final defaultHeight = (isDesktop || isWebDesktop)
-        ? kDesktopDefaultDisplayHeight
-        : kMobileDefaultDisplayHeight;
+    final defaultHeight = kDesktopDefaultDisplayHeight;
     return parent.target?.ffiModel.rect?.height.toInt() ?? defaultHeight;
   }
 
@@ -2093,12 +2022,10 @@ class CanvasModel with ChangeNotifier {
   static double get tabBarHeight => stateGlobal.tabBarHeight;
 
   void activateLocalCursor() {
-    if (isDesktop || isWebDesktop) {
-      try {
-        RemoteCursorMovedState.find(id).value = false;
-      } catch (e) {
-        //
-      }
+    try {
+      RemoteCursorMovedState.find(id).value = false;
+    } catch (e) {
+      //
     }
   }
 
@@ -2107,14 +2034,10 @@ class CanvasModel with ChangeNotifier {
     // If keyboard is not permitted, do not move cursor when mouse is moving.
     if (parent.target != null && parent.target!.ffiModel.keyboard) {
       // Draw cursor if is not desktop.
-      if (!(isDesktop || isWebDesktop)) {
-        parent.target!.cursorModel.moveLocal(x, y);
-      } else {
-        try {
-          RemoteCursorMovedState.find(id).value = false;
-        } catch (e) {
-          //
-        }
+      try {
+        RemoteCursorMovedState.find(id).value = false;
+      } catch (e) {
+        //
       }
     }
   }
@@ -2275,26 +2198,16 @@ class CanvasModel with ChangeNotifier {
 
   panX(double dx) {
     _x += dx;
-    if (isMobile) {
-      isMobileCanvasChanged = true;
-    }
     notifyListeners();
   }
 
   resetOffset() {
-    if (isWebDesktop) {
-      updateViewStyle();
-    } else {
-      _resetCanvasOffset(getDisplayWidth(), getDisplayHeight());
-    }
+    _resetCanvasOffset(getDisplayWidth(), getDisplayHeight());
     notifyListeners();
   }
 
   panY(double dy) {
     _y += dy;
-    if (isMobile) {
-      isMobileCanvasChanged = true;
-    }
     notifyListeners();
   }
 
@@ -2314,9 +2227,6 @@ class CanvasModel with ChangeNotifier {
     // (focalPoint.dy - _y_1 - adjust) / s1 + displayOriginY = (focalPoint.dy - _y_2 - adjust) / s2 + displayOriginY
     // _y_2 = focalPoint.dy - adjust - (focalPoint.dy - _y_1 - adjust) / s1 * s2
     _y = focalPoint.dy - adjust - (focalPoint.dy - _y - adjust) / s * _scale;
-    if (isMobile) {
-      isMobileCanvasChanged = true;
-    }
     notifyListeners();
   }
 
@@ -2508,30 +2418,14 @@ class CursorData {
       return scale;
     }
     if (_rasterWidth != targetWidth || _rasterHeight != targetHeight) {
-      if (isWindows) {
-        data = img2
-            .copyResize(
-              image,
-              width: targetWidth,
-              height: targetHeight,
-              interpolation: img2.Interpolation.average,
-            )
-            .getBytes(order: img2.ChannelOrder.bgra);
-      } else if (isDesktop && scale < 1.0 && !image.hasPalette) {
-        data = Uint8List.fromList(
-            img2.encodePng(_resizeWithAlpha(targetWidth, targetHeight)));
-      } else {
-        data = Uint8List.fromList(
-          img2.encodePng(
-            img2.copyResize(
-              image,
-              width: targetWidth,
-              height: targetHeight,
-              interpolation: img2.Interpolation.average,
-            ),
-          ),
-        );
-      }
+      data = img2
+          .copyResize(
+            image,
+            width: targetWidth,
+            height: targetHeight,
+            interpolation: img2.Interpolation.average,
+          )
+          .getBytes(order: img2.ChannelOrder.bgra);
       _rasterWidth = targetWidth;
       _rasterHeight = targetHeight;
     }
@@ -2638,11 +2532,7 @@ class PredefinedCursor {
           return;
         }
         double scale = 1.0;
-        if (isWindows) {
-          data = _image2!.getBytes(order: img2.ChannelOrder.bgra);
-        } else {
-          data = Uint8List.fromList(img2.encodePng(_image2!));
-        }
+        data = _image2!.getBytes(order: img2.ChannelOrder.bgra);
 
         _cache = CursorData(
           peerId: '',
@@ -2727,15 +2617,6 @@ class CursorModel with ChangeNotifier {
       // `lastIsBlocked` is only used in onDoubleTap() to block the touch event from the KeyHelpTools.
       // `lastIsBlocked` will be set when the cursor is moving or touch somewhere else.
       _lastIsBlocked = true;
-    }
-    if (isMobile && _lastKeyboardIsVisible != keyboardIsVisible) {
-      if (keyboardIsVisible) {
-        parent.target?.canvasModel.saveMobileOffsetBeforeSoftKeyboard();
-        parent.target?.canvasModel.mobileFocusCanvasCursor();
-        parent.target?.canvasModel.isMobileCanvasChanged = false;
-      } else {
-        parent.target?.canvasModel.restoreMobileOffsetAfterSoftKeyboard();
-      }
     }
     _lastKeyboardIsVisible = keyboardIsVisible;
   }
@@ -3147,27 +3028,7 @@ class CursorModel with ChangeNotifier {
         bytes: rgba.buffer,
         bytesOffset: rgba.offsetInBytes,
         order: img2.ChannelOrder.rgba);
-    if (isWindows) {
-      data = imgOrigin.getBytes(order: img2.ChannelOrder.bgra);
-    } else {
-      ByteData? imgBytes =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (imgBytes == null) {
-        return false;
-      }
-      data = imgBytes.buffer.asUint8List();
-      if (isDesktop &&
-          (parent.target?.ffiModel.isPeerLinux == true ||
-              parent.target?.ffiModel.isPeerWindows == true)) {
-        // PNG decoding supplies straight alpha for Linux/Windows cursor resizing.
-        final decoded = img2.decodePng(data);
-        if (decoded == null) {
-          debugPrint('Unable to decode cursor $id PNG for resizing');
-          return false;
-        }
-        imgOrigin = decoded;
-      }
-    }
+    data = imgOrigin.getBytes(order: img2.ChannelOrder.bgra);
     final cache = CursorData(
       peerId: peerId,
       id: id,
@@ -3241,7 +3102,7 @@ class CursorModel with ChangeNotifier {
   void _switchedAway(CursorData cache) {
     _awaitingNative.remove(cache.id);
     // Mobile only paints the cursor, from its image.
-    if (isMobile || _nativeIds.contains(cache.id)) {
+    if (_nativeIds.contains(cache.id)) {
       cache.releasePixels();
       return;
     }
@@ -3277,7 +3138,7 @@ class CursorModel with ChangeNotifier {
 
   // Painted images kept: mobile always paints the cursor, a desktop only when it shows the
   // remote cursor, and otherwise the native cursors show the shapes.
-  int get _imageLimit => isMobile || showsRemoteCursor ? kRecentShapes : 1;
+  int get _imageLimit => showsRemoteCursor ? kRecentShapes : 1;
 
   // `_images` is in order of use. The image painted is kept, whoever's it is.
   void _evictImages() {
@@ -3478,12 +3339,7 @@ class QualityMonitorModel with ChangeNotifier {
   // session tab to show it on (the desktop tab's tooltip already does), and
   // WebRTC is the one path that can be direct or TURN.
   String? get webrtcTransport {
-    if (!isWeb) return null;
-    final ffiModel = parent.target?.ffiModel;
-    if (ffiModel == null) return null;
-    final streamType = ffiModel.cachedPeerData.streamType;
-    if (!streamType.startsWith('WebRTC')) return null;
-    return ffiModel.direct == false ? '$streamType (TURN)' : streamType;
+    return null;
   }
 
   checkShowQualityMonitor(SessionID sessionId) async {
@@ -3596,7 +3452,7 @@ class FFI {
   late final Peers lanPeersModel; // global
 
   FFI(SessionID? sId) {
-    sessionId = sId ?? (isDesktop ? Uuid().v4obj() : _constSessionId);
+    sessionId = sId ?? (Uuid().v4obj());
     imageModel = ImageModel(WeakReference(this));
     ffiModel = FfiModel(WeakReference(this));
     cursorModel = CursorModel(WeakReference(this));
@@ -3646,7 +3502,6 @@ class FFI {
     List<int>? displays,
   }) {
     closed = false;
-    if (isMobile) mobileReset();
     if (isFileTransfer) {
       connType = ConnType.fileTransfer;
     } else {
@@ -3688,13 +3543,11 @@ class FFI {
       }
       ffiModel.pi.currentDisplay = display;
     }
-    if (isDesktop && connType == ConnType.defaultConn) {
+    if (connType == ConnType.defaultConn) {
       textureModel.updateCurrentDisplay(display ?? 0);
     }
 
-    if (isDesktop) {
-      inputModel.updateTrackpadSpeed();
-    }
+    inputModel.updateTrackpadSpeed();
 
     // CAUTION: `sessionStart()` and `sessionStartWithDisplays()` are an async functions.
     // Though the stream is returned immediately, the stream may not be ready.
@@ -3709,24 +3562,6 @@ class FFI {
           sessionId: sessionId, id: id, displays: Int32List.fromList(displays));
     }
 
-    if (isWeb) {
-      platformFFI.setCursorDataCallback(ffiModel.handleCursorData);
-      platformFFI.setRgbaCallback((int display, Uint8List data) {
-        onEvent2UIRgba();
-        imageModel.onRgba(display, data);
-      });
-      platformFFI.setVideoFrameCallback((int display, ui.Image image,
-          bool Function() isCurrentSession) async {
-        if (!isCurrentSession()) {
-          image.dispose();
-          return;
-        }
-        await onEvent2UIRgba();
-        await imageModel.onImage(display, image, isCurrentSession);
-      });
-      this.id = id;
-      return;
-    }
 
     final cb = ffiModel.startEventListener(sessionId, id);
 
@@ -3865,10 +3700,7 @@ class FFI {
   /// Close the remote session.
   Future<void> close({bool closeSession = true}) async {
     closed = true;
-    if (isWeb) {
-      platformFFI.clearVideoFrameCallback();
-    }
-    if (imageModel.image != null && !isWebDesktop) {
+    if (imageModel.image != null) {
       await setCanvasConfig(
           sessionId,
           cursorModel.x,
@@ -3924,12 +3756,8 @@ class Display {
   double get scale => _scale > 1.0 ? _scale : 1.0;
 
   Display() {
-    width = (isDesktop || isWebDesktop)
-        ? kDesktopDefaultDisplayWidth
-        : kMobileDefaultDisplayWidth;
-    height = (isDesktop || isWebDesktop)
-        ? kDesktopDefaultDisplayHeight
-        : kMobileDefaultDisplayHeight;
+    width = kDesktopDefaultDisplayWidth;
+    height = kDesktopDefaultDisplayHeight;
   }
 
   @override
@@ -3995,7 +3823,7 @@ class PeerInfo with ChangeNotifier {
       platformAdditions[kPlatformAdditionsAmyuniVirtualDisplays] ?? 0;
 
   bool get isSupportMultiDisplay =>
-      (isDesktop || isWebDesktop) && isSupportMultiUiSession;
+      isSupportMultiUiSession;
   bool get forceTextureRender => currentDisplay == kAllDisplayValue;
 
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
@@ -4084,16 +3912,7 @@ Future<void> setCanvasConfig(
 }
 
 Future<Map<String, dynamic>?> getCanvasConfig(SessionID sessionId) async {
-  if (!isWebDesktop) return null;
-  var p =
-      await bind.sessionGetFlutterOption(sessionId: sessionId, k: canvasKey);
-  if (p == null || p.isEmpty) return null;
-  try {
-    Map<String, dynamic> m = json.decode(p);
-    return m;
-  } catch (e) {
-    return null;
-  }
+  return null;
 }
 
 Future<void> initializeCursorAndCanvas(FFI ffi) async {

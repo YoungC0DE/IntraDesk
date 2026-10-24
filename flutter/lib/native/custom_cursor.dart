@@ -5,7 +5,6 @@ import 'package:flutter_custom_cursor/flutter_custom_cursor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'package:flutter_hbb/common.dart' show isLinux;
 import 'package:flutter_hbb/models/model.dart';
 import 'package:image/image.dart' as img;
 
@@ -27,10 +26,8 @@ MouseCursor buildCursorOfCache(
         return _shownCursor(cursor);
       }
       // Square canvases avoid clipping or stray edge pixels on Linux.
-      final width = isLinux && cache.rasterWidth < cache.rasterHeight
-          ? cache.rasterHeight
-          : cache.rasterWidth;
-      final height = isLinux ? width : cache.rasterHeight;
+      final width = cache.rasterWidth;
+      final height = cache.rasterHeight;
       debugPrint(
           "Register custom cursor with key $key (${cache.hotx},${cache.hoty})");
       // [Safety]

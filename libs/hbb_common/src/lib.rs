@@ -5,7 +5,6 @@ use config::Config;
 pub use futures;
 pub use protobuf;
 pub use protos::rendezvous as rendezvous_proto;
-use serde_derive::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::{self, BufRead},
@@ -243,12 +242,6 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-pub fn is_valid_custom_id(id: &str) -> bool {
-    regex::Regex::new(r"^[a-zA-Z][\w-]{5,15}$")
-        .unwrap()
-        .is_match(id)
-}
-
 // Support 1.1.10-1, the number after - is a patch version.
 pub fn get_version_number(v: &str) -> i64 {
     let mut versions = v.split('-');
@@ -444,51 +437,6 @@ pub fn init_log(_is_async: bool, _name: &str) -> Option<flexi_logger::LoggerHand
         }
     });
     logger_holder
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct VersionCheckRequest {
-    #[serde(default)]
-    pub os: String,
-    #[serde(default)]
-    pub os_version: String,
-    #[serde(default)]
-    pub arch: String,
-    #[serde(default)]
-    pub device_id: Vec<u8>,
-    #[serde(default)]
-    pub typ: String,
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct VersionCheckResponse {
-    #[serde(default)]
-    pub url: String,
-}
-
-pub const VER_TYPE_RUSTDESK_CLIENT: &str = "rustdesk-client";
-pub const VER_TYPE_RUSTDESK_SERVER: &str = "rustdesk-server";
-
-pub fn version_check_request(typ: String) -> (VersionCheckRequest, String) {
-    const URL: &str = "https://api.rustdesk.com/version/latest";
-
-    use sysinfo::System;
-    let system = System::new();
-    let os = system.distribution_id();
-    let os_version = system.os_version().unwrap_or_default();
-    let arch = std::env::consts::ARCH.to_string();
-    #[allow(deprecated)]
-    let device_id = fingerprint::get_fingerprint(None, None);
-    (
-        VersionCheckRequest {
-            os,
-            os_version,
-            arch,
-            device_id,
-            typ,
-        },
-        URL.to_string(),
-    )
 }
 
 pub fn time_based_rand() -> u32 {

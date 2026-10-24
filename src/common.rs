@@ -14,8 +14,7 @@ use hbb_common::{
     anyhow::{anyhow, Context},
     bail, base64,
     bytes::Bytes,
-    config::{self, use_ws, Config, LocalConfig, CONNECT_TIMEOUT, READ_TIMEOUT, RENDEZVOUS_PORT},
-    futures::future::join_all,
+    config::{self, use_ws, Config, LocalConfig, CONNECT_TIMEOUT, READ_TIMEOUT},
     futures_util::future::poll_fn,
     log,
     protobuf::{Enum, Message as _},
@@ -510,122 +509,6 @@ audio_rechannel!(audio_rechannel_8_5, 8, 5);
 audio_rechannel!(audio_rechannel_8_6, 8, 6);
 audio_rechannel!(audio_rechannel_8_7, 8, 7);
 
-pub struct CheckTestNatType {
-    is_direct: bool,
-}
-
-impl CheckTestNatType {
-    pub fn new() -> Self {
-        Self {
-            is_direct: Config::get_socks().is_none() && !config::use_ws(),
-        }
-    }
-}
-
-impl Drop for CheckTestNatType {
-    fn drop(&mut self) {
-        let is_direct = Config::get_socks().is_none() && !config::use_ws();
-        if self.is_direct != is_direct {
-            test_nat_type();
-        }
-    }
-}
-
-pub fn test_nat_type() {
-    test_ipv6_sync();
-    use std::sync::atomic::{AtomicBool, Ordering};
-    std::thread::spawn(move || {
-        static IS_RUNNING: AtomicBool = AtomicBool::new(false);
-        if IS_RUNNING.load(Ordering::SeqCst) {
-            return;
-        }
-        IS_RUNNING.store(true, Ordering::SeqCst);
-
-        crate::ipc::get_socks_ws();
-        let is_direct = Config::get_socks().is_none() && !config::use_ws();
-        if !is_direct {
-            Config::set_nat_type(NatType::SYMMETRIC as _);
-            IS_RUNNING.store(false, Ordering::SeqCst);
-            return;
-        }
-
-        let mut i = 0;
-        loop {
-            match test_nat_type_() {
-                Ok(true) => break,
-                Err(err) => {
-                    log::error!("test nat: {}", err);
-                }
-                _ => {}
-            }
-            if Config::get_nat_type() != 0 {
-                break;
-            }
-            i = i * 2 + 1;
-            if i > 300 {
-                i = 300;
-            }
-            std::thread::sleep(std::time::Duration::from_secs(i));
-        }
-
-        IS_RUNNING.store(false, Ordering::SeqCst);
-    });
-}
-
-#[tokio::main(flavor = "current_thread")]
-async fn test_nat_type_() -> ResultType<bool> {
-    log::info!("Testing nat ...");
-    let start = std::time::Instant::now();
-    let server1 = Config::get_rendezvous_server();
-    let server2 = crate::increase_port(&server1, -1);
-    let mut msg_out = RendezvousMessage::new();
-    let serial = Config::get_serial();
-    msg_out.set_test_nat_request(TestNatRequest {
-        serial,
-        ..Default::default()
-    });
-    let mut port1 = 0;
-    let mut port2 = 0;
-    let mut local_addr = None;
-    for i in 0..2 {
-        let server = if i == 0 { &*server1 } else { &*server2 };
-        let mut socket =
-            socket_client::connect_tcp_local(server, local_addr, CONNECT_TIMEOUT).await?;
-        if i == 0 {
-            // reuse the local addr is required for nat test
-            local_addr = Some(socket.local_addr());
-            Config::set_option(
-                "local-ip-addr".to_owned(),
-                socket.local_addr().ip().to_string(),
-            );
-        }
-        socket.send(&msg_out).await?;
-        if let Some(msg_in) = get_next_nonkeyexchange_msg(&mut socket, None).await {
-            if let Some(rendezvous_message::Union::TestNatResponse(tnr)) = msg_in.union {
-                log::debug!("Got nat response from {}: port={}", server, tnr.port);
-                if i == 0 {
-                    port1 = tnr.port;
-                } else {
-                    port2 = tnr.port;
-                }
-            }
-        } else {
-            break;
-        }
-    }
-    let ok = port1 > 0 && port2 > 0;
-    if ok {
-        let t = if port1 == port2 {
-            NatType::ASYMMETRIC
-        } else {
-            NatType::SYMMETRIC
-        };
-        Config::set_nat_type(t as _);
-        log::info!("Tested nat type: {:?} in {:?}", t, start.elapsed());
-    }
-    Ok(ok)
-}
-
 pub async fn get_rendezvous_server(ms_timeout: u64) -> (String, Vec<String>, bool) {
     let (mut a, mut b) = get_rendezvous_server_(ms_timeout).await;
     let mut b: Vec<String> = b
@@ -652,47 +535,6 @@ async fn get_rendezvous_server_(ms_timeout: u64) -> (String, Vec<String>) {
 #[inline]
 pub async fn get_nat_type(ms_timeout: u64) -> i32 {
     crate::ipc::get_nat_type(ms_timeout).await
-}
-
-// used for client to test which server is faster in case stop-servic=Y
-#[tokio::main(flavor = "current_thread")]
-async fn test_rendezvous_server_() {
-    let servers = Config::get_rendezvous_servers();
-    if servers.len() <= 1 {
-        return;
-    }
-    let mut futs = Vec::new();
-    for host in servers {
-        futs.push(tokio::spawn(async move {
-            let tm = std::time::Instant::now();
-            if socket_client::connect_tcp(
-                crate::check_port(&host, RENDEZVOUS_PORT),
-                CONNECT_TIMEOUT,
-            )
-            .await
-            .is_ok()
-            {
-                let elapsed = tm.elapsed().as_micros();
-                Config::update_latency(&host, elapsed as _);
-            } else {
-                Config::update_latency(&host, -1);
-            }
-        }));
-    }
-    join_all(futs).await;
-    Config::reset_online();
-}
-
-pub fn test_rendezvous_server() {
-    std::thread::spawn(test_rendezvous_server_);
-}
-
-pub fn refresh_rendezvous_server() {
-    std::thread::spawn(|| {
-        if crate::ipc::test_rendezvous_server().is_err() {
-            test_rendezvous_server();
-        }
-    });
 }
 
 pub fn run_me<T: AsRef<std::ffi::OsStr>>(args: Vec<T>) -> std::io::Result<std::process::Child> {
@@ -1836,16 +1678,6 @@ pub async fn punch_udp(
             }
         }
     }
-}
-
-fn test_ipv6_sync() {
-    #[tokio::main(flavor = "current_thread")]
-    async fn func() {
-        if let Some(job) = test_ipv6().await {
-            job.await.ok();
-        }
-    }
-    std::thread::spawn(func);
 }
 
 pub async fn get_ipv6_socket() -> Option<(Arc<UdpSocket>, bytes::Bytes)> {

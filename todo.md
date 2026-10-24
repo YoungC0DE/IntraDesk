@@ -141,7 +141,10 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 
 ## Fase 2 — Funcionamento só na LAN (trilha C)
 
-- [~] **T2.1** Desligar o servidor rendezvous/relay: não iniciar `rendezvous_mediator`, remover os servidores padrão (`RENDEZVOUS_SERVERS`), nenhuma tentativa de conexão externa. Aceite: com Wireshark, o app não envia nada para fora da sub-rede.
+- [x] **T2.1** Servidor rendezvous/relay desligado no lado servidor: `src/rendezvous_mediator.rs` apagado (registro de ID/chave, hole punching UDP/TCP/IPv6, relay, WebRTC answerer, "intranet"); o servidor agora só sobe a escuta direta (`direct_server`, movida para `src/server.rs`), a descoberta LAN e o teste de AV1. Sem servidores padrão (`RENDEZVOUS_SERVERS` saiu; `get_rendezvous_servers` vazio). Saíram também os testes que contatavam servidores: tipo de NAT (`test_nat_type`, `CheckTestNatType`), latência dos servidores (`test_rendezvous_server`/`refresh_rendezvous_server`, IPC `TestRendezvousServer`/`Deployed`), "Alterar ID" (registrava o ID no servidor: FFI `main_change_id`/`main_get_async_status`, diálogo e cartão nas configurações, opção `disable-change-id`, `is_valid_custom_id`, 9 chaves de tradução), `version_check_request` (`api.rustdesk.com`, sem uso), bin `src/main.rs` (só testava rendezvous/NAT; o build usa `--lib`). Mudar opções não reinicia mais o mediador (`CheckIfRestart` só trata cache TLS e entrada de áudio).
+  Ficou para a T2.3 (lado cliente): conexão por ID via rendezvous, KCP/hole punching (`kcp_stream.rs`; `KcpStream::accept` fica sem uso fora dos testes até lá), teste IPv6, `get_nat_type`, `PUBLIC_SERVER`, getters de servidor no `Config`. Para a T2.9: proxy/WebSocket/TLS/UDP. `ConnectionMeta` agora é sempre vazio (vinha do rendezvous); dá para remover junto com a T3.x em `connection.rs`.
+  Aceite com Wireshark: fica para a T7.4 (depende também da T2.3).
+  Checagem: `cargo check --workspace --lib --tests`, `flutter analyze` ok.
   dep: T0.5, T0.6 · Área: `src/rendezvous_mediator.rs`, `src/server.rs`, `libs/hbb_common/src/config.rs` · @dono: claude
 - [ ] **T2.2** Acesso direto por IP sempre ligado (porta TCP 21118), sem opção para desligar.
   dep: T2.1, T0.6 · Área: `libs/hbb_common/src/config.rs`, `src/server.rs` · @dono:
@@ -160,6 +163,8 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T0.4, T0.6, D9 · Área: `libs/hbb_common/src/config.rs`, `libs/portable`, `flutter/windows/CMakeLists.txt`, `build.py`, `scripts/build.ps1`, CI · @dono: claude
 - [ ] **T2.8** Firewall: detectar se as portas estão bloqueadas e mostrar aviso com botão "Liberar no firewall" (pede elevação e cria a regra com `netsh` só para redes privadas).
   dep: T2.2 · Área: `src/platform/windows.rs` (função nova), tela inicial · @dono:
+- [ ] **T2.9** Remover opções de rede que só servem para sair da LAN: proxy (socks/http), WebSocket, fallback TLS inseguro e "desativar UDP" (`libs/hbb_common/src/{socket_client,proxy,websocket,tls}.rs`, `src/ipc.rs` `Socks`/`SocksWs`, configurações de rede no Flutter).
+  dep: T2.3 · Área: os arquivos citados · @dono:
 
 ## Fase 3 — Segurança (trilha D) — obrigatória antes de qualquer release
 

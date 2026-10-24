@@ -2,10 +2,8 @@ use base::config::keys;
 use hbb_common::{
     allow_err,
     bytes::Bytes,
-    config::{self, Config, LocalConfig, PeerConfig, CONNECT_TIMEOUT, RENDEZVOUS_PORT},
-    futures::future::join_all,
+    config::{self, Config, LocalConfig, PeerConfig},
     log,
-    rendezvous_proto::*,
     tokio,
 };
 use hbb_common::{
@@ -19,8 +17,6 @@ use std::{
 };
 
 use crate::ipc;
-
-type Message = RendezvousMessage;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct UiStatus {
@@ -44,7 +40,6 @@ lazy_static::lazy_static! {
         #[cfg(feature = "flutter")]
         video_conn_count: 0,
     }));
-    static ref ASYNC_JOB_STATUS : Arc<Mutex<String>> = Default::default();
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
@@ -58,8 +53,6 @@ lazy_static::lazy_static! {
 lazy_static::lazy_static! {
     pub static ref IS_FILE_TRANSFER_ENABLED: Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
 }
-
-const INIT_ASYNC_JOB_STATUS: &str = " ";
 
 #[inline]
 pub fn get_id() -> String {
@@ -515,30 +508,6 @@ pub fn get_uuid() -> String {
 }
 
 #[inline]
-pub fn get_init_async_job_status() -> String {
-    INIT_ASYNC_JOB_STATUS.to_string()
-}
-
-#[inline]
-pub fn reset_async_job_status() {
-    *ASYNC_JOB_STATUS.lock().unwrap() = get_init_async_job_status();
-}
-
-#[inline]
-pub fn change_id(id: String) {
-    reset_async_job_status();
-    let old_id = get_id();
-    std::thread::spawn(move || {
-        change_id_shared(id, old_id);
-    });
-}
-
-#[inline]
-pub fn get_async_job_status() -> String {
-    ASYNC_JOB_STATUS.lock().unwrap().clone()
-}
-
-#[inline]
 pub fn get_langs() -> String {
     use serde_json::json;
     let mut x: Vec<(&str, String)> = crate::lang::LANGS
@@ -746,126 +715,6 @@ pub(crate) async fn send_to_cm(data: &ipc::Data) {
     if let Ok(mut c) = ipc::connect(1000, "_cm").await {
         c.send(data).await.ok();
     }
-}
-
-const INVALID_FORMAT: &'static str = "Invalid format";
-const UNKNOWN_ERROR: &'static str = "Unknown error";
-
-#[inline]
-#[tokio::main(flavor = "current_thread")]
-pub async fn change_id_shared(id: String, old_id: String) -> String {
-    let res = change_id_shared_(id, old_id).await.to_owned();
-    *ASYNC_JOB_STATUS.lock().unwrap() = res.clone();
-    res
-}
-
-pub async fn change_id_shared_(id: String, old_id: String) -> &'static str {
-    if !hbb_common::is_valid_custom_id(&id) {
-        log::debug!(
-            "debugging invalid id: \"{id}\", len: {}, base64: \"{}\"",
-            id.len(),
-            crate::encode64(&id)
-        );
-        let bom = id.trim_start_matches('\u{FEFF}');
-        log::debug!("bom: {}", hbb_common::is_valid_custom_id(&bom));
-        return INVALID_FORMAT;
-    }
-
-    let uuid = Bytes::from(
-        hbb_common::machine_uid::get()
-            .unwrap_or("".to_owned())
-            .as_bytes()
-            .to_vec(),
-    );
-
-    if uuid.is_empty() {
-        log::error!("Failed to change id, uuid is_empty");
-        return UNKNOWN_ERROR;
-    }
-
-    let rendezvous_servers = crate::ipc::get_rendezvous_servers(1_000).await;
-
-    let mut futs = Vec::new();
-    let err: Arc<Mutex<&str>> = Default::default();
-    for rendezvous_server in rendezvous_servers {
-        let err = err.clone();
-        let id = id.to_owned();
-        let uuid = uuid.clone();
-        let old_id = old_id.clone();
-        futs.push(tokio::spawn(async move {
-            let tmp = check_id(rendezvous_server, old_id, id, uuid).await;
-            if !tmp.is_empty() {
-                *err.lock().unwrap() = tmp;
-            }
-        }));
-    }
-    join_all(futs).await;
-    let err = *err.lock().unwrap();
-    if err.is_empty() {
-        crate::ipc::set_config_async("id", id.to_owned()).await.ok();
-    }
-    err
-}
-
-async fn check_id(
-    rendezvous_server: String,
-    old_id: String,
-    id: String,
-    uuid: Bytes,
-) -> &'static str {
-    if let Ok(mut socket) = hbb_common::socket_client::connect_tcp(
-        crate::check_port(rendezvous_server, RENDEZVOUS_PORT),
-        CONNECT_TIMEOUT,
-    )
-    .await
-    {
-        let mut msg_out = Message::new();
-        msg_out.set_register_pk(RegisterPk {
-            old_id,
-            id,
-            uuid,
-            ..Default::default()
-        });
-        let mut ok = false;
-        if socket.send(&msg_out).await.is_ok() {
-            if let Some(msg_in) =
-                crate::common::get_next_nonkeyexchange_msg(&mut socket, None).await
-            {
-                match msg_in.union {
-                    Some(rendezvous_message::Union::RegisterPkResponse(rpr)) => {
-                        match rpr.result.enum_value() {
-                            Ok(register_pk_response::Result::OK) => {
-                                ok = true;
-                            }
-                            Ok(register_pk_response::Result::ID_EXISTS) => {
-                                return "Not available";
-                            }
-                            Ok(register_pk_response::Result::TOO_FREQUENT) => {
-                                return "Too frequent";
-                            }
-                            Ok(register_pk_response::Result::NOT_SUPPORT) => {
-                                return "server_not_support";
-                            }
-                            Ok(register_pk_response::Result::SERVER_ERROR) => {
-                                return "Server error";
-                            }
-                            Ok(register_pk_response::Result::INVALID_ID_FORMAT) => {
-                                return INVALID_FORMAT;
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        if !ok {
-            return UNKNOWN_ERROR;
-        }
-    } else {
-        return "Failed to connect to rendezvous server";
-    }
-    ""
 }
 
 // if it's relay id, return id processed, otherwise return original id

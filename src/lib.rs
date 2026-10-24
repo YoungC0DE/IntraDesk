@@ -11,8 +11,6 @@ mod server;
 pub use self::server::*;
 mod client;
 mod lan;
-mod rendezvous_mediator;
-pub use self::rendezvous_mediator::*;
 /// cbindgen:ignore
 pub mod common;
 pub mod ipc;

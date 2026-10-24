@@ -851,14 +851,6 @@ pub fn main_get_login_device_info() -> SyncReturn<String> {
     SyncReturn(get_login_device_info_json())
 }
 
-pub fn main_change_id(new_id: String) {
-    change_id(new_id)
-}
-
-pub fn main_get_async_status() -> String {
-    get_async_job_status()
-}
-
 pub fn main_get_option(key: String) -> String {
     get_option(key)
 }
@@ -872,24 +864,10 @@ pub fn main_get_error() -> String {
 }
 
 pub fn main_set_option(key: String, value: String) {
-
-    // If `is_allow_tls_fallback` and https proxy is used, we need to restart rendezvous mediator.
-    // No need to check if https proxy is used, because this option does not change frequently
-    // and restarting mediator is safe even https proxy is not used.
-    let is_allow_tls_fallback = key.eq(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK);
-    if is_allow_tls_fallback
-        || key.eq("custom-rendezvous-server")
-        || key.eq(keys::OPTION_ALLOW_WEBSOCKET)
-        || key.eq(keys::OPTION_DISABLE_UDP)
-        || key.eq("api-server")
-    {
-        if is_allow_tls_fallback {
-            hbb_common::tls::reset_tls_cache();
-        }
-        set_option(key, value.clone());
-    } else {
-        set_option(key, value.clone());
+    if key.eq(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK) {
+        hbb_common::tls::reset_tls_cache();
     }
+    set_option(key, value);
 }
 
 pub fn main_get_options() -> String {

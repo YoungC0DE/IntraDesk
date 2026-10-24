@@ -1,10 +1,6 @@
 #[path = "ipc/auth.rs"]
 mod ipc_auth;
-use crate::{
-    common::CheckTestNatType,
-    rendezvous_mediator::RendezvousMediator,
-    ui_interface::{get_local_option, set_local_option},
-};
+use crate::ui_interface::{get_local_option, set_local_option};
 use bytes::Bytes;
 pub use clipboard::ClipboardFile;
 use hbb_common::{
@@ -272,8 +268,6 @@ pub enum Data {
     ClipboardFile(ClipboardFile),
     ClipboardFileEnabled(bool),
     ClipboardNonFile(Option<(String, Vec<ClipboardNonFile>)>),
-    TestRendezvousServer,
-    Deployed,
     Keyboard(DataKeyboard),
     KeyboardResponse(DataKeyboardResponse),
     Mouse(DataMouse),
@@ -483,48 +477,26 @@ pub async fn new_listener(postfix: &str) -> ResultType<Incoming> {
 }
 
 pub struct CheckIfRestart {
-    stop_service: String,
-    rendezvous_servers: Vec<String>,
     audio_input: String,
-    ws: String,
-    disable_udp: String,
     allow_insecure_tls_fallback: String,
-    api_server: String,
 }
 
 impl CheckIfRestart {
     pub fn new() -> CheckIfRestart {
         CheckIfRestart {
-            stop_service: Config::get_option("stop-service"),
-            rendezvous_servers: Config::get_rendezvous_servers(),
             audio_input: Config::get_option("audio-input"),
-            ws: Config::get_option(OPTION_ALLOW_WEBSOCKET),
-            disable_udp: Config::get_option(keys::OPTION_DISABLE_UDP),
             allow_insecure_tls_fallback: Config::get_option(
                 keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK,
             ),
-            api_server: Config::get_option("api-server"),
         }
     }
 }
 impl Drop for CheckIfRestart {
     fn drop(&mut self) {
-        // If https proxy is used, we need to restart rendezvous mediator.
-        // No need to check if https proxy is used, because this option does not change frequently
-        // and restarting mediator is safe even https proxy is not used.
-        let allow_insecure_tls_fallback_changed = self.allow_insecure_tls_fallback
-            != Config::get_option(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK);
-        if allow_insecure_tls_fallback_changed
-            || self.stop_service != Config::get_option("stop-service")
-            || self.rendezvous_servers != Config::get_rendezvous_servers()
-            || self.ws != Config::get_option(OPTION_ALLOW_WEBSOCKET)
-            || self.disable_udp != Config::get_option(keys::OPTION_DISABLE_UDP)
-            || self.api_server != Config::get_option("api-server")
+        if self.allow_insecure_tls_fallback
+            != Config::get_option(keys::OPTION_ALLOW_INSECURE_TLS_FALLBACK)
         {
-            if allow_insecure_tls_fallback_changed {
-                hbb_common::tls::reset_tls_cache();
-            }
-            RendezvousMediator::restart();
+            hbb_common::tls::reset_tls_cache();
         }
         if self.audio_input != Config::get_option("audio-input") {
             crate::audio_service::restart();
@@ -576,13 +548,11 @@ async fn handle(data: Data, stream: &mut Connection) {
                 allow_err!(stream.send(&Data::Socks(Config::get_socks())).await);
             }
             Some(data) => {
-                let _nat = CheckTestNatType::new();
                 if data.proxy.is_empty() {
                     Config::set_socks(None);
                 } else {
                     Config::set_socks(Some(data));
                 }
-                RendezvousMediator::restart();
                 log::info!("socks updated");
             }
         },
@@ -705,7 +675,6 @@ async fn handle(data: Data, stream: &mut Connection) {
             }
             Some(value) => {
                 let _chk = CheckIfRestart::new();
-                let _nat = CheckTestNatType::new();
                 Config::set_options(value);
                 allow_err!(stream.send(&Data::Options(None)).await);
             }
@@ -738,13 +707,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     ))
                     .await
             );
-        }
-        Data::TestRendezvousServer => {
-            crate::test_rendezvous_server();
-        }
-        Data::Deployed => {
-            crate::rendezvous_mediator::NEEDS_DEPLOY.store(false, Ordering::SeqCst);
-            crate::rendezvous_mediator::RendezvousMediator::restart();
         }
         Data::SwitchSidesRequest(id) => {
             let uuid = uuid::Uuid::new_v4();
@@ -1295,7 +1257,6 @@ pub fn set_option(key: &str, value: &str) {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn set_options(value: HashMap<String, String>) -> ResultType<()> {
-    let _nat = CheckTestNatType::new();
     if let Ok(mut c) = connect(1000, "").await {
         c.send(&Data::Options(Some(value.clone()))).await?;
         // do not put below before connect, because we need to check should_exit
@@ -1353,7 +1314,6 @@ pub async fn get_socks() -> Option<config::Socks5Server> {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn set_socks(value: config::Socks5Server) -> ResultType<()> {
-    let _nat = CheckTestNatType::new();
     Config::set_socks(if value.proxy.is_empty() {
         None
     } else {
@@ -1392,20 +1352,6 @@ pub async fn get_socks_ws() -> (Option<config::Socks5Server>, String) {
 pub fn get_proxy_status() -> bool {
     Config::get_socks().is_some()
 }
-#[tokio::main(flavor = "current_thread")]
-pub async fn test_rendezvous_server() -> ResultType<()> {
-    let mut c = connect(1000, "").await?;
-    c.send(&Data::TestRendezvousServer).await?;
-    Ok(())
-}
-
-#[tokio::main(flavor = "current_thread")]
-pub async fn notify_deployed() -> ResultType<()> {
-    let mut c = connect(1000, "").await?;
-    c.send(&Data::Deployed).await?;
-    Ok(())
-}
-
 #[tokio::main(flavor = "current_thread")]
 pub async fn send_url_scheme(url: String) -> ResultType<()> {
     connect(1_000, "_url")

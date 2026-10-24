@@ -3259,9 +3259,6 @@ bool isChangePermanentPasswordDisabled() =>
     bind.mainGetBuildinOption(key: kOptionDisableChangePermanentPassword) ==
     'Y';
 
-bool isChangeIdDisabled() =>
-    bind.mainGetBuildinOption(key: kOptionDisableChangeId) == 'Y';
-
 bool isUnlockPinDisabled() =>
     bind.mainGetBuildinOption(key: kOptionDisableUnlockPin) == 'Y';
 

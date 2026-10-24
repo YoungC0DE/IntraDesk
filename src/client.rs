@@ -39,7 +39,7 @@ use hbb_common::{
     bail,
     config::{
         self, use_ws, Config, LocalConfig, PeerConfig, PeerInfoSerde, Resolution,
-        CONNECT_TIMEOUT, READ_TIMEOUT, RELAY_PORT, RENDEZVOUS_PORT, RENDEZVOUS_SERVERS,
+        CONNECT_TIMEOUT, READ_TIMEOUT, RELAY_PORT, RENDEZVOUS_PORT,
     },
     futures::future::{select_ok, BoxFuture, FutureExt},
     get_version_number, log,
@@ -417,21 +417,13 @@ impl Client {
         } else {
             (peer, "", key, token)
         };
-        let (rendezvous_server, servers, contained) = if other_server.is_empty() {
+        let (rendezvous_server, servers, _) = if other_server.is_empty() {
             crate::get_rendezvous_server(1_000).await
         } else {
             if other_server == PUBLIC_SERVER {
-                (
-                    check_port(RENDEZVOUS_SERVERS[0], RENDEZVOUS_PORT),
-                    RENDEZVOUS_SERVERS[1..]
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect(),
-                    true,
-                )
-            } else {
-                (check_port(other_server, RENDEZVOUS_PORT), Vec::new(), true)
+                bail!("Public servers are not supported");
             }
+            (check_port(other_server, RENDEZVOUS_PORT), Vec::new(), true)
         };
 
         // Same relay gate as the v6 socket below: under any forced relay the v6 punch cannot
@@ -497,7 +489,6 @@ impl Client {
             webrtc_offerer,
             rendezvous_server.clone(),
             servers.clone(),
-            contained,
         );
         // The fallback request exists only to carry a TCP punch, so it is pointless once TCP
         // punch is off — it would reach `connect()` with nothing to try and just open a second
@@ -525,7 +516,6 @@ impl Client {
             None,
             rendezvous_server,
             servers,
-            contained,
         )
         .boxed();
         if has_webrtc_offerer {
@@ -751,7 +741,6 @@ impl Client {
         webrtc_offerer: Option<WebRTCStream>,
         mut rendezvous_server: String,
         servers: Vec<String>,
-        contained: bool,
     ) -> ResultType<(
         (
             Stream,
@@ -782,9 +771,6 @@ impl Client {
                     break;
                 }
             }
-            crate::refresh_rendezvous_server();
-        } else if !contained {
-            crate::refresh_rendezvous_server();
         }
         log::info!("rendezvous server: {}", rendezvous_server);
         let mut socket = socket?;

@@ -99,7 +99,6 @@ const CHARS: &[char] = &[
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const RENDEZVOUS_SERVERS: &[&str] = &["rs-ny.rustdesk.com"];
 pub const RS_PUB_KEY: &str = "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=";
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
@@ -814,7 +813,7 @@ impl Config {
                 return ss;
             }
         }
-        return RENDEZVOUS_SERVERS.iter().map(|x| x.to_string()).collect();
+        Vec::new()
     }
 
     pub fn reset_online() {
@@ -1021,15 +1020,6 @@ impl Config {
             .read()
             .unwrap()
             .get(keys::OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD)
-            .map(|v| v == "Y")
-            .unwrap_or(false)
-    }
-
-    pub fn is_disable_change_id() -> bool {
-        BUILTIN_SETTINGS
-            .read()
-            .unwrap()
-            .get(keys::OPTION_DISABLE_CHANGE_ID)
             .map(|v| v == "Y")
             .unwrap_or(false)
     }
@@ -2419,7 +2409,6 @@ pub mod keys {
     pub const OPTION_ALLOW_WEBRTC_CC: &str = "allow-webrtc-congestion-control";
     pub const OPTION_ALLOW_HOSTNAME_AS_ID: &str = "allow-hostname-as-id";
     pub const OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD: &str = "disable-change-permanent-password";
-    pub const OPTION_DISABLE_CHANGE_ID: &str = "disable-change-id";
     pub const OPTION_DISABLE_UNLOCK_PIN: &str = "disable-unlock-pin";
 
     // proxy settings

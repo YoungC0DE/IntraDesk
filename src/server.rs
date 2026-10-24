@@ -9,22 +9,20 @@ use bytes::Bytes;
 
 pub use connection::*;
 use hbb_common::config::Config2;
-use hbb_common::tcp::{self, new_listener};
+use hbb_common::tcp;
 use hbb_common::{
     allow_err,
     anyhow::Context,
     bail,
-    config::{Config, CONNECT_TIMEOUT, RELAY_PORT},
+    config::{self, Config, CONNECT_TIMEOUT, RENDEZVOUS_PORT},
     log,
     protobuf::{Enum, Message as _},
     rendezvous_proto::*,
-    socket_client,
     sodiumoxide::crypto::{box_, sign},
     timeout, tokio,
-    websocket::{check_ws, is_ws_endpoint},
     ResultType, Stream,
 };
-use base::message_proto::*;
+use base::{config::keys::OPTION_DIRECT_SERVER, message_proto::*};
 use service::ServiceTmpl;
 use service::{EmptyExtraFieldService, GenericService, Service, Subscriber};
 use video_service::VideoSource;
@@ -95,37 +93,6 @@ pub fn new() -> ServerPtr {
         }
     }
     Arc::new(RwLock::new(server))
-}
-
-async fn accept_connection_(
-    server: ServerPtr,
-    socket: Stream,
-    secure: bool,
-    meta: ConnectionMeta,
-    slot: crate::rendezvous_mediator::PunchSlot,
-) -> ResultType<()> {
-    let local_addr = socket.local_addr();
-    drop(socket);
-    // even we drop socket, below still may fail if not use reuse_addr,
-    // there is TIME_WAIT before socket really released, so sometimes we
-    // see "Only one usage of each socket address is normally permitted" on windows sometimes,
-    let listener = new_listener(local_addr, true).await?;
-    log::info!("Server listening on: {}", &listener.local_addr()?);
-    if let Ok((stream, addr)) = timeout(CONNECT_TIMEOUT, listener.accept()).await? {
-        // The peer is in: the place goes back before the session runs, as every punch's does.
-        drop(slot);
-        stream.set_nodelay(true).ok();
-        let stream_addr = stream.local_addr()?;
-        create_tcp_connection(
-            server,
-            Stream::from(stream, stream_addr),
-            addr,
-            secure,
-            meta,
-        )
-        .await?;
-    }
-    Ok(())
 }
 
 pub async fn create_tcp_connection(
@@ -256,77 +223,6 @@ async fn identity_handshake(stream: &mut Stream, secure: bool) -> ResultType<()>
         }
     }
 
-    Ok(())
-}
-
-pub(crate) async fn accept_connection(
-    server: ServerPtr,
-    socket: Stream,
-    peer_addr: SocketAddr,
-    secure: bool,
-    meta: ConnectionMeta,
-    slot: crate::rendezvous_mediator::PunchSlot,
-) {
-    if let Err(err) = accept_connection_(server, socket, secure, meta, slot).await {
-        log::warn!("Failed to accept connection from {}: {}", peer_addr, err);
-    }
-}
-
-pub async fn create_relay_connection(
-    server: ServerPtr,
-    relay_server: String,
-    uuid: String,
-    peer_addr: SocketAddr,
-    secure: bool,
-    ipv4: bool,
-    meta: ConnectionMeta,
-) {
-    if let Err(err) = create_relay_connection_(
-        server,
-        relay_server,
-        uuid.clone(),
-        peer_addr,
-        secure,
-        ipv4,
-        meta,
-    )
-    .await
-    {
-        log::error!(
-            "Failed to create relay connection for {} with uuid {}: {}",
-            peer_addr,
-            uuid,
-            err
-        );
-    }
-}
-
-async fn create_relay_connection_(
-    server: ServerPtr,
-    relay_server: String,
-    uuid: String,
-    peer_addr: SocketAddr,
-    secure: bool,
-    ipv4: bool,
-    meta: ConnectionMeta,
-) -> ResultType<()> {
-    // The proxy's address family does not constrain the relay target.
-    let relay_server = crate::check_port(relay_server, RELAY_PORT);
-    let use_ws_proxy = Config::is_proxy() && is_ws_endpoint(&check_ws(&relay_server));
-    let mut stream = socket_client::connect_tcp(
-        socket_client::ipv4_to_ipv6(relay_server, ipv4 || use_ws_proxy),
-        CONNECT_TIMEOUT,
-    )
-    .await?;
-    let mut msg_out = RendezvousMessage::new();
-    let licence_key = crate::get_key(true).await;
-    msg_out.set_request_relay(RequestRelay {
-        licence_key,
-        uuid,
-        ..Default::default()
-    });
-    stream.send(&msg_out).await?;
-    create_tcp_connection(server, stream, peer_addr, secure, meta).await?;
     Ok(())
 }
 
@@ -541,7 +437,7 @@ pub async fn start_server(is_server: bool, no_server: bool) {
         input_service::fix_key_down_timeout_loop();
         #[cfg(feature = "hwcodec")]
         scrap::hwcodec::start_check_process();
-        crate::RendezvousMediator::start_all().await;
+        run_listeners().await;
     } else {
         match crate::ipc::connect(1000, "").await {
             Ok(mut conn) => {
@@ -577,7 +473,104 @@ pub async fn start_server(is_server: bool, no_server: bool) {
 }
 
 
+/// Serves incoming sessions on the direct-access port and answers LAN discovery until the
+/// process exits.
+async fn run_listeners() {
+    if config::is_outgoing_only() {
+        loop {
+            hbb_common::sleep(1.).await;
+        }
+    }
+    check_zombie();
+    let server = new();
+    tokio::spawn(direct_server(server.clone()));
+    std::thread::spawn(move || {
+        allow_err!(crate::lan::start_listening());
+    });
+    scrap::codec::test_av1();
+    loop {
+        if is_service_stopped() {
+            server.write().unwrap().close_connections();
+        }
+        hbb_common::sleep(1.).await;
+    }
+}
 
+fn is_service_stopped() -> bool {
+    config::option2bool("stop-service", &Config::get_option("stop-service"))
+}
+
+fn get_direct_port() -> i32 {
+    let port = Config::get_option("direct-access-port")
+        .parse::<i32>()
+        .unwrap_or(0);
+    if port <= 0 {
+        RENDEZVOUS_PORT + 2
+    } else {
+        port
+    }
+}
+
+async fn direct_server(server: ServerPtr) {
+    let mut listener = None;
+    let mut port = 0;
+    loop {
+        let disabled = !config::option2bool(
+            OPTION_DIRECT_SERVER,
+            &Config::get_option(OPTION_DIRECT_SERVER),
+        ) || is_service_stopped();
+        if !disabled && listener.is_none() {
+            port = get_direct_port();
+            match tcp::listen_any(port as _).await {
+                Ok(l) => {
+                    log::info!("Direct server listening on: {:?}", l.local_addr());
+                    listener = Some(l);
+                }
+                Err(err) => {
+                    log::error!(
+                        "Failed to start direct server on port: {}, error: {}",
+                        port,
+                        err
+                    );
+                    while port == get_direct_port() {
+                        hbb_common::sleep(1.).await;
+                    }
+                }
+            }
+        }
+        if let Some(l) = listener.as_mut() {
+            if disabled || port != get_direct_port() {
+                log::info!("Exit direct access listen");
+                listener = None;
+                continue;
+            }
+            if let Ok(Ok((stream, addr))) = timeout(1000, l.accept()).await {
+                stream.set_nodelay(true).ok();
+                log::info!("direct access from {}", addr);
+                let local_addr = stream
+                    .local_addr()
+                    .unwrap_or(Config::get_any_listen_addr(true));
+                let server = server.clone();
+                tokio::spawn(async move {
+                    allow_err!(
+                        create_tcp_connection(
+                            server,
+                            Stream::from(stream, local_addr),
+                            addr,
+                            false,
+                            ConnectionMeta::default(),
+                        )
+                        .await
+                    );
+                });
+            } else {
+                hbb_common::sleep(0.1).await;
+            }
+        } else {
+            hbb_common::sleep(1.).await;
+        }
+    }
+}
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn stop_main_window_process() {

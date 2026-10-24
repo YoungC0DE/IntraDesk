@@ -160,7 +160,6 @@ const String kOptionRemovePresetPasswordWarning =
     "remove-preset-password-warning";
 const String kOptionDisableChangePermanentPassword =
     "disable-change-permanent-password";
-const String kOptionDisableChangeId = "disable-change-id";
 const String kOptionDisableUnlockPin = "disable-unlock-pin";
 const kHideUsernameOnCard = "hide-username-on-card";
 const String kOptionHideHelpCards = "hide-help-cards";

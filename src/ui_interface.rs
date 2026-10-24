@@ -416,18 +416,6 @@ pub fn get_proxy_status() -> bool {
     return false;
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[inline]
-pub fn is_installed() -> bool {
-    crate::platform::is_installed()
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-#[inline]
-pub fn is_installed() -> bool {
-    false
-}
-
 #[inline]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn get_mouse_time() -> f64 {
@@ -1120,12 +1108,7 @@ pub fn check_hwcodec() {
         static ONCE: Once = Once::new();
 
         ONCE.call_once(|| {
-            if crate::platform::is_installed() {
-                ipc::notify_server_to_check_hwcodec().ok();
-                ipc::client_get_hwcodec_config_thread(3);
-            } else {
-                scrap::hwcodec::start_check_process();
-            }
+            scrap::hwcodec::start_check_process();
         })
     }
 }

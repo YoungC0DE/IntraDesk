@@ -1,7 +1,6 @@
 #[cfg(not(debug_assertions))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::platform::breakdown_callback;
-use base::config::keys;
 #[cfg(not(debug_assertions))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use base::platform::register_breakdown_handler;
@@ -77,22 +76,6 @@ pub fn core_main() -> Option<CoreMainAction> {
         }
         i += 1;
     }
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    if args.is_empty() {
-        #[cfg(target_os = "linux")]
-        let should_check_start_tray = crate::check_process("--server", false);
-        // We can use `crate::check_process("--server", false)` on Windows.
-        // Because `--server` process is the System user's process. We can't get the arguments in `check_process()`.
-        // We can assume that self service running means the server is also running on Windows.
-        #[cfg(target_os = "windows")]
-        let should_check_start_tray = crate::platform::is_self_service_running()
-            && crate::platform::is_cur_exe_the_installed();
-        if should_check_start_tray && !crate::check_process("--tray", true) {
-            #[cfg(target_os = "linux")]
-            hbb_common::allow_err!(crate::platform::check_autostart_config());
-            hbb_common::allow_err!(crate::run_me(vec!["--tray"]));
-        }
-    }
     #[cfg(not(debug_assertions))]
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     register_breakdown_handler(breakdown_callback);
@@ -128,8 +111,7 @@ pub fn core_main() -> Option<CoreMainAction> {
     }
     #[cfg(windows)]
     {
-        _is_quick_support |= !crate::platform::is_installed()
-            && args.is_empty()
+        _is_quick_support |= args.is_empty()
             && (is_quick_support_exe(&arg_exe)
                 || config::LocalConfig::get_option("pre-elevate-service") == "Y"
                 || crate::platform::is_elevated(None).unwrap_or(false));
@@ -157,8 +139,7 @@ pub fn core_main() -> Option<CoreMainAction> {
     }
 
     #[cfg(windows)]
-    if !crate::platform::is_installed()
-        && args.is_empty()
+    if args.is_empty()
         && _is_quick_support
         && !_is_elevate
         && !_is_run_as_system
@@ -169,7 +150,7 @@ pub fn core_main() -> Option<CoreMainAction> {
         }
     }
     #[cfg(windows)]
-    if !crate::platform::is_installed() && (_is_elevate || _is_run_as_system) {
+    if _is_elevate || _is_run_as_system {
         crate::platform::elevate_or_run_as_system(_is_elevate, _is_run_as_system);
         return None;
     }
@@ -232,34 +213,6 @@ pub fn core_main() -> Option<CoreMainAction> {
                 crate::tray::start_tray();
             }
             return None;
-        } else if args[0] == "--service" {
-            log::info!("start --service");
-            crate::start_os_service();
-            return None;
-        } else if args[0] == "--server" {
-            log::info!("start --server with user {}", crate::username());
-            #[cfg(target_os = "linux")]
-            {
-                hbb_common::allow_err!(crate::platform::check_autostart_config());
-                std::process::Command::new("pkill")
-                    .arg("-f")
-                    .arg(&format!("{} --tray", crate::get_app_name().to_lowercase()))
-                    .status()
-                    .ok();
-                hbb_common::allow_err!(crate::run_me(vec!["--tray"]));
-            }
-            #[cfg(any(target_os = "linux", target_os = "windows"))]
-            {
-                crate::start_server(true, false);
-            }
-            #[cfg(target_os = "macos")]
-            {
-                let handler = std::thread::spawn(move || crate::start_server(true, false));
-                crate::tray::start_tray();
-                // prevent server exit when encountering errors from tray
-                hbb_common::allow_err!(handler.join());
-            }
-            return None;
         } else if args[0] == "--import-config" {
             if args.len() == 2 {
                 let filepath;
@@ -274,85 +227,8 @@ pub fn core_main() -> Option<CoreMainAction> {
                 import_config(&filepath);
             }
             return None;
-        } else if args[0] == "--password" {
-            if is_cli_setting_change_disabled() {
-                println!("Settings are disabled!");
-                return None;
-            }
-            if config::Config::is_disable_change_permanent_password() {
-                println!("Changing permanent password is disabled!");
-                return None;
-            }
-            if args.len() == 2 {
-                if crate::platform::is_installed() && is_root() {
-                    if let Err(err) = crate::ipc::set_permanent_password(args[1].to_owned()) {
-                        println!("{err}");
-                    } else {
-                        println!("Done!");
-                    }
-                } else {
-                    println!("Installation and administrative privileges required!");
-                }
-            }
-            return None;
-        } else if args[0] == "--set-unlock-pin" {
-            if config::Config::is_disable_unlock_pin() {
-                println!("Unlock PIN is disabled!");
-                return None;
-            }
-            #[cfg(feature = "flutter")]
-            if args.len() == 2 {
-                if crate::platform::is_installed() && is_root() {
-                    if let Err(err) = crate::ipc::set_unlock_pin(args[1].to_owned(), false) {
-                        println!("{err}");
-                    } else {
-                        println!("Done!");
-                    }
-                } else {
-                    println!("Installation and administrative privileges required!");
-                }
-            }
-            return None;
         } else if args[0] == "--get-id" {
             println!("{}", crate::ipc::get_id());
-            return None;
-        } else if args[0] == "--set-id" {
-            if is_cli_setting_change_disabled() {
-                println!("Settings are disabled!");
-                return None;
-            }
-            if config::Config::is_disable_change_id() {
-                println!("Changing ID is disabled!");
-                return None;
-            }
-            if args.len() == 2 {
-                if crate::platform::is_installed() && is_root() {
-                    let old_id = crate::ipc::get_id();
-                    let mut res = crate::ui_interface::change_id_shared(args[1].to_owned(), old_id);
-                    if res.is_empty() {
-                        res = "Done!".to_owned();
-                    }
-                    println!("{}", res);
-                } else {
-                    println!("Installation and administrative privileges required!");
-                }
-            }
-            return None;
-        } else if args[0] == "--option" {
-            if is_cli_setting_change_disabled() {
-                println!("Settings are disabled!");
-                return None;
-            }
-            if crate::platform::is_installed() && is_root() {
-                if args.len() == 2 {
-                    let options = crate::ipc::get_options();
-                    println!("{}", options.get(&args[1]).unwrap_or(&"".to_owned()));
-                } else if args.len() == 3 {
-                    crate::ipc::set_option(&args[1], &args[2]);
-                }
-            } else {
-                println!("Installation and administrative privileges required!");
-            }
             return None;
         } else if args[0] == "--check-hwcodec-config" {
             #[cfg(feature = "hwcodec")]
@@ -362,13 +238,6 @@ pub fn core_main() -> Option<CoreMainAction> {
             // call connection manager to establish connections
             // meanwhile, return true to call flutter window to show control panel
             crate::ui_interface::start_option_status_sync();
-        } else if args[0] == "-gtk-sudo" {
-            // rustdesk service kill `rustdesk --` processes
-            #[cfg(target_os = "linux")]
-            if args.len() > 2 {
-                crate::platform::gtk_sudo::exec();
-            }
-            return None;
         }
     }
     //_async_logger_holder.map(|x| x.flush());
@@ -500,17 +369,6 @@ fn try_send_by_dbus(uni_links: String) -> Option<Vec<String>> {
     }
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn is_root() -> bool {
-    #[cfg(windows)]
-    {
-        return crate::platform::is_elevated(None).unwrap_or_default()
-            || crate::platform::is_root();
-    }
-    #[allow(unreachable_code)]
-    crate::platform::is_root()
-}
-
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
     matches!(
@@ -524,14 +382,6 @@ fn is_user_main_ipc_scope_cli_command(args: &[String]) -> bool {
             | Some("--assign")
             | Some("--deploy")
     )
-}
-
-#[inline]
-fn is_cli_setting_change_disabled() -> bool {
-    let option = keys::OPTION_ALLOW_COMMAND_LINE_SETTINGS_WHEN_SETTINGS_DISABLED;
-    let allow_command_line_settings =
-        config::option2bool(option, &crate::get_builtin_option(option));
-    config::is_disable_settings() && !allow_command_line_settings
 }
 
 /// Check if the executable is a Quick Support version.

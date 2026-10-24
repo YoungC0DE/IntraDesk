@@ -27,10 +27,6 @@ use hbb_common::{
 use base::config::keys::{self, OPTION_ALLOW_WEBSOCKET};
 #[cfg(windows)]
 pub(crate) use ipc_auth::authorize_windows_portable_service_ipc_connection;
-#[cfg(windows)]
-pub(crate) use ipc_auth::ensure_peer_executable_matches_current_by_pid_opt;
-#[cfg(windows)]
-pub(crate) use ipc_auth::log_rejected_windows_ipc_connection;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use ipc_auth::{active_uid, authorize_service_scoped_ipc_connection};
 #[cfg(target_os = "macos")]
@@ -1952,32 +1948,6 @@ pub async fn get_hwcodec_config_from_server() -> ResultType<()> {
         }
     }
     bail!("failed to get hwcodec config");
-}
-
-#[cfg(feature = "hwcodec")]
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub fn client_get_hwcodec_config_thread(wait_sec: u64) {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    if !crate::platform::is_installed()
-        || !scrap::codec::enable_hwcodec_option()
-        || scrap::hwcodec::HwCodecConfig::already_set()
-    {
-        return;
-    }
-    ONCE.call_once(move || {
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            let mut intervals: Vec<u64> = vec![wait_sec, 3, 3, 6, 9];
-            for i in intervals.drain(..) {
-                if i > 0 {
-                    std::thread::sleep(std::time::Duration::from_secs(i));
-                }
-                if get_hwcodec_config_from_server().is_ok() {
-                    break;
-                }
-            }
-        });
-    });
 }
 
 #[cfg(feature = "hwcodec")]

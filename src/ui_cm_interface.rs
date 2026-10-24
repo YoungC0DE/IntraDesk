@@ -1578,10 +1578,7 @@ fn send_raw(msg: Message, tx: &UnboundedSender<Data>) {
 }
 
 pub fn can_elevate() -> bool {
-    #[cfg(windows)]
-    return !crate::platform::is_installed();
-    #[cfg(not(windows))]
-    return false;
+    true
 }
 
 pub fn elevate_portable(_id: i32) {

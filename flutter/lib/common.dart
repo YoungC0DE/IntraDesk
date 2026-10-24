@@ -2752,12 +2752,7 @@ Future<bool> callMainCheckSuperUserPermission() async {
 }
 
 Future<void> start_service(bool is_start) async {
-  bool checked = !bind.mainIsInstalled() ||
-      !isMacOS ||
-      await callMainCheckSuperUserPermission();
-  if (checked) {
-    mainSetBoolOption(kOptionStopService, !is_start);
-  }
+  mainSetBoolOption(kOptionStopService, !is_start);
 }
 
 Future<bool> canBeBlocked() async {

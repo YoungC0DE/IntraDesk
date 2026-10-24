@@ -2050,10 +2050,6 @@ pub fn option_synced() -> bool {
     crate::ui_interface::option_synced()
 }
 
-pub fn main_is_installed() -> SyncReturn<bool> {
-    SyncReturn(is_installed())
-}
-
 pub fn main_init_input_source() -> SyncReturn<()> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     crate::keyboard::input_source::init_input_source();

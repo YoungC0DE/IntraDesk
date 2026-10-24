@@ -1159,17 +1159,6 @@ impl Connection {
                 platform_additions.insert("is_wayland".into(), json!(true));
             }
         }
-        #[cfg(target_os = "windows")]
-        {
-            platform_additions.insert(
-                "is_installed".into(),
-                json!(crate::platform::is_installed()),
-            );
-            if crate::platform::is_installed() {
-                platform_additions.extend(virtual_display_manager::get_platform_additions());
-            }
-        }
-
         #[cfg(any(target_os = "windows", feature = "unix-file-copy-paste"))]
         {
             let is_both_windows = cfg!(target_os = "windows")
@@ -1239,10 +1228,7 @@ impl Connection {
         pi.sas_enabled = sas_enabled;
 
         let mut sub_service = false;
-        #[allow(unused_mut)]
-        let mut wait_session_id_confirm = false;
-        #[cfg(windows)]
-        self.handle_windows_specific_session(&mut pi, &mut wait_session_id_confirm);
+        let wait_session_id_confirm = false;
         if self.file_transfer.is_some() {
             res.set_peer_info(pi);
         } else {
@@ -1363,32 +1349,6 @@ impl Connection {
                 self.auto_disconnect_timer = Self::get_auto_disconenct_timer();
                 s.try_add_monitor_service(self.display_idx);
                 s.add_monitor_connection(self.inner.clone(), &noperms, self.display_idx);
-            }
-        }
-    }
-
-    #[cfg(windows)]
-    fn handle_windows_specific_session(
-        &mut self,
-        pi: &mut PeerInfo,
-        wait_session_id_confirm: &mut bool,
-    ) {
-        let sessions = crate::platform::get_available_sessions(true);
-        if let Some(current_sid) = crate::platform::get_current_process_session_id() {
-            if crate::platform::is_installed()
-                && crate::platform::is_share_rdp()
-                && raii::AuthedConnID::conn_count() == 1
-                && sessions.len() > 1
-                && sessions.iter().any(|e| e.sid == current_sid)
-                && get_version_number(&self.lr.version) >= get_version_number("1.2.4")
-            {
-                pi.windows_sessions = Some(WindowsSessions {
-                    sessions,
-                    current_sid,
-                    ..Default::default()
-                })
-                .into();
-                *wait_session_id_confirm = true;
             }
         }
     }
@@ -2882,33 +2842,6 @@ impl Connection {
                         .lock()
                         .unwrap()
                         .user_auto_adjust_fps(self.inner.id(), fps),
-                    #[cfg(windows)]
-                    Some(misc::Union::SelectedSid(sid)) => {
-                        if let Some(current_process_sid) =
-                            crate::platform::get_current_process_session_id()
-                        {
-                            let sessions = crate::platform::get_available_sessions(false);
-                            if crate::platform::is_installed()
-                                && crate::platform::is_share_rdp()
-                                && raii::AuthedConnID::conn_count() == 1
-                                && sessions.len() > 1
-                                && current_process_sid != sid
-                                && sessions.iter().any(|e| e.sid == sid)
-                            {
-                                std::thread::spawn(move || {
-                                    let _ = ipc::connect_to_user_session(Some(sid));
-                                });
-                                return false;
-                            }
-                            if self.file_transfer.is_some() {
-                                if let Some((dir, show_hidden)) = self.delayed_read_dir.take() {
-                                    self.read_dir(&dir, show_hidden);
-                                }
-                            } else {
-                                self.try_sub_monitor_services();
-                            }
-                        }
-                    }
                     Some(misc::Union::MessageQuery(mq)) => {
                         if let Some(msg_out) = video_service::make_display_changed_msg(
                             mq.switch_display as _,
@@ -3176,7 +3109,7 @@ impl Connection {
             err = "No permission".to_string();
         } else {
             err = "No need to elevate".to_string();
-            if !crate::platform::is_installed() && !portable_client::running() {
+            if !portable_client::running() {
                 err = portable_client::start_portable_service(para)
                     .err()
                     .map_or("".to_string(), |e| e.to_string());
@@ -3825,7 +3758,7 @@ impl Connection {
 
     #[cfg(windows)]
     fn portable_check(&mut self) {
-        if self.portable.is_installed || !self.is_remote() || !self.keyboard {
+        if !self.is_remote() || !self.keyboard {
             return;
         }
         let running = portable_client::running();
@@ -4616,14 +4549,12 @@ pub struct PortableState {
     pub last_uac: bool,
     pub last_foreground_window_elevated: bool,
     pub last_running: Option<bool>,
-    pub is_installed: bool,
 }
 
 #[cfg(windows)]
 impl Default for PortableState {
     fn default() -> Self {
         Self {
-            is_installed: crate::platform::is_installed(),
             last_uac: Default::default(),
             last_foreground_window_elevated: Default::default(),
             last_running: Default::default(),
@@ -4831,11 +4762,6 @@ mod raii {
             if cached != Some(current) {
                 Self::check_wake_lock();
             }
-        }
-
-        #[cfg(windows)]
-        pub fn conn_count() -> usize {
-            AUTHED_CONNS.lock().unwrap().len()
         }
 
         pub fn check_remove_session(conn_id: i32, key: SessionKey) {

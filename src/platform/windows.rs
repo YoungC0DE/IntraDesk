@@ -1,13 +1,11 @@
 use super::{CursorData, ResultType};
-use crate::ipc;
 use base::message_proto::{DisplayInfo, Resolution, WindowsSession};
 use hbb_common::{
     allow_err,
     anyhow::anyhow,
     bail,
     libc::{c_int, wchar_t},
-    log, sleep,
-    timeout, tokio,
+    log,
 };
 use std::{
     collections::HashMap,
@@ -33,9 +31,8 @@ use winapi::{
         libloaderapi::{
             GetProcAddress, LoadLibraryA, LoadLibraryExA, LOAD_LIBRARY_SEARCH_SYSTEM32,
         },
-        minwinbase::STILL_ACTIVE,
         processthreadsapi::{
-            GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess,
+            GetCurrentProcess, GetCurrentProcessId, OpenProcess,
             OpenProcessToken, ProcessIdToSessionId, PROCESS_INFORMATION, STARTUPINFOW,
         },
         securitybaseapi::{
@@ -72,14 +69,6 @@ use windows::Win32::{
         PROCESS_QUERY_LIMITED_INFORMATION as WIN_PROCESS_QUERY_LIMITED_INFORMATION,
     },
 };
-use windows_service::{
-    define_windows_service,
-    service::{
-        ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
-        ServiceType,
-    },
-    service_control_handler::{self, ServiceControlHandlerResult},
-};
 use winreg::{enums::*, RegKey};
 
 mod acl;
@@ -94,7 +83,6 @@ pub const FLUTTER_RUNNER_WIN32_WINDOW_CLASS: &'static str = "FLUTTER_RUNNER_WIN3
 pub const EXPLORER_EXE: &'static str = "explorer.exe";
 pub const SET_FOREGROUND_WINDOW: &'static str = "SET_FOREGROUND_WINDOW";
 
-const HKLM_PREFIX: &str = "HKEY_LOCAL_MACHINE\\";
 
 pub fn get_focused_display(displays: Vec<DisplayInfo>) -> Option<usize> {
     unsafe {
@@ -503,24 +491,6 @@ fn fix_cursor_mask(
     return true;
 }
 
-define_windows_service!(ffi_service_main, service_main);
-
-fn service_main(arguments: Vec<OsString>) {
-    if let Err(e) = run_service(arguments) {
-        log::error!("run_service failed: {}", e);
-    }
-}
-
-pub fn start_os_service() {
-    if let Err(e) =
-        windows_service::service_dispatcher::start(crate::get_app_name(), ffi_service_main)
-    {
-        log::error!("start_service failed: {}", e);
-    }
-}
-
-const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
-
 extern "C" {
     fn get_current_session(rdp: BOOL) -> DWORD;
     fn LaunchProcessWin(
@@ -562,217 +532,6 @@ extern "C" {
 
 pub fn get_current_session_id(share_rdp: bool) -> DWORD {
     unsafe { get_current_session(if share_rdp { TRUE } else { FALSE }) }
-}
-
-#[inline]
-fn resolve_expected_active_session_id_for_service(session_id: u32) -> Option<u32> {
-    let share_rdp_enabled = is_share_rdp();
-    if get_available_sessions(false)
-        .iter()
-        .any(|e| e.sid == session_id)
-    {
-        return Some(session_id);
-    }
-    let current_active_session =
-        unsafe { get_current_session(if share_rdp_enabled { TRUE } else { FALSE }) };
-    if current_active_session == u32::MAX {
-        None
-    } else {
-        Some(current_active_session)
-    }
-}
-
-#[inline]
-fn authorize_service_scoped_ipc_connection(
-    stream: &ipc::Connection,
-    expected_active_session_id: Option<u32>,
-) -> bool {
-    let (authorized, peer_pid, peer_session_id, peer_is_system) =
-        stream.service_authorization_status_for_session(expected_active_session_id);
-    if !authorized {
-        ipc::log_rejected_windows_ipc_connection(
-            crate::POSTFIX_SERVICE,
-            peer_pid,
-            peer_session_id,
-            expected_active_session_id,
-            peer_is_system,
-            None,
-        );
-        return false;
-    }
-    if let Err(err) =
-        ipc::ensure_peer_executable_matches_current_by_pid_opt(peer_pid, crate::POSTFIX_SERVICE)
-    {
-        log::warn!(
-                "Rejected unauthorized connection on protected service-scoped IPC channel due to executable mismatch: postfix={}, peer_pid={:?}, err={}",
-                crate::POSTFIX_SERVICE,
-                peer_pid,
-                err
-            );
-        return false;
-    }
-    true
-}
-
-#[tokio::main(flavor = "current_thread")]
-async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
-    let event_handler = move |control_event| -> ServiceControlHandlerResult {
-        log::info!("Got service control event: {:?}", control_event);
-        match control_event {
-            ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,
-            ServiceControl::Stop | ServiceControl::Preshutdown | ServiceControl::Shutdown => {
-                send_close(crate::POSTFIX_SERVICE).ok();
-                ServiceControlHandlerResult::NoError
-            }
-            _ => ServiceControlHandlerResult::NotImplemented,
-        }
-    };
-
-    // Register system service event handler
-    let status_handle = service_control_handler::register(crate::get_app_name(), event_handler)?;
-
-    let next_status = ServiceStatus {
-        // Should match the one from system service registry
-        service_type: SERVICE_TYPE,
-        // The new state
-        current_state: ServiceState::Running,
-        // Accept stop events when running
-        controls_accepted: ServiceControlAccept::STOP,
-        // Used to report an error when starting or stopping only, otherwise must be zero
-        exit_code: ServiceExitCode::Win32(0),
-        // Only used for pending states, otherwise must be zero
-        checkpoint: 0,
-        // Only used for pending states, otherwise must be zero
-        wait_hint: Duration::default(),
-        process_id: None,
-    };
-
-    // Tell the system that the service is running now
-    status_handle.set_service_status(next_status)?;
-
-    let mut session_id = unsafe { get_current_session(share_rdp()) };
-    log::info!("session id {}", session_id);
-    let mut h_process = launch_server(session_id, true).await.unwrap_or(NULL);
-    let mut incoming = ipc::new_listener(crate::POSTFIX_SERVICE).await?;
-    let mut stored_usid = None;
-    loop {
-        let sids: Vec<_> = get_available_sessions(false)
-            .iter()
-            .map(|e| e.sid)
-            .collect();
-        if !sids.contains(&session_id) || !is_share_rdp() {
-            let current_active_session = unsafe { get_current_session(share_rdp()) };
-            if session_id != current_active_session {
-                session_id = current_active_session;
-                h_process = launch_server(session_id, true).await.unwrap_or(NULL);
-            }
-        }
-        let res = timeout(super::SERVICE_INTERVAL, incoming.next()).await;
-        match res {
-            Ok(res) => match res {
-                Some(Ok(stream)) => {
-                    let mut stream = ipc::Connection::new(stream);
-                    // Keep IPC authorization consistent with the session we are currently serving.
-                    // Recompute expected session right before authorization to avoid using a stale
-                    // session_id after awaiting incoming.next().
-                    let expected_active_session_id =
-                        resolve_expected_active_session_id_for_service(session_id);
-                    if !authorize_service_scoped_ipc_connection(&stream, expected_active_session_id)
-                    {
-                        continue;
-                    }
-                    if let Ok(Some(data)) = stream.next_timeout(1000).await {
-                        match data {
-                            ipc::Data::Close => {
-                                log::info!("close received");
-                                break;
-                            }
-                            ipc::Data::SAS => {
-                                send_sas();
-                            }
-                            ipc::Data::UserSid(usid) => {
-                                if let Some(usid) = usid {
-                                    if session_id != usid {
-                                        log::info!(
-                                            "session changed from {} to {}",
-                                            session_id,
-                                            usid
-                                        );
-                                        session_id = usid;
-                                        stored_usid = Some(session_id);
-                                        h_process =
-                                            launch_server(session_id, true).await.unwrap_or(NULL);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Err(_) => {
-                // timeout
-                unsafe {
-                    let tmp = get_current_session(share_rdp());
-                    if tmp == 0xFFFFFFFF {
-                        continue;
-                    }
-                    let mut close_sent = false;
-                    if tmp != session_id && stored_usid != Some(session_id) {
-                        log::info!("session changed from {} to {}", session_id, tmp);
-                        session_id = tmp;
-                        send_close_async("").await.ok();
-                        close_sent = true;
-                    }
-                    let mut exit_code: DWORD = 0;
-                    if h_process.is_null()
-                        || (GetExitCodeProcess(h_process, &mut exit_code) == TRUE
-                            && exit_code != STILL_ACTIVE
-                            && CloseHandle(h_process) == TRUE)
-                    {
-                        match launch_server(session_id, !close_sent).await {
-                            Ok(ptr) => {
-                                h_process = ptr;
-                            }
-                            Err(err) => {
-                                log::error!("Failed to launch server: {}", err);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if !h_process.is_null() {
-        send_close_async("").await.ok();
-        unsafe { CloseHandle(h_process) };
-    }
-
-    status_handle.set_service_status(ServiceStatus {
-        service_type: SERVICE_TYPE,
-        current_state: ServiceState::Stopped,
-        controls_accepted: ServiceControlAccept::empty(),
-        exit_code: ServiceExitCode::Win32(0),
-        checkpoint: 0,
-        wait_hint: Duration::default(),
-        process_id: None,
-    })?;
-
-    Ok(())
-}
-
-async fn launch_server(session_id: DWORD, close_first: bool) -> ResultType<HANDLE> {
-    if close_first {
-        // in case started some elsewhere
-        send_close_async("").await.ok();
-    }
-    let cmd = format!(
-        "\"{}\" --server",
-        std::env::current_exe()?.to_str().unwrap_or("")
-    );
-    launch_privileged_process(session_id, &cmd)
 }
 
 pub fn launch_privileged_process(session_id: DWORD, cmd: &str) -> ResultType<HANDLE> {
@@ -873,21 +632,6 @@ pub fn run_exe_in_session(
         );
     }
     Ok(None)
-}
-
-#[tokio::main(flavor = "current_thread")]
-async fn send_close(postfix: &str) -> ResultType<()> {
-    send_close_async(postfix).await
-}
-
-async fn send_close_async(postfix: &str) -> ResultType<()> {
-    ipc::connect(1000, postfix)
-        .await?
-        .send(&ipc::Data::Close)
-        .await?;
-    // sleep a while to wait for closing and exit
-    sleep(0.1).await;
-    Ok(())
 }
 
 // https://docs.microsoft.com/en-us/windows/win32/api/sas/nf-sas-sendsas
@@ -1002,18 +746,6 @@ pub fn try_change_desktop() -> bool {
     return false;
 }
 
-fn share_rdp() -> BOOL {
-    if get_reg("share_rdp") != "false" {
-        TRUE
-    } else {
-        FALSE
-    }
-}
-
-pub fn is_share_rdp() -> bool {
-    share_rdp() == TRUE
-}
-
 pub fn get_current_process_session_id() -> Option<u32> {
     get_session_id_of_process(unsafe { GetCurrentProcessId() })
 }
@@ -1053,7 +785,7 @@ pub fn get_active_username() -> String {
     let buff_size = 256;
     let mut buff: Vec<u16> = Vec::with_capacity(buff_size);
     buff.resize(buff_size, 0);
-    let n = unsafe { get_active_user(buff.as_mut_ptr(), buff_size as _, share_rdp()) };
+    let n = unsafe { get_active_user(buff.as_mut_ptr(), buff_size as _, TRUE) };
     if n == 0 {
         return "".to_owned();
     }
@@ -1246,76 +978,6 @@ pub fn lock_screen() {
     }
 }
 
-const IS1: &str = "{54E86BC2-6C85-41F3-A9EB-1A94AC9B1F93}_is1";
-
-fn get_subkey(name: &str, wow: bool) -> String {
-    let tmp = format!(
-        "HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}",
-        name
-    );
-    if wow {
-        tmp.replace("Microsoft", "Wow6432Node\\Microsoft")
-    } else {
-        tmp
-    }
-}
-
-fn get_valid_subkey() -> String {
-    let app_name = crate::get_app_name();
-    let subkey = format!("{HKLM_PREFIX}Software\\{app_name}\\InstallState\\{app_name}");
-    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-        return subkey;
-    }
-    let subkey = get_subkey(IS1, false);
-    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-        return subkey;
-    }
-    let subkey = get_subkey(IS1, true);
-    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-        return subkey;
-    }
-    let subkey = get_subkey(&app_name, true);
-    if !get_reg_of(&subkey, "InstallLocation").is_empty() {
-        return subkey;
-    }
-    return get_subkey(&app_name, false);
-}
-
-pub fn get_install_info() -> (String, String, String, String) {
-    get_install_info_with_subkey(get_valid_subkey())
-}
-
-fn get_default_install_path() -> String {
-    let mut pf = "C:\\Program Files".to_owned();
-    if let Ok(x) = std::env::var("ProgramFiles") {
-        if std::path::Path::new(&x).exists() {
-            pf = x;
-        }
-    }
-    #[cfg(target_pointer_width = "32")]
-    {
-        let tmp = pf.replace("Program Files", "Program Files (x86)");
-        if std::path::Path::new(&tmp).exists() {
-            pf = tmp;
-        }
-    }
-    format!("{}\\{}", pf, crate::get_app_name())
-}
-
-fn get_install_info_with_subkey(subkey: String) -> (String, String, String, String) {
-    let mut path = get_reg_of(&subkey, "InstallLocation");
-    if path.is_empty() {
-        path = get_default_install_path();
-    }
-    path = path.trim_end_matches('\\').to_owned();
-    let start_menu = format!(
-        "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{}",
-        crate::get_app_name()
-    );
-    let exe = format!("{}\\{}.exe", path, crate::get_app_name());
-    (subkey, path, start_menu, exe)
-}
-
 fn write_vbs(cmds: String, tip: &str) -> ResultType<PathBuf> {
     const UTF16LE_BOM: &[u8] = &[0xFF, 0xFE];
     let mut tmp = std::env::temp_dir();
@@ -1364,26 +1026,6 @@ pub fn add_recent_document(path: &str) {
     unsafe {
         AddRecentDocument(wstr);
     }
-}
-
-pub fn is_installed() -> bool {
-    let (_, _, _, exe) = get_install_info();
-    std::fs::metadata(exe).is_ok()
-}
-
-pub fn get_reg(name: &str) -> String {
-    let (subkey, _, _, _) = get_install_info();
-    get_reg_of(&subkey, name)
-}
-
-fn get_reg_of(subkey: &str, name: &str) -> String {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok(tmp) = hklm.open_subkey(subkey.replace("HKEY_LOCAL_MACHINE\\", "")) {
-        if let Ok(v) = tmp.get_value(name) {
-            return v;
-        }
-    }
-    "".to_owned()
 }
 
 #[inline]
@@ -2878,20 +2520,6 @@ fn get_pids<S: AsRef<str>>(name: S) -> ResultType<Vec<u32>> {
     }
 
     Ok(pids)
-}
-
-pub fn is_cur_exe_the_installed() -> bool {
-    let (_, _, _, exe) = get_install_info();
-    // Check if is installed, because `exe` is the default path if is not installed.
-    if !std::fs::metadata(&exe).is_ok() {
-        return false;
-    }
-    let mut path = std::env::current_exe().unwrap_or_default();
-    if let Ok(linked) = path.read_link() {
-        path = linked;
-    }
-    let path = path.to_string_lossy().to_lowercase();
-    path == exe.to_lowercase()
 }
 
 #[cfg(not(target_pointer_width = "64"))]

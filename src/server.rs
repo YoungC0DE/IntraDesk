@@ -647,9 +647,6 @@ pub async fn start_server(is_server: bool, no_server: bool) {
                         }
                     }
                 }
-                #[cfg(feature = "hwcodec")]
-                #[cfg(any(target_os = "windows", target_os = "linux"))]
-                crate::ipc::client_get_hwcodec_config_thread(0);
             }
             Err(err) => {
                 log::info!("server not started: {err:?}, no_server: {no_server}");

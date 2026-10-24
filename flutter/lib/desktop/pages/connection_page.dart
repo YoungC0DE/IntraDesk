@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -33,6 +34,7 @@ class OnlineStatusWidget extends StatefulWidget {
 /// State for the connection page.
 class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
+  final _localIps = <String>[].obs;
   Timer? _updateTimer;
 
   double get em => 14.0;
@@ -75,10 +77,9 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
               width: 8,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                color: _svcStopped.value ||
-                        stateGlobal.svcStatus.value == SvcStatus.connecting
+                color: _svcStopped.value
                     ? kColorWarn
-                    : (stateGlobal.svcStatus.value == SvcStatus.ready
+                    : (_localIps.isNotEmpty
                         ? Color.fromARGB(255, 50, 190, 166)
                         : Color.fromARGB(255, 224, 79, 95)),
               ),
@@ -113,11 +114,10 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
     return Text(
       _svcStopped.value
           ? translate("Service is not running")
-          : stateGlobal.svcStatus.value == SvcStatus.connecting
-              ? translate("connecting_status")
-              : stateGlobal.svcStatus.value == SvcStatus.notReady
-                  ? translate("not_ready_status")
-                  : translate('Ready'),
+          : _localIps.isEmpty
+              ? translate("Not connected to a network")
+              : translate("Visible on the network: IP {}")
+                  .replaceAll('{}', _localIps.join(', ')),
       style: TextStyle(fontSize: em),
     );
   }
@@ -125,15 +125,9 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   updateStatus() async {
     final status =
         jsonDecode(await bind.mainGetConnectStatus()) as Map<String, dynamic>;
-    final statusNum = status['status_num'] as int;
-    if (statusNum == 0) {
-      stateGlobal.svcStatus.value = SvcStatus.connecting;
-    } else if (statusNum == -1) {
-      stateGlobal.svcStatus.value = SvcStatus.notReady;
-    } else if (statusNum == 1) {
-      stateGlobal.svcStatus.value = SvcStatus.ready;
-    } else {
-      stateGlobal.svcStatus.value = SvcStatus.notReady;
+    final ips = List<String>.from(status['local_ips'] ?? []);
+    if (!listEquals(ips, _localIps)) {
+      _localIps.value = ips;
     }
     try {
       stateGlobal.videoConnCount.value = status['video_conn_count'] as int;

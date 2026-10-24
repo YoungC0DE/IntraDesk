@@ -117,6 +117,27 @@ pub fn start_discovery() {
     });
 }
 
+/// Private IPv4 addresses other computers can use to reach this one. Interfaces with a gateway
+/// come first: virtual adapters (Hyper-V, WSL, VPN) usually have none.
+pub fn local_ipv4s() -> Vec<String> {
+    let interfaces = default_net::get_interfaces();
+    let private_ips = |with_gateway: bool| -> Vec<String> {
+        interfaces
+            .iter()
+            .filter(|interface| interface.gateway.is_some() == with_gateway)
+            .flat_map(|interface| interface.ipv4.iter())
+            .filter(|x| x.addr.is_private())
+            .map(|x| x.addr.to_string())
+            .collect()
+    };
+    let ips = private_ips(true);
+    if ips.is_empty() {
+        private_ips(false)
+    } else {
+        ips
+    }
+}
+
 /// Splits `ids` by whether the last LAN discovery rounds saw them. An id may also be an address
 /// typed by the user (`ip` or `ip:port`), matched against the addresses the peers answered from.
 pub fn online_states(ids: Vec<String>) -> (Vec<String>, Vec<String>) {

@@ -20,9 +20,10 @@ use crate::ipc;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct UiStatus {
-    pub status_num: i32,
     pub mouse_time: i64,
     pub video_conn_count: usize,
+    /// Filled when read, see `get_connect_status`.
+    pub local_ips: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -34,11 +35,9 @@ pub struct LoginDeviceInfo {
 
 lazy_static::lazy_static! {
     static ref UI_STATUS : Arc<Mutex<UiStatus>> = Arc::new(Mutex::new(UiStatus{
-        status_num: 0,
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         mouse_time: 0,
-        #[cfg(feature = "flutter")]
         video_conn_count: 0,
+        local_ips: Vec::new(),
     }));
     static ref TEMPORARY_PASSWD : Arc<Mutex<String>> = Arc::new(Mutex::new("".to_owned()));
     static ref IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS : Arc<Mutex<Option<bool>>> = Arc::new(Mutex::new(None));
@@ -330,7 +329,9 @@ pub fn check_mouse_time() {
 
 #[inline]
 pub fn get_connect_status() -> UiStatus {
-    UI_STATUS.lock().unwrap().clone()
+    let mut status = UI_STATUS.lock().unwrap().clone();
+    status.local_ips = crate::lan::local_ipv4s();
+    status
 }
 
 #[inline]
@@ -607,8 +608,6 @@ pub fn get_login_device_info_json() -> String {
 #[tokio::main(flavor = "current_thread")]
 async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc::Data>) {
     let mut rx = rx;
-    let mut mouse_time = 0;
-    let mut video_conn_count = 0;
     let is_cm = crate::common::is_cm();
 
     loop {
@@ -625,9 +624,7 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                 }
                                 break;
                             }
-                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
                             Ok(Some(ipc::Data::MouseMoveTime(v))) => {
-                                mouse_time = v;
                                 UI_STATUS.lock().unwrap().mouse_time = v;
                             }
                             Ok(Some(ipc::Data::Options(Some(v)))) => {
@@ -639,21 +636,8 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                                     *TEMPORARY_PASSWD.lock().unwrap() = value;
                                 }
                             }
-                            #[cfg(feature = "flutter")]
                             Ok(Some(ipc::Data::VideoConnCount(Some(n)))) => {
-                                video_conn_count = n;
-                            }
-                            Ok(Some(ipc::Data::OnlineStatus(Some((mut x, _c))))) => {
-                                if x > 0 {
-                                    x = 1
-                                }
-                                *UI_STATUS.lock().unwrap() = UiStatus {
-                                    status_num: x as _,
-                                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                                    mouse_time,
-                                    #[cfg(feature = "flutter")]
-                                    video_conn_count,
-                                };
+                                UI_STATUS.lock().unwrap().video_conn_count = n;
                             }
                             Ok(Some(ipc::Data::ControlPermissionsRemoteModify(v))) => {
                                 *IS_REMOTE_MODIFY_ENABLED_BY_CONTROL_PERMISSIONS.lock().unwrap() = v;
@@ -675,7 +659,6 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                         allow_err!(c.send(&data).await);
                     }
                     _ = timer.tick() => {
-                        c.send(&ipc::Data::OnlineStatus(None)).await.ok();
                         c.send(&ipc::Data::Options(None)).await.ok();
                         c.send(&ipc::Data::Config(("temporary-password".to_owned(), None))).await.ok();
                         #[cfg(feature = "flutter")]
@@ -694,11 +677,6 @@ async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc:
                 .insert("ipc-closed".to_owned(), "Y".to_owned());
             break;
         }
-        *UI_STATUS.lock().unwrap() = UiStatus {
-            status_num: -1,
-            mouse_time,
-            video_conn_count,
-        };
         sleep(1.).await;
     }
 }

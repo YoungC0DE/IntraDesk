@@ -255,7 +255,6 @@ pub enum Data {
     Close,
     SAS,
     UserSid(Option<u32>),
-    OnlineStatus(Option<(i64, bool)>),
     Config((String, Option<String>)),
     Options(Option<HashMap<String, String>>),
     ConfirmedKey(Option<(Vec<u8>, Vec<u8>)>),
@@ -528,11 +527,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                 crate::server::input_service::fix_key_down_timeout_at_exit();
                 std::process::exit(-1); // to make sure --server luauchagent process can restart because SuccessfulExit used
             }
-        }
-        Data::OnlineStatus(_) => {
-            let x = config::get_online_state();
-            let confirmed = Config::get_key_confirmed();
-            allow_err!(stream.send(&Data::OnlineStatus(Some((x, confirmed)))).await);
         }
         Data::ConfirmedKey(None) => {
             let out = if Config::get_key_confirmed() {

@@ -7,11 +7,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Password", "Senha"),
         ("Ready", "Pronto"),
         ("Established", "Estabelecido"),
-        ("connecting_status", "Conectando à rede do RustDesk..."),
         ("Start service", "Iniciar Serviço"),
         ("Service is running", "Serviço está em execução"),
         ("Service is not running", "Serviço não está em execução"),
-        ("not_ready_status", "Não está pronto. Por favor verifique sua conexão"),
         ("Control Remote Desktop", "Controle um Computador Remoto"),
         ("Transfer file", "Transferir arquivos"),
         ("Connect", "Conectar"),
@@ -521,5 +519,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("On", "Ativado"),
         ("Off", "Desativado"),
         ("Computer not found on the network", "Computador não encontrado na rede"),
+        ("Visible on the network: IP {}", "Visível na rede: IP {}"),
+        ("Not connected to a network", "Sem conexão de rede"),
     ].iter().cloned().collect();
 }

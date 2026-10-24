@@ -7,11 +7,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Password", ""),
         ("Ready", ""),
         ("Established", ""),
-        ("connecting_status", ""),
         ("Start service", ""),
         ("Service is running", ""),
         ("Service is not running", ""),
-        ("not_ready_status", ""),
         ("Control Remote Desktop", ""),
         ("Transfer file", ""),
         ("Connect", ""),
@@ -521,5 +519,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("On", ""),
         ("Off", ""),
         ("Computer not found on the network", ""),
+        ("Visible on the network: IP {}", ""),
+        ("Not connected to a network", ""),
     ].iter().cloned().collect();
 }

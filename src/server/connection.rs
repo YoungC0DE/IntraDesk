@@ -148,6 +148,15 @@ async fn login_deadline(authorized: bool, started: Instant) {
     time::sleep_until(started + LOGIN_GRACE).await
 }
 
+/// How long an address stays refused after too many wrong attempts, counted in minutes from its
+/// last wrong attempt. Its counters are kept, so the next wrong attempt locks it out again.
+const LOCKOUT_MINUTES: i32 = 15;
+
+/// `failure` is (minute of the last wrong attempt, wrong attempts in that minute, total).
+fn lockout_expired(failure: (i32, i32, i32), now_minute: i32) -> bool {
+    now_minute - failure.0 >= LOCKOUT_MINUTES
+}
+
 lazy_static::lazy_static! {
     // Connections between accept and authorization, oldest first; see admit_unauthorized.
     static ref UNAUTHORIZED_CONNS: Mutex<Vec<(i32, IpAddr, Arc<UnauthorizedShared>)>> = Default::default();
@@ -2456,7 +2465,7 @@ impl Connection {
             .copied()
             .unwrap_or((0, 0, 0));
 
-        if failure_prefix.2 > thresh {
+        if failure_prefix.2 > thresh && !lockout_expired(failure_prefix, time) {
             self.send_login_error(format!(
                 "Too many wrong attempts for IPv6 prefix /{}",
                 prefix_num
@@ -2492,7 +2501,7 @@ impl Connection {
             .copied()
             .unwrap_or((0, 0, 0));
 
-        let res = if failure.2 > 30 {
+        let res = if failure.2 > 30 && !lockout_expired(failure, time) {
             self.send_login_error("Too many wrong attempts").await;
             false
         } else if time == failure.0 && failure.1 > 6 {
@@ -4243,6 +4252,19 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
 mod test {
     #[allow(unused)]
     use super::*;
+
+    #[test]
+    fn test_lockout_after_too_many_wrong_attempts_is_temporary() {
+        // 31 wrong attempts, the last one at minute 100.
+        let failure = (100, 1, 31);
+        assert!(!lockout_expired(failure, 100));
+        assert!(!lockout_expired(failure, 100 + LOCKOUT_MINUTES - 1));
+        assert!(lockout_expired(failure, 100 + LOCKOUT_MINUTES));
+        // A wrong attempt after the lockout restarts it from that minute.
+        let again = Connection::bump_failure_entry(failure, 200);
+        assert_eq!(again, (200, 1, 32));
+        assert!(!lockout_expired(again, 200));
+    }
 
     // The registry is process-global and the harness runs tests in parallel threads, so every
     // test that admits connections holds this first; a poisoned lock is still a lock.

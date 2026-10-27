@@ -269,18 +269,6 @@ pub struct PeerConfig {
     )]
     pub reverse_mouse_wheel: String,
     #[serde(
-        default = "PeerConfig::default_displays_as_individual_windows",
-        deserialize_with = "PeerConfig::deserialize_displays_as_individual_windows",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub displays_as_individual_windows: String,
-    #[serde(
-        default = "PeerConfig::default_use_all_my_displays_for_the_remote_session",
-        deserialize_with = "PeerConfig::deserialize_use_all_my_displays_for_the_remote_session",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub use_all_my_displays_for_the_remote_session: String,
-    #[serde(
         rename = "trackpad-speed",
         default = "PeerConfig::default_trackpad_speed",
         deserialize_with = "PeerConfig::deserialize_trackpad_speed"
@@ -335,9 +323,6 @@ impl Default for PeerConfig {
             keyboard_mode: Default::default(),
             view_only: Default::default(),
             reverse_mouse_wheel: Self::default_reverse_mouse_wheel(),
-            displays_as_individual_windows: Self::default_displays_as_individual_windows(),
-            use_all_my_displays_for_the_remote_session:
-                Self::default_use_all_my_displays_for_the_remote_session(),
             trackpad_speed: Self::default_trackpad_speed(),
             custom_resolutions: Default::default(),
             options: Self::default_options(),
@@ -1398,16 +1383,6 @@ impl PeerConfig {
         deserialize_reverse_mouse_wheel,
         UserDefaultConfig::read(keys::OPTION_REVERSE_MOUSE_WHEEL)
     );
-    serde_field_string!(
-        default_displays_as_individual_windows,
-        deserialize_displays_as_individual_windows,
-        UserDefaultConfig::read(keys::OPTION_DISPLAYS_AS_INDIVIDUAL_WINDOWS)
-    );
-    serde_field_string!(
-        default_use_all_my_displays_for_the_remote_session,
-        deserialize_use_all_my_displays_for_the_remote_session,
-        UserDefaultConfig::read(keys::OPTION_USE_ALL_MY_DISPLAYS_FOR_THE_REMOTE_SESSION)
-    );
 
     fn default_custom_image_quality() -> Vec<i32> {
         let f: f64 = UserDefaultConfig::read(keys::OPTION_CUSTOM_IMAGE_QUALITY)
@@ -1988,9 +1963,6 @@ pub mod keys {
     pub const OPTION_I444: &str = "i444";
     pub const OPTION_REVERSE_MOUSE_WHEEL: &str = "reverse_mouse_wheel";
     pub const OPTION_SWAP_LEFT_RIGHT_MOUSE: &str = "swap-left-right-mouse";
-    pub const OPTION_DISPLAYS_AS_INDIVIDUAL_WINDOWS: &str = "displays_as_individual_windows";
-    pub const OPTION_USE_ALL_MY_DISPLAYS_FOR_THE_REMOTE_SESSION: &str =
-        "use_all_my_displays_for_the_remote_session";
     pub const OPTION_VIEW_STYLE: &str = "view_style";
     pub const OPTION_SCROLL_STYLE: &str = "scroll_style";
     pub const OPTION_EDGE_SCROLL_EDGE_THICKNESS: &str = "edge-scroll-edge-thickness";

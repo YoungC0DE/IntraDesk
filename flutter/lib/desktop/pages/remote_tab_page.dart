@@ -427,15 +427,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
         windowOnTop(windowId());
       }
       return jumpOk;
-    } else if (call.method == kWindowEventActiveDisplaySession) {
-      final args = jsonDecode(call.arguments);
-      final id = args['id'];
-      final display = args['display'];
-      final jumpOk = tabController.jumpToByKeyAndDisplay(id, display);
-      if (jumpOk) {
-        windowOnTop(windowId());
-      }
-      return jumpOk;
     } else if (call.method == kWindowEventGetRemoteList) {
       return tabController.state.value.tabs
           .map((e) => e.key)

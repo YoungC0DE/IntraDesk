@@ -54,54 +54,6 @@ class RustDeskMultiWindowManager {
   final List<int> _remoteDesktopWindows = List.empty(growable: true);
   final List<int> _fileTransferWindows = List.empty(growable: true);
 
-  // This function must be called in the main window thread.
-  // Because the _remoteDesktopWindows is managed in that thread.
-  openMonitorSession(int windowId, String peerId, int display, int displayCount,
-      Rect? screenRect, int windowType) async {
-    final windowIDs = _remoteDesktopWindows;
-    if (windowIDs.length > 1) {
-      for (final windowId in windowIDs) {
-        if (await DesktopMultiWindow.invokeMethod(
-            windowId,
-            kWindowEventActiveDisplaySession,
-            jsonEncode({
-              'id': peerId,
-              'display': display,
-            }))) {
-          return;
-        }
-      }
-    }
-
-    final displays = display == kAllDisplayValue
-        ? List.generate(displayCount, (index) => index)
-        : [display];
-    var params = {
-      'type': windowType,
-      'id': peerId,
-      'tab_window_id': windowId,
-      'display': display,
-      'displays': displays,
-    };
-    if (screenRect != null) {
-      params['screen_rect'] = {
-        'l': screenRect.left,
-        't': screenRect.top,
-        'r': screenRect.right,
-        'b': screenRect.bottom,
-      };
-    }
-    await _newSession(
-      false,
-      windowType.windowType,
-      kWindowEventNewRemoteDesktop,
-      peerId,
-      windowIDs,
-      jsonEncode(params),
-      screenRect: screenRect,
-    );
-  }
-
   Future<int> newSessionWindow(
     WindowType type,
     String remoteId,

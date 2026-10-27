@@ -6,7 +6,6 @@
 pub use hbb_common::config::keys::*;
 
 pub const OPTION_VIEW_ONLY: &str = "view_only";
-pub const OPTION_SHOW_MONITORS_TOOLBAR: &str = "show_monitors_toolbar";
 pub const OPTION_SHOW_REMOTE_CURSOR: &str = "show_remote_cursor";
 pub const OPTION_FOLLOW_REMOTE_CURSOR: &str = "follow_remote_cursor";
 pub const OPTION_FOLLOW_REMOTE_WINDOW: &str = "follow_remote_window";
@@ -113,7 +112,6 @@ pub const OPTION_PRE_ELEVATE_SERVICE: &str = "pre-elevate-service";
 // DEFAULT_DISPLAY_SETTINGS, OVERWRITE_DISPLAY_SETTINGS
 pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
     OPTION_VIEW_ONLY,
-    OPTION_SHOW_MONITORS_TOOLBAR,
     OPTION_COLLAPSE_TOOLBAR,
     OPTION_SHOW_REMOTE_CURSOR,
     OPTION_FOLLOW_REMOTE_CURSOR,
@@ -128,8 +126,6 @@ pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
     OPTION_I444,
     OPTION_REVERSE_MOUSE_WHEEL,
     OPTION_SWAP_LEFT_RIGHT_MOUSE,
-    OPTION_DISPLAYS_AS_INDIVIDUAL_WINDOWS,
-    OPTION_USE_ALL_MY_DISPLAYS_FOR_THE_REMOTE_SESSION,
     OPTION_VIEW_STYLE,
     OPTION_SCROLL_STYLE,
     OPTION_EDGE_SCROLL_EDGE_THICKNESS,

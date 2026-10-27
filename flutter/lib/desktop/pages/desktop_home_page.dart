@@ -16,7 +16,6 @@ import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
-import 'package:window_size/window_size.dart' as window_size;
 
 class DesktopHomePage extends StatefulWidget {
   const DesktopHomePage({Key? key}) : super(key: key);
@@ -322,22 +321,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     });
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
 
-    screenToMap(window_size.Screen screen) => {
-          'frame': {
-            'l': screen.frame.left,
-            't': screen.frame.top,
-            'r': screen.frame.right,
-            'b': screen.frame.bottom,
-          },
-          'visibleFrame': {
-            'l': screen.visibleFrame.left,
-            't': screen.visibleFrame.top,
-            'r': screen.visibleFrame.right,
-            'b': screen.visibleFrame.bottom,
-          },
-          'scaleFactor': screen.scaleFactor,
-        };
-
     bool isChattyMethod(String methodName) {
       switch (methodName) {
         case kWindowBumpMouse: return true;
@@ -353,9 +336,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       }
       if (call.method == kWindowMainWindowOnTop) {
         windowOnTop(null);
-      } else if (call.method == kWindowGetScreenList) {
-        return jsonEncode(
-            (await window_size.getScreenList()).map(screenToMap).toList());
       } else if (call.method == kWindowActionRebuild) {
         reloadCurrentWindow();
       } else if (call.method == kWindowEventShow) {
@@ -373,16 +353,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         return RdPlatformChannel.instance.bumpMouse(
           dx: call.arguments['dx'],
           dy: call.arguments['dy']);
-      } else if (call.method == kWindowEventOpenMonitorSession) {
-        final args = jsonDecode(call.arguments);
-        final windowId = args['window_id'] as int;
-        final peerId = args['peer_id'] as String;
-        final display = args['display'] as int;
-        final displayCount = args['display_count'] as int;
-        final windowType = args['window_type'] as int;
-        final screenRect = parseParamScreenRect(args);
-        await rustDeskWinManager.openMonitorSession(
-            windowId, peerId, display, displayCount, screenRect, windowType);
       } else if (call.method == kWindowEventRemoteWindowCoords) {
         final windowId = int.tryParse(call.arguments);
         if (windowId != null) {

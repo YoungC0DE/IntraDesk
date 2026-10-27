@@ -324,7 +324,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("password-hidden-tip", ""),
         ("preset-password-in-use-tip", ""),
         ("Deploy", ""),
-        ("Switch display", ""),
         ("All monitors", ""),
         ("#{} monitor", ""),
         ("Invalid ID", ""),

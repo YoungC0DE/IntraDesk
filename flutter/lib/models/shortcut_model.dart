@@ -283,13 +283,8 @@ void registerSessionShortcutActions(
   });
 
   void openDisplay(int display, PeerInfo pi, {bool updateCursorPos = true}) {
-    if (pi.isSupportMultiDisplay && bind.sessionGetDisplaysAsIndividualWindows(sessionId: sessionId) ==
-            'Y') {
-      openMonitorInNewTabOrWindow(display, ffi.id, pi);
-    } else {
-      openMonitorInTheSameTab(display, ffi, pi,
-          updateCursorPos: updateCursorPos);
-    }
+    openMonitorInTheSameTab(display, ffi, pi,
+        updateCursorPos: updateCursorPos);
   }
 
   // Switch Display Next / Prev — requires the peer to have at least 2

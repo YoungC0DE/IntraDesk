@@ -815,9 +815,6 @@ class FfiModel with ChangeNotifier {
       final last = lastUserDisplay ?? _pi.currentDisplay;
       pendingMonitorRestore = (!isCache &&
               last != currentDisplay &&
-              bind.sessionGetUseAllMyDisplaysForTheRemoteSession(
-                      sessionId: sessionId) !=
-                  'Y' &&
               ((last == kAllDisplayValue && _pi.displays.isNotEmpty) ||
                   (last >= 0 && last < _pi.displays.length)))
           ? last
@@ -867,10 +864,6 @@ class FfiModel with ChangeNotifier {
     await parent.target?.inputModel.updateKeyboardMode();
 
     notifyListeners();
-
-    if (!isCache) {
-      tryUseAllMyDisplaysForTheRemoteSession(peerId);
-    }
   }
 
   checkDesktopKeyboardMode() async {
@@ -901,50 +894,6 @@ class FfiModel with ChangeNotifier {
           break;
         }
       }
-    }
-  }
-
-  tryUseAllMyDisplaysForTheRemoteSession(String peerId) async {
-    if (bind.sessionGetUseAllMyDisplaysForTheRemoteSession(
-            sessionId: sessionId) !=
-        'Y') {
-      return;
-    }
-
-    if (!_pi.isSupportMultiDisplay || _pi.displays.length <= 1) {
-      return;
-    }
-
-    final screenRectList = await getScreenRectList();
-    if (screenRectList.length <= 1) {
-      return;
-    }
-
-    // to-do: peer currentDisplay is the primary display, but the primary display may not be the first display.
-    // local primary display also may not be the first display.
-    //
-    // 0 is assumed to be the primary display here, for now.
-
-    // move to the first display and set fullscreen
-    bind.sessionSwitchDisplay(
-      isDesktop: true,
-      sessionId: sessionId,
-      value: Int32List.fromList([0]),
-    );
-    _pi.currentDisplay = 0;
-    try {
-      CurrentDisplayState.find(peerId).value = _pi.currentDisplay;
-    } catch (e) {
-      //
-    }
-    await tryMoveToScreenAndSetFullscreen(screenRectList[0]);
-
-    final length = _pi.displays.length < screenRectList.length
-        ? _pi.displays.length
-        : screenRectList.length;
-    for (var i = 1; i < length; i++) {
-      openMonitorInNewTabOrWindow(i, peerId, _pi,
-          screenRect: screenRectList[i]);
     }
   }
 

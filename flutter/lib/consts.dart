@@ -37,7 +37,6 @@ const String kAppTypeDesktopRemote = "remote";
 const String kAppTypeDesktopFileTransfer = "file transfer";
 
 const String kWindowMainWindowOnTop = "main_window_on_top";
-const String kWindowGetScreenList = "get_screen_list";
 // This method is not used, maybe it can be removed.
 const String kWindowDisableGrabKeyboard = "disable_grab_keyboard";
 const String kWindowActionRebuild = "rebuild";
@@ -49,14 +48,12 @@ const String kWindowBumpMouse = "bump_mouse";
 const String kWindowEventNewRemoteDesktop = "new_remote_desktop";
 const String kWindowEventNewFileTransfer = "new_file_transfer";
 const String kWindowEventActiveSession = "active_session";
-const String kWindowEventActiveDisplaySession = "active_display_session";
 const String kWindowEventGetRemoteList = "get_remote_list";
 const String kWindowEventGetSessionIdList = "get_session_id_list";
 const String kWindowEventRemoteWindowCoords = "remote_window_coords";
 const String kWindowEventSetFullscreen = "set_fullscreen";
 
 const String kWindowEventGetCachedSessionData = "get_cached_session_data";
-const String kWindowEventOpenMonitorSession = "open_monitor_session";
 
 const String kOptionViewStyle = "view_style";
 const String kOptionImageQuality = "image_quality";
@@ -99,8 +96,6 @@ const String kOptionAllowRemoteCmModification = "allow-remote-cm-modification";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
 const String kOptionVirtualMouseScale = "virtual-mouse-scale";
 const String kOptionShowVirtualJoystick = "show-virtual-joystick";
-const String kOptionAllowMonitorSwitchMainToolbar = "allow-monitor-switch-main-toolbar";
-const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-toolbar";
 
 // network options
 
@@ -143,7 +138,6 @@ const String kMouseEventTypeUp = "up";
 
 const String kKeyFlutterKey = "flutter_key";
 
-const String kKeyShowMonitorsToolbar = 'show_monitors_toolbar';
 
 const String kMsgboxTextWaitingForImage = 'Connected, waiting for image...';
 

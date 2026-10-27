@@ -276,22 +276,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.write().unwrap().save_keyboard_mode(value);
     }
 
-    pub fn get_displays_as_individual_windows(&self) -> String {
-        self.lc
-            .read()
-            .unwrap()
-            .displays_as_individual_windows
-            .clone()
-    }
-
-    pub fn get_use_all_my_displays_for_the_remote_session(&self) -> String {
-        self.lc
-            .read()
-            .unwrap()
-            .use_all_my_displays_for_the_remote_session
-            .clone()
-    }
-
     pub fn save_view_style(&self, value: String) {
         self.lc.write().unwrap().save_view_style(value);
     }

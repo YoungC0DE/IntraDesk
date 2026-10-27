@@ -799,14 +799,6 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
     final List<Widget> toolbarItems = [];
     toolbarItems.add(_PinMenu(state: widget.state));
     toolbarItems.add(Obx(() {
-      if (pi.displaysCount.value > 1 &&
-          mainGetLocalBoolOptionSync(kOptionAllowMonitorSwitchMainToolbar)) {
-        return _MainMonitorSwitchButton(id: widget.id, ffi: widget.ffi);
-      } else {
-        return const Offstage();
-      }
-    }));
-    toolbarItems.add(Obx(() {
       if (pi.displaysCount.value > 1) {
         return _MonitorMenu(
             id: widget.id,
@@ -928,88 +920,6 @@ class _PinMenu extends StatelessWidget {
   }
 }
 
-class _MonitorCycle {
-  final String id;
-  final FFI ffi;
-  const _MonitorCycle(this.id, this.ffi);
-
-  PeerInfo get _pi => ffi.ffiModel.pi;
-  int get total => _pi.displays.length;
-  int get _current => CurrentDisplayState.find(id).value;
-  bool get _inRange => _current >= 0 && _current < total;
-
-  String get label => _inRange ? '${_current + 1}' : '*';
-  String get tooltip => '${translate('Switch display')} ($label/$total)';
-
-  void next() {
-    final t = total;
-    if (t < 2) return;
-    final from = _inRange ? _current : -1;
-    final target = (from + 1) % t;
-    final isChooseDisplayToOpenInNewWindow = _pi.isSupportMultiDisplay &&
-        bind.sessionGetDisplaysAsIndividualWindows(sessionId: ffi.sessionId) ==
-            'Y';
-    if (isChooseDisplayToOpenInNewWindow) {
-      openMonitorInNewTabOrWindow(target, ffi.id, _pi);
-    } else {
-      openMonitorInTheSameTab(target, ffi, _pi, updateCursorPos: false);
-    }
-  }
-}
-
-class _MainMonitorSwitchButton extends StatelessWidget {
-  final String id;
-  final FFI ffi;
-
-  const _MainMonitorSwitchButton({
-    Key? key,
-    required this.id,
-    required this.ffi,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final cycle = _MonitorCycle(id, ffi);
-    return Obx(() {
-      if (cycle.total < 2) return const Offstage();
-      final label = cycle.label;
-
-      return _IconMenuButton(
-        tooltip: cycle.tooltip,
-        color: _ToolbarTheme.accentColor(context),
-        hoverColor: _ToolbarTheme.hoverAccentColor(context),
-        onPressed: cycle.next,
-        icon: SizedBox(
-          width: _ToolbarTheme.buttonSize,
-          height: _ToolbarTheme.buttonSize,
-          child: Stack(
-            alignment: const Alignment(0, -0.125),
-            children: [
-              SvgPicture.asset(
-                'assets/display_switcher.svg',
-                colorFilter:
-                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-                width: _ToolbarTheme.buttonSize,
-                height: _ToolbarTheme.buttonSize,
-              ),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 11,
-                  height: 1,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
 class _MonitorMenu extends StatelessWidget {
   final String id;
   final FFI ffi;
@@ -1023,17 +933,12 @@ class _MonitorMenu extends StatelessWidget {
     required this.setRemoteState,
   }) : super(key: key);
 
-  bool get showMonitorsToolbar =>
-      bind.mainGetUserDefaultOption(key: kKeyShowMonitorsToolbar) == 'Y';
-
   bool get supportIndividualWindows =>
       ffi.ffiModel.pi.isSupportMultiDisplay;
 
   @override
   Widget build(BuildContext context) {
-    final child = showMonitorsToolbar
-        ? buildMultiMonitorMenu(context)
-        : Obx(() => buildMonitorMenu(context));
+    final child = Obx(() => buildMonitorMenu(context));
     final quarterTurns = _monitorMenuQuarterTurns(edge);
     if (quarterTurns == 0) return child;
     return RotatedBox(
@@ -1059,15 +964,11 @@ class _MonitorMenu extends StatelessWidget {
         menuChildrenGetter: (_) => [buildMonitorSubmenuWidget(context)]);
   }
 
-  Widget buildMultiMonitorMenu(BuildContext context) {
-    return Row(children: buildMonitorList(context, true));
-  }
-
   Widget buildMonitorSubmenuWidget(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(children: buildMonitorList(context, false)),
+        Row(children: buildMonitorList(context)),
       ],
     );
   }
@@ -1083,7 +984,7 @@ class _MonitorMenu extends StatelessWidget {
         ),
       );
 
-  List<Widget> buildMonitorList(BuildContext context, bool isMulti) {
+  List<Widget> buildMonitorList(BuildContext context) {
     final List<Widget> monitorList = [];
     final pi = ffi.ffiModel.pi;
 
@@ -1098,13 +999,9 @@ class _MonitorMenu extends StatelessWidget {
                 width, Colors.white, _ToolbarTheme.accentColor(context));
           }
           return _IconMenuButton(
-            tooltip: isMulti
-                ? ''
-                : isAllMonitors
-                    ? 'All monitors'
-                    : '#{${i + 1}} monitor',
-            hMargin: isMulti ? null : 6,
-            vMargin: isMulti ? null : 12,
+            tooltip: isAllMonitors ? 'All monitors' : '#{${i + 1}} monitor',
+            hMargin: 6,
+            vMargin: 12,
             topLevel: false,
             color: i == display.value
                 ? _ToolbarTheme.accentColor(context)
@@ -1131,7 +1028,7 @@ class _MonitorMenu extends StatelessWidget {
                       ],
                     ),
                   ),
-            onPressed: () => onPressed(i, pi, isMulti),
+            onPressed: () => onPressed(i, pi),
           );
         });
 
@@ -1215,22 +1112,11 @@ class _MonitorMenu extends StatelessWidget {
     );
   }
 
-  onPressed(int i, PeerInfo pi, bool isMulti) {
-    if (!isMulti) {
-      // If show monitors in toolbar(`buildMultiMonitorMenu()`), then the menu will dismiss automatically.
-      _menuDismissCallback(ffi);
-    }
+  onPressed(int i, PeerInfo pi) {
+    _menuDismissCallback(ffi);
     RxInt display = CurrentDisplayState.find(id);
     if (display.value != i) {
-      final isChooseDisplayToOpenInNewWindow = pi.isSupportMultiDisplay &&
-          bind.sessionGetDisplaysAsIndividualWindows(
-                  sessionId: ffi.sessionId) ==
-              'Y';
-      if (isChooseDisplayToOpenInNewWindow) {
-        openMonitorInNewTabOrWindow(i, ffi.id, pi);
-      } else {
-        openMonitorInTheSameTab(i, ffi, pi, updateCursorPos: !isMulti);
-      }
+      openMonitorInTheSameTab(i, ffi, pi);
     }
   }
 }
@@ -2716,9 +2602,6 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildDraggable(context),
-        Obx(() => collapse.isTrue
-            ? _MinimizedMonitorSwitchButton(id: widget.id, ffi: widget.ffi)
-            : const Offstage()),
         Obx(() => buttonWrapper(
               () {
                 widget.setFullscreen(!isFullscreen.value);
@@ -2798,68 +2681,4 @@ Widget _buildPointerTrackWidget(Widget child, FFI? ffi) {
       child: child,
     ),
   );
-}
-
-class _MinimizedMonitorSwitchButton extends StatelessWidget {
-  final String id;
-  final FFI ffi;
-
-  const _MinimizedMonitorSwitchButton({
-    Key? key,
-    required this.id,
-    required this.ffi,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    const double iconSize = 20;
-    final cycle = _MonitorCycle(id, ffi);
-
-    return Obx(() {
-      final label = cycle.label;
-      if (!mainGetLocalBoolOptionSync(kOptionAllowMonitorSwitchMainToolbar) ||
-          !mainGetLocalBoolOptionSync(kOptionAllowMonitorSwitchMinToolbar)) {
-        return const Offstage();
-      }
-      if (cycle.total < 2) return const Offstage();
-
-      return Tooltip(
-        message: cycle.tooltip,
-        child: TextButton(
-          onPressed: cycle.next,
-          style: ButtonStyle(
-            minimumSize: MaterialStateProperty.all(const Size(0, 0)),
-            padding: MaterialStateProperty.all(EdgeInsets.zero),
-            backgroundColor: MaterialStateProperty.resolveWith((states) {
-              if (states.contains(MaterialState.hovered)) {
-                return _ToolbarTheme.accentColor(context).withOpacity(0.15);
-              }
-              return null;
-            }),
-          ),
-          child: Stack(
-            alignment: const Alignment(0, -0.125),
-            children: [
-              SvgPicture.asset(
-                'assets/display_switcher.svg',
-                colorFilter:
-                    ColorFilter.mode(_ToolbarTheme.accentColor(context), BlendMode.srcIn),
-                width: iconSize,
-                height: iconSize,
-              ),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  height: 1,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    });
-  }
 }

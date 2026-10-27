@@ -324,7 +324,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("password-hidden-tip", "A senha permanente está definida como (oculta)."),
         ("preset-password-in-use-tip", "A senha predefinida está sendo usada."),
         ("Deploy", "Implantar"),
-        ("Switch display", "Trocar de tela"),
         ("All monitors", "Todas as telas"),
         ("#{} monitor", "Tela {}"),
         ("Invalid ID", "ID inválido"),

@@ -41,9 +41,10 @@ pub fn translate_locale(name: String, locale: &str) -> String {
             s = s.replace("{}", &value);
         }
         if !crate::is_rustdesk() {
+            // These name RustDesk itself (credit), not the app.
             if s.contains("RustDesk")
-                && !name.starts_with("upgrade_rustdesk_server_pro")
                 && name != "powered_by_me"
+                && name != "intradesk-license-tip"
             {
                 let app_name = crate::get_app_name();
                 if !app_name.contains("RustDesk") {
@@ -124,6 +125,14 @@ mod test {
             f("{2} times {4} makes {8}"),
             ("{} times {4} makes {8}".to_string(), Some("2".to_string()))
         );
+    }
+
+    #[test]
+    fn test_license_tip_keeps_the_rustdesk_credit() {
+        for locale in ["en-US", "pt-BR"] {
+            let s = super::translate_locale("intradesk-license-tip".to_owned(), locale);
+            assert!(s.contains("RustDesk"), "{locale}: {s}");
+        }
     }
 
     #[test]

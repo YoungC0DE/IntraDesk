@@ -38,7 +38,7 @@ falhas, anexe o log: `%APPDATA%\IntraDesk\log\` (pasta do processo principal e
 | 2.2 | Busca pelo nome, usuário e IP do PC A | Filtra o card | |
 | 2.3 | Duplo clique no card do PC A | Pede senha | |
 | 2.4 | Senha errada | "Senha incorreta"; no PC A aparece a tentativa | |
-| 2.5 | Senha errada 7 vezes em 1 minuto | "Por favor tente após 1 minuto" | |
+| 2.5 | Senha errada 7 vezes em 1 minuto | "Tente novamente daqui a 1 minuto" | |
 | 2.6 | Senha temporária certa | Sessão abre com a imagem do PC A | |
 | 2.7 | "Conectar a" com o IP do PC A | Conecta (com senha) | |
 | 2.8 | "Conectar a" com o nome do PC A | Conecta (com senha) | |

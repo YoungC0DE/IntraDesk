@@ -21,10 +21,7 @@ import '../../models/platform_model.dart';
 import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
 
 class OnlineStatusWidget extends StatefulWidget {
-  const OnlineStatusWidget({Key? key, this.onSvcStatusChanged, this.localIps})
-      : super(key: key);
-
-  final VoidCallback? onSvcStatusChanged;
+  const OnlineStatusWidget({Key? key, this.localIps}) : super(key: key);
 
   /// Receives the LAN IPs of this computer, so other widgets can show them.
   final RxList<String>? localIps;
@@ -35,13 +32,12 @@ class OnlineStatusWidget extends StatefulWidget {
 
 /// State for the connection page.
 class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
-  final _svcStopped = Get.find<RxBool>(tag: 'stop-service');
   late final RxList<String> _localIps = widget.localIps ?? <String>[].obs;
   final _firewallBlocked = false.obs;
   Timer? _updateTimer;
 
   double get em => 14.0;
-  bool get _showFirewallWarning => _firewallBlocked.value && !_svcStopped.value;
+  bool get _showFirewallWarning => _firewallBlocked.value;
   double? get height =>
       bind.isIncomingOnly() || _showFirewallWarning ? null : em * 3;
 
@@ -62,18 +58,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   @override
   Widget build(BuildContext context) {
     final isIncomingOnly = bind.isIncomingOnly();
-    startServiceWidget() => Offstage(
-          offstage: !_svcStopped.value,
-          child: InkWell(
-                  onTap: () async {
-                    await start_service(true);
-                  },
-                  child: Text(translate("Start service"),
-                      style: TextStyle(
-                          decoration: TextDecoration.underline, fontSize: em)))
-              .marginOnly(left: em),
-        );
-
     basicWidget() => Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -82,11 +66,9 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
               width: 8,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
-                color: _svcStopped.value
-                    ? kColorWarn
-                    : (_localIps.isNotEmpty
-                        ? Color.fromARGB(255, 50, 190, 166)
-                        : Color.fromARGB(255, 224, 79, 95)),
+                color: _localIps.isNotEmpty
+                    ? Color.fromARGB(255, 50, 190, 166)
+                    : Color.fromARGB(255, 224, 79, 95),
               ),
             ).marginSymmetric(horizontal: em),
             Flexible(
@@ -95,8 +77,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
                 child: _buildConnStatusMsg(),
               ),
             ),
-            // stop
-            if (!isIncomingOnly) startServiceWidget(),
           ],
         );
 
@@ -128,11 +108,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               basicWidget(),
-              if (isIncomingOnly)
-                Align(
-                        child: startServiceWidget(),
-                        alignment: Alignment.centerLeft)
-                    .marginOnly(top: 2.0, left: 22.0),
               if (_showFirewallWarning)
                 firewallWidget().marginOnly(top: em * 0.5),
             ],
@@ -141,14 +116,11 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
   }
 
   _buildConnStatusMsg() {
-    widget.onSvcStatusChanged?.call();
     return Text(
-      _svcStopped.value
-          ? translate("Service is not running")
-          : _localIps.isEmpty
-              ? translate("Not connected to a network")
-              : translate("Visible on the network: IP {}")
-                  .replaceAll('{}', _localIps.join(', ')),
+      _localIps.isEmpty
+          ? translate("Not connected to a network")
+          : translate("Visible on the network: IP {}")
+              .replaceAll('{}', _localIps.join(', ')),
       style: TextStyle(fontSize: em),
     );
   }
@@ -163,7 +135,6 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
     final firewallBlocked = status['firewall_blocked'] == true;
     if (firewallBlocked != _firewallBlocked.value) {
       _firewallBlocked.value = firewallBlocked;
-      widget.onSvcStatusChanged?.call();
     }
     try {
       stateGlobal.videoConnCount.value = status['video_conn_count'] as int;

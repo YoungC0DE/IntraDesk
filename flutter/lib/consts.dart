@@ -96,7 +96,6 @@ const String kOptionPeerTabIndex = "peer-tab-index";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
 const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
-const String kOptionStopService = "stop-service";
 const String kOptionAllowRemoteCmModification = "allow-remote-cm-modification";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
 const String kOptionVirtualMouseScale = "virtual-mouse-scale";
@@ -107,7 +106,6 @@ const String kOptionAllowMonitorSwitchMinToolbar = "allow-monitor-switch-min-too
 // network options
 
 // builtin options
-const String kOptionHideStopService = "hide-stop-service";
 const String kOptionHideGeneralSetting = "hide-general-settings";
 const String kOptionHideSecuritySetting = "hide-security-settings";
 const String kOptionRemovePresetPasswordWarning =
@@ -120,7 +118,6 @@ const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 
 const String kOptionToggleViewOnly = "view-only";
 
-const String kOptionDisableFloatingWindow = "disable-floating-window";
 
 const String kOptionKeepScreenOn = "keep-screen-on";
 
@@ -329,8 +326,6 @@ const kActionAccessibilitySettings = "android.settings.ACCESSIBILITY_SETTINGS";
 const kRecordAudio = "android.permission.RECORD_AUDIO";
 const kRequestIgnoreBatteryOptimizations =
     "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS";
-const kSystemAlertWindow = "android.permission.SYSTEM_ALERT_WINDOW";
-const kAndroid13Notification = "android.permission.POST_NOTIFICATIONS";
 
 /// Android channel invoke type key
 class AndroidChannel {

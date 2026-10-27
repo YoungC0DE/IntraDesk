@@ -34,7 +34,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   @override
   bool get wantKeepAlive => true;
   StreamSubscription? _uniLinksSubscription;
-  var svcStopped = false.obs;
   Timer? _updateTimer;
 
   final RxBool _block = false.obs;
@@ -307,13 +306,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     bind.mainDiscover();
     _updateTimer = periodic_immediate(const Duration(seconds: 1), () async {
       await gFFI.serverModel.fetchID();
-      final v = await mainGetBoolOption(kOptionStopService);
-      if (v != svcStopped.value) {
-        svcStopped.value = v;
-        setState(() {});
-      }
     });
-    Get.put<RxBool>(svcStopped, tag: 'stop-service');
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
 
     screenToMap(window_size.Screen screen) => {
@@ -392,7 +385,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   @override
   void dispose() {
     _uniLinksSubscription?.cancel();
-    Get.delete<RxBool>(tag: 'stop-service');
     _updateTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

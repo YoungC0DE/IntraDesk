@@ -40,13 +40,8 @@ pub const OPTION_ALLOW_SCOPE_VIOLATION_CLOSE: &str = "allow-scope-violation-clos
 pub const OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION: &str = "allow-remote-config-modification";
 pub const OPTION_ENABLE_LAN_DISCOVERY: &str = "enable-lan-discovery";
 pub const OPTION_DIRECT_ACCESS_PORT: &str = "direct-access-port";
-pub const OPTION_WHITELIST: &str = "whitelist";
-pub const OPTION_ID_WHITELIST: &str = "id-whitelist";
-pub const OPTION_ALLOW_AUTO_DISCONNECT: &str = "allow-auto-disconnect";
-pub const OPTION_AUTO_DISCONNECT_TIMEOUT: &str = "auto-disconnect-timeout";
 pub const OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN: &str = "allow-only-conn-window-open";
 pub const OPTION_ENABLE_ABR: &str = "enable-abr";
-pub const OPTION_ALLOW_REMOVE_WALLPAPER: &str = "allow-remove-wallpaper";
 pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-render";
 pub const OPTION_ENABLE_HWCODEC: &str = "enable-hwcodec";
 pub const OPTION_TEMPORARY_PASSWORD_LENGTH: &str = "temporary-password-length";
@@ -87,7 +82,6 @@ pub const OPTION_PRESET_STRATEGY_NAME: &str = "preset-strategy-name";
 pub const OPTION_REMOVE_PRESET_PASSWORD_WARNING: &str = "remove-preset-password-warning";
 pub const OPTION_HIDE_GENERAL_SETTINGS: &str = "hide-general-settings";
 pub const OPTION_HIDE_SECURITY_SETTINGS: &str = "hide-security-settings";
-pub const OPTION_HIDE_STOP_SERVICE: &str = "hide-stop-service";
 pub const OPTION_ALLOW_COMMAND_LINE_SETTINGS_WHEN_SETTINGS_DISABLED: &str =
     "allow-command-line-settings-when-settings-disabled";
 
@@ -212,13 +206,8 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD,
     OPTION_ENABLE_LAN_DISCOVERY,
     OPTION_DIRECT_ACCESS_PORT,
-    OPTION_WHITELIST,
-    OPTION_ID_WHITELIST,
-    OPTION_ALLOW_AUTO_DISCONNECT,
-    OPTION_AUTO_DISCONNECT_TIMEOUT,
     OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN,
     OPTION_ENABLE_ABR,
-    OPTION_ALLOW_REMOVE_WALLPAPER,
     OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER,
     OPTION_ENABLE_HWCODEC,
     OPTION_TEMPORARY_PASSWORD_LENGTH,
@@ -245,7 +234,6 @@ pub const KEYS_BUILDIN_SETTINGS: &[&str] = &[
     OPTION_REMOVE_PRESET_PASSWORD_WARNING,
     OPTION_HIDE_GENERAL_SETTINGS,
     OPTION_HIDE_SECURITY_SETTINGS,
-    OPTION_HIDE_STOP_SERVICE,
     OPTION_HIDE_USERNAME_ON_CARD,
     OPTION_HIDE_HELP_CARDS,
     OPTION_DEFAULT_CONNECT_PASSWORD,

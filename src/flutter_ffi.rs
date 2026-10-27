@@ -1479,12 +1479,6 @@ pub fn main_get_data_dir_ios(app_dir: String) -> SyncReturn<String> {
     SyncReturn(data_dir.to_string_lossy().to_string())
 }
 
-pub fn main_stop_service() {
-}
-
-pub fn main_start_service() {
-}
-
 pub fn main_update_temporary_password() {
     update_temporary_password();
 }
@@ -1689,21 +1683,6 @@ pub fn cm_init() {
 /// * Should only be called in the main flutter window.
 /// * macOS only
 pub fn main_start_ipc_url_server() {
-}
-
-pub fn main_test_wallpaper(_second: u64) {
-    std::thread::spawn(move || match crate::platform::WallPaperRemover::new() {
-        Ok(_remover) => {
-            std::thread::sleep(std::time::Duration::from_secs(_second));
-        }
-        Err(e) => {
-            log::info!("create wallpaper remover failed: {:?}", e);
-        }
-    });
-}
-
-pub fn main_support_remove_wallpaper() -> bool {
-    support_remove_wallpaper()
 }
 
 pub fn is_incoming_only() -> SyncReturn<bool> {

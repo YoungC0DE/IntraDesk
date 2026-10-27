@@ -1,10 +1,8 @@
 use super::{input_service::*, *};
 use crate::clipboard::{update_clipboard, ClipboardSide};
 use crate::clipboard_file::*;
-use crate::platform::WallPaperRemover;
 use crate::portable_service::client as portable_client;
 use crate::{display_service, ipc, video_service, VERSION};
-use cidr_utils::cidr::IpCidr;
 use hbb_common::{
     config::{
         self, decode_permanent_password_h1_from_storage, decode_preset_password_h1_from_storage,
@@ -40,11 +38,6 @@ use std::{
 use system_shutdown;
 
 pub type Sender = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
-
-const FAILURE_IDX_ID_WHITELIST: usize = 1;
-// How long a rejection counts, so also how long a blocked address stays blocked. Longer
-// throttles enumeration harder; shorter limits collateral on whitelisted neighbours.
-const ID_WHITELIST_FAILURE_DECAY_MINUTES: i32 = 10;
 
 /// A connection not authorized within this long of starting is closed, however alive it
 /// keeps itself: a wrong password, an accept prompt or an admin-terminal
@@ -160,10 +153,7 @@ fn lockout_expired(failure: (i32, i32, i32), now_minute: i32) -> bool {
 lazy_static::lazy_static! {
     // Connections between accept and authorization, oldest first; see admit_unauthorized.
     static ref UNAUTHORIZED_CONNS: Mutex<Vec<(i32, IpAddr, Arc<UnauthorizedShared>)>> = Default::default();
-    // [0] password, [1] ID whitelist.
-    // Bucket 1 is separate so its rejections do not touch the password budget. It is
-    // decayed in `check_id_whitelist` and cleared on auth, never on a bare id match.
-    static ref LOGIN_FAILURES: [Arc::<Mutex<HashMap<String, (i32, i32, i32)>>>; 2] = Default::default();
+    static ref LOGIN_FAILURES: Arc::<Mutex<HashMap<String, (i32, i32, i32)>>> = Default::default();
     static ref SESSIONS: Arc::<Mutex<HashMap<SessionKey, Session>>> = Default::default();
     static ref ALIVE_CONNS: Arc::<Mutex<Vec<i32>>> = Default::default();
     pub static ref AUTHED_CONNS: Arc::<Mutex<Vec<AuthedConn>>> = Default::default();
@@ -184,9 +174,6 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     x == 0
 }
 
-lazy_static::lazy_static! {
-    static ref WALLPAPER_REMOVER: Arc<Mutex<Option<WallPaperRemover>>> = Default::default();
-}
 pub static CLICK_TIME: AtomicI64 = AtomicI64::new(0);
 pub static MOUSE_MOVE_TIME: AtomicI64 = AtomicI64::new(0);
 
@@ -296,7 +283,6 @@ pub struct Connection {
     pressed_modifiers: HashSet<rdev::Key>,
     closed: bool,
     start_cm_ipc_para: Option<StartCmIpcPara>,
-    auto_disconnect_timer: Option<(Instant, u64)>,
     authed_conn_id: Option<self::raii::AuthedConnID>,
     file_remove_log_control: FileRemoveLogControl,
     last_supported_encoding: Option<SupportedEncoding>,
@@ -441,7 +427,6 @@ impl Connection {
                 rx_to_cm,
                 tx_from_cm,
             }),
-            auto_disconnect_timer: None,
             authed_conn_id: None,
             file_remove_log_control: FileRemoveLogControl::new(id),
             last_supported_encoding: None,
@@ -713,16 +698,6 @@ impl Connection {
                         }
                     }
                     match &msg.union {
-                        Some(message::Union::Misc(m)) => {
-                            match &m.union {
-                                Some(misc::Union::StopService(_)) => {
-                                    conn.send_close_reason_no_retry("").await;
-                                    conn.on_close("stop service", false).await;
-                                    break;
-                                }
-                                _ => {},
-                            }
-                        }
                         Some(message::Union::PeerInfo(_pi)) => {
                             conn.refresh_video_display(None);
                             #[cfg(target_os = "macos")]
@@ -763,13 +738,6 @@ impl Connection {
                     #[cfg(windows)]
                     conn.portable_check();
                     raii::AuthedConnID::check_wake_lock_on_setting_changed();
-                    if let Some((instant, minute)) = conn.auto_disconnect_timer.as_ref() {
-                        if instant.elapsed().as_secs() > minute * 60 {
-                            conn.send_close_reason_no_retry("Connection failed due to inactivity").await;
-                            conn.on_close("auto disconnect", true).await;
-                            break;
-                        }
-                    }
                     conn.file_remove_log_control.on_timer().drain(..).map(|x| conn.send_to_cm(x)).count();
                     #[cfg(feature = "hwcodec")]
                     conn.update_supported_encoding();
@@ -879,90 +847,8 @@ impl Connection {
         self.send(msg_out).await;
     }
 
-    async fn check_whitelist(&mut self, addr: &SocketAddr) -> bool {
-        let whitelist: Vec<String> = Config::get_option("whitelist")
-            .split(",")
-            .filter(|x| !x.is_empty())
-            .map(|x| x.to_owned())
-            .collect();
-        if !whitelist.is_empty()
-            && whitelist
-                .iter()
-                .filter(|x| x == &"0.0.0.0")
-                .next()
-                .is_none()
-            && whitelist
-                .iter()
-                .filter(|x| IpCidr::from_str(x).map_or(false, |y| y.contains(addr.ip())))
-                .next()
-                .is_none()
-        {
-            self.send_login_error("Your ip is blocked by the peer")
-                .await;
-            return false;
-        }
-        true
-    }
-
-    async fn check_id_whitelist(&mut self) -> bool {
-        let id_whitelist: Vec<String> = Config::get_option(keys::OPTION_ID_WHITELIST)
-            .split(',')
-            .map(|x| x.trim().to_owned())
-            .filter(|x| !x.is_empty())
-            .collect();
-        if id_whitelist.is_empty() {
-            return true;
-        }
-        // Limit before matching, or a match returning early would never touch the counter and
-        // leave enumeration unthrottled. Not cleared here: `my_id` is self-reported, so that
-        // would let anyone holding one allowed id reset the budget between probes.
-        self.decay_id_whitelist_failures();
-        let (failure, res) = self.check_failure(FAILURE_IDX_ID_WHITELIST).await;
-        if !res {
-            return false;
-        }
-        if id_whitelist_allows(&id_whitelist, &self.lr.my_id) {
-            return true;
-        }
-        self.update_failure(failure, false, FAILURE_IDX_ID_WHITELIST);
-        self.send_login_error("Your ID is blocked by the peer")
-            .await;
-        false
-    }
-
-    // What `check_failure` consults: the source address, plus shared IPv6 prefixes.
-    fn failure_keys(&self) -> Vec<String> {
-        let mut keys = vec![self.ip.clone()];
-        if let Some((p64, p56, p48)) = self.get_ipv6_prefixes() {
-            keys.extend([p64, p56, p48]);
-        }
-        keys
-    }
-
-    // Only this connection's own keys, so it stays O(1) instead of scanning the map.
-    fn decay_id_whitelist_failures(&self) {
-        decay_stale_failures(
-            &mut LOGIN_FAILURES[FAILURE_IDX_ID_WHITELIST].lock().unwrap(),
-            &self.failure_keys(),
-            (get_time() / 60_000) as i32,
-            ID_WHITELIST_FAILURE_DECAY_MINUTES,
-        );
-    }
-
-    // Not `update_failure(.., true, ..)`: it no-ops when the peer's own address has no entry,
-    // normal on IPv6, leaving the shared prefixes that are what actually block it.
-    fn clear_id_whitelist_failures(&self) {
-        clear_failures(
-            &mut LOGIN_FAILURES[FAILURE_IDX_ID_WHITELIST].lock().unwrap(),
-            &self.failure_keys(),
-        );
-    }
-
     async fn on_open(&mut self, addr: SocketAddr) -> bool {
         log::debug!("#{} Connection opened from {}.", self.inner.id, addr);
-        if !self.check_whitelist(&addr).await {
-            return false;
-        }
         if crate::is_server() && Config::get_option("allow-only-conn-window-open") == "Y" {
             if !crate::check_process("", !crate::platform::is_root()) {
                 self.send_login_error("The main window is not open").await;
@@ -988,9 +874,6 @@ impl Connection {
         // leaves. This session's later logins come in on the password the
         // session remembers, so they are not affected.
         password::update_temporary_password();
-        // Releases the budget `check_id_whitelist` charges against this address: only a peer
-        // that got this far proved more than a self-reported id.
-        self.clear_id_whitelist_failures();
         let auth_conn_type = if self.file_transfer.is_some() {
             AuthConnType::FileTransfer
         } else {
@@ -1147,7 +1030,6 @@ impl Connection {
                 }
                 let mut s = s.write().unwrap();
                 let _h = try_start_record_cursor_pos();
-                self.auto_disconnect_timer = Self::get_auto_disconenct_timer();
                 s.try_add_monitor_service(self.display_idx);
                 s.add_monitor_connection(self.inner.clone(), &noperms, self.display_idx);
             }
@@ -1156,23 +1038,6 @@ impl Connection {
 
     fn on_remote_authorized(&self) {
         self.update_codec_on_login();
-        if config::option2bool(
-            "allow-remove-wallpaper",
-            &Config::get_option("allow-remove-wallpaper"),
-        ) {
-            // multi connections set once
-            let mut wallpaper = WALLPAPER_REMOVER.lock().unwrap();
-            if wallpaper.is_none() {
-                match crate::platform::WallPaperRemover::new() {
-                    Ok(remover) => {
-                        *wallpaper = Some(remover);
-                    }
-                    Err(e) => {
-                        log::info!("create wallpaper remover failed: {:?}", e);
-                    }
-                }
-            }
-        }
     }
 
     fn peer_keyboard_enabled(&self) -> bool {
@@ -1522,7 +1387,7 @@ impl Connection {
         self.file_transfer = None;
     }
 
-    // Approval and whitelist decisions must stay bound to the same controller identity and
+    // Approval decisions must stay bound to the same controller identity and
     // session scope across authentication retries.
     fn login_scope_digest(lr: &LoginRequest) -> [u8; 32] {
         let mut hasher = Sha256::new();
@@ -1640,9 +1505,6 @@ impl Connection {
                 return true;
             }
             self.reset_session_scope_for_login();
-            if !self.check_id_whitelist().await {
-                return false;
-            }
             match lr.union {
                 Some(login_request::Union::FileTransfer(ft)) => {
                     if !Self::permission(
@@ -1692,18 +1554,18 @@ impl Connection {
             } else if lr.password.is_empty() {
                 self.try_start_cm(lr.my_id, lr.my_name, false);
             } else {
-                let (failure, res) = self.check_failure(0).await;
+                let (failure, res) = self.check_failure().await;
                 if !res {
                     return true;
                 }
                 if !self.validate_password() {
-                    self.update_failure(failure, false, 0);
+                    self.update_failure(failure, false);
                     self.check_update_temporary_password(false);
                     self.send_login_error(crate::client::LOGIN_MSG_PASSWORD_WRONG)
                         .await;
                     self.try_start_cm(lr.my_id, lr.my_name, false);
                 } else {
-                    self.update_failure(failure, true, 0);
+                    self.update_failure(failure, true);
                     if !self.send_logon_response_and_keep_alive().await {
                         return false;
                     }
@@ -1754,14 +1616,12 @@ impl Connection {
                             true,
                         );
                     }
-                    self.update_auto_disconnect_timer();
                 }
                 Some(message::Union::PointerDeviceEvent(pde)) => {
                     if self.peer_keyboard_enabled() {
                         MOUSE_MOVE_TIME.store(get_time(), Ordering::SeqCst);
                         self.input_pointer(pde, self.inner.id());
                     }
-                    self.update_auto_disconnect_timer();
                 }
                 Some(message::Union::KeyEvent(me)) => {
                     if self.peer_keyboard_enabled() {
@@ -1818,13 +1678,11 @@ impl Connection {
                             self.input_key(me, false);
                         }
                     }
-                    self.update_auto_disconnect_timer();
                 }
                 Some(message::Union::OsLogin(login)) => {
                     if self.peer_keyboard_enabled() {
                         self.type_auto_login_password(login.password).await;
                     }
-                    self.update_auto_disconnect_timer();
                 }
                 Some(message::Union::Clipboard(cb)) => {
                     if self.should_handle_text_clipboard_message() && self.clipboard_enabled() {
@@ -2136,13 +1994,11 @@ impl Connection {
                                 // Compatibility with old versions and sciter(remote).
                                 self.refresh_video_display(None);
                             }
-                            self.update_auto_disconnect_timer();
                         }
                     }
                     Some(misc::Union::RefreshVideoDisplay(display)) => {
                         if self.should_handle_render_broadcast_message() {
                             self.refresh_video_display(Some(display as usize));
-                            self.update_auto_disconnect_timer();
                         }
                     }
                     Some(misc::Union::VideoReceived(_)) => {
@@ -2248,8 +2104,8 @@ impl Connection {
         cur
     }
 
-    fn update_failure(&self, (failure, time): ((i32, i32, i32), i32), remove: bool, i: usize) {
-        let map_mutex = &LOGIN_FAILURES[i];
+    fn update_failure(&self, (failure, time): ((i32, i32, i32), i32), remove: bool) {
+        let map_mutex = &*LOGIN_FAILURES;
         if remove {
             if failure.0 != 0 {
                 if let Some((p64, p56, p48)) = self.get_ipv6_prefixes() {
@@ -2283,13 +2139,12 @@ impl Connection {
 
     async fn check_failure_ipv6_prefix(
         &mut self,
-        i: usize,
         time: i32,
         prefix: &str,
         prefix_num: i8,
         thresh: i32,
     ) -> Option<(((i32, i32, i32), i32), bool)> {
-        let failure_prefix = LOGIN_FAILURES[i]
+        let failure_prefix = LOGIN_FAILURES
             .lock()
             .unwrap()
             .get(prefix)
@@ -2308,24 +2163,24 @@ impl Connection {
         }
     }
 
-    async fn check_failure(&mut self, i: usize) -> (((i32, i32, i32), i32), bool) {
+    async fn check_failure(&mut self) -> (((i32, i32, i32), i32), bool) {
         let time = (get_time() / 60_000) as i32;
 
         // IPv6 addresses are cheap to make so we check prefix/netblock as well
         if let Some((p64, p56, p48)) = self.get_ipv6_prefixes() {
-            if let Some(res) = self.check_failure_ipv6_prefix(i, time, &p64, 64, 60).await {
+            if let Some(res) = self.check_failure_ipv6_prefix(time, &p64, 64, 60).await {
                 return res;
             }
-            if let Some(res) = self.check_failure_ipv6_prefix(i, time, &p56, 56, 80).await {
+            if let Some(res) = self.check_failure_ipv6_prefix(time, &p56, 56, 80).await {
                 return res;
             }
-            if let Some(res) = self.check_failure_ipv6_prefix(i, time, &p48, 48, 100).await {
+            if let Some(res) = self.check_failure_ipv6_prefix(time, &p48, 48, 100).await {
                 return res;
             }
         }
 
         // checks IPv6 and IPv4 direct addresses
-        let failure = LOGIN_FAILURES[i]
+        let failure = LOGIN_FAILURES
             .lock()
             .unwrap()
             .get(&self.ip)
@@ -2448,7 +2303,6 @@ impl Connection {
         let mut msg = Message::new();
         msg.set_misc(misc);
         self.send(msg).await;
-        self.update_auto_disconnect_timer();
     }
 
     async fn capture_displays(&mut self, add: &[usize], sub: &[usize], set: &[usize]) {
@@ -3039,26 +2893,6 @@ impl Connection {
             rdev::simulate(&rdev::EventType::KeyRelease(*modifier)).ok();
         }
         self.pressed_modifiers.clear();
-    }
-
-    fn get_auto_disconenct_timer() -> Option<(Instant, u64)> {
-        if Config::get_option("allow-auto-disconnect") == "Y" {
-            let mut minute: u64 = Config::get_option("auto-disconnect-timeout")
-                .parse()
-                .unwrap_or(10);
-            if minute == 0 {
-                minute = 10;
-            }
-            Some((Instant::now(), minute))
-        } else {
-            None
-        }
-    }
-
-    fn update_auto_disconnect_timer(&mut self) {
-        self.auto_disconnect_timer
-            .as_mut()
-            .map(|t| t.0 = Instant::now());
     }
 
     #[cfg(feature = "hwcodec")]
@@ -3695,16 +3529,6 @@ impl Drop for Connection {
     }
 }
 
-extern "C" fn connection_shutdown_hook() {
-    // https://stackoverflow.com/questions/35980148/why-does-an-atexit-handler-panic-when-it-accesses-stdout
-    // Please make sure there is no print in the call stack
-    {
-        *WALLPAPER_REMOVER.lock().unwrap() = None;
-    }
-}
-
-
-
 /// Get control permission state from CONTROL_PERMISSIONS_ARRAY.
 /// Returns: Some(false) if any disable, Some(true) if any enable (and no disable), None if not set.
 pub fn get_control_permission_state(
@@ -3797,11 +3621,6 @@ mod raii {
                 session_key,
             });
             Self::check_wake_lock();
-            use std::sync::Once;
-            static _ONCE: Once = Once::new();
-            _ONCE.call_once(|| {
-                shutdown_hooks::add_shutdown_hook(connection_shutdown_hook);
-            });
             if conn_type == AuthConnType::Remote {
                 video_service::VIDEO_QOS
                     .lock()
@@ -3906,9 +3725,6 @@ mod raii {
                 .filter(|c| c.conn_type == AuthConnType::Remote)
                 .count();
             if remote_count == 0 {
-                {
-                    *WALLPAPER_REMOVER.lock().unwrap() = None;
-                }
                 display_service::restore_resolutions();
             }
             Self::check_wake_lock();
@@ -3942,76 +3758,6 @@ mod raii {
             }
         }
     }
-}
-
-// An empty whitelist allows everyone.
-//
-// A peer connecting across servers reports `<its id>@<its own server>` (see
-// `create_login_msg`), so the bare id is matched as well. That suffix is self-asserted and
-// unsigned, so matching only the full form would reject the honest cross-server peer while
-// an attacker just reports the bare id: it can produce false rejects but no true ones.
-fn id_whitelist_allows(id_whitelist: &[String], my_id: &str) -> bool {
-    if id_whitelist.is_empty() {
-        return true;
-    }
-    let bare_id = my_id.split('@').next().unwrap_or(my_id);
-    id_whitelist
-        .iter()
-        .any(|x| wildcard_match(x, my_id) || wildcard_match(x, bare_id))
-}
-
-// Drop `keys` whose last failure (`.0`, in minutes) is at least `window` old. A backwards
-// clock gives a negative age and keeps the entry, so it never widens access.
-fn decay_stale_failures(
-    failures: &mut HashMap<String, (i32, i32, i32)>,
-    keys: &[String],
-    now: i32,
-    window: i32,
-) {
-    for key in keys {
-        if failures
-            .get(key)
-            .is_some_and(|v| now.saturating_sub(v.0) >= window)
-        {
-            failures.remove(key);
-        }
-    }
-}
-
-// Unconditionally forget `keys`, unlike `update_failure`'s remove path which requires the
-// per-address entry to exist.
-fn clear_failures(failures: &mut HashMap<String, (i32, i32, i32)>, keys: &[String]) {
-    for key in keys {
-        failures.remove(key);
-    }
-}
-
-// Simple glob matching for the ID whitelist: '*' matches any sequence of characters
-// (including the empty one), '?' matches exactly one character. Case-insensitive.
-fn wildcard_match(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.trim().to_lowercase().chars().collect();
-    let t: Vec<char> = text.trim().to_lowercase().chars().collect();
-    let (mut pi, mut ti) = (0, 0);
-    let mut star: Option<(usize, usize)> = None;
-    while ti < t.len() {
-        if pi < p.len() && p[pi] == '*' {
-            star = Some((pi + 1, ti));
-            pi += 1;
-        } else if pi < p.len() && (p[pi] == '?' || p[pi] == t[ti]) {
-            pi += 1;
-            ti += 1;
-        } else if let Some((sp, st)) = star {
-            pi = sp;
-            ti = st + 1;
-            star = Some((sp, st + 1));
-        } else {
-            return false;
-        }
-    }
-    while pi < p.len() && p[pi] == '*' {
-        pi += 1;
-    }
-    pi == p.len()
 }
 
 #[cfg(test)]
@@ -4211,92 +3957,6 @@ mod test {
         let mut remote = LoginRequest::new();
         remote.my_id = "peer".to_owned();
         assert_ne!(scope(&first), scope(&remote));
-    }
-
-    #[test]
-    fn test_wildcard_match() {
-        // Exact match.
-        assert!(wildcard_match("123456789", "123456789"));
-        assert!(!wildcard_match("123456789", "123456780"));
-        assert!(!wildcard_match("12345678", "123456789"));
-        assert!(!wildcard_match("123456789", "12345678"));
-        // Case-insensitive.
-        assert!(wildcard_match("MyCustomId", "mycustomid"));
-        // '*' matches any sequence.
-        assert!(wildcard_match("*", "123456789"));
-        assert!(wildcard_match("*", ""));
-        assert!(wildcard_match("*", "*abc"));
-        assert!(wildcard_match("123*", "123456789"));
-        assert!(wildcard_match("123*", "123"));
-        assert!(wildcard_match("12*", "12*9"));
-        assert!(!wildcard_match("123*", "124456789"));
-        assert!(wildcard_match("*789", "123456789"));
-        assert!(wildcard_match("1*9", "123456789"));
-        assert!(wildcard_match("1*4*9", "123456789"));
-        assert!(!wildcard_match("1*4*9", "123456780"));
-        assert!(wildcard_match("*456*", "123456789"));
-        // '?' matches exactly one character.
-        assert!(wildcard_match("12345678?", "123456789"));
-        assert!(!wildcard_match("123456789?", "123456789"));
-        assert!(wildcard_match("???456???", "123456789"));
-        assert!(wildcard_match("1?3*7?9", "123456789"));
-        // Whitespace around entries is ignored.
-        assert!(wildcard_match(" 123456789 ", "123456789"));
-    }
-
-    #[test]
-    fn test_id_whitelist_allows() {
-        let list = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-
-        // An empty whitelist allows everyone.
-        assert!(id_whitelist_allows(&[], "123456789"));
-
-        // Same server: the peer reports a bare id.
-        assert!(id_whitelist_allows(&list(&["123456789"]), "123456789"));
-        assert!(!id_whitelist_allows(&list(&["123456789"]), "987654321"));
-
-        // Cross server: the peer appends its own server, which must not reject it.
-        assert!(id_whitelist_allows(
-            &list(&["123456789"]),
-            "123456789@example.com:21116"
-        ));
-        // A different id is still rejected, suffix or not.
-        assert!(!id_whitelist_allows(
-            &list(&["123456789"]),
-            "987654321@example.com:21116"
-        ));
-
-        // An entry pinned to one server keeps matching that exact form.
-        assert!(id_whitelist_allows(
-            &list(&["123456789@example.com:21116"]),
-            "123456789@example.com:21116"
-        ));
-        assert!(!id_whitelist_allows(
-            &list(&["123456789@example.com:21116"]),
-            "123456789@other.com:21116"
-        ));
-        // ... and no longer matches the bare id, which is the point of pinning.
-        assert!(!id_whitelist_allows(
-            &list(&["123456789@example.com:21116"]),
-            "123456789"
-        ));
-
-        // Wildcards keep working on both forms.
-        assert!(id_whitelist_allows(&list(&["abc*"]), "abcdef"));
-        assert!(id_whitelist_allows(
-            &list(&["abc*"]),
-            "abcdef@example.com:21116"
-        ));
-        assert!(id_whitelist_allows(
-            &list(&["*"]),
-            "123456789@example.com:21116"
-        ));
-
-        // Any entry of the list is enough.
-        assert!(id_whitelist_allows(
-            &list(&["111111111", "123456789", "222222222"]),
-            "123456789@example.com:21116"
-        ));
     }
 
 

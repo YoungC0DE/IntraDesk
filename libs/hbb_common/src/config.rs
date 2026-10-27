@@ -1973,7 +1973,7 @@ pub fn is_disable_settings() -> bool {
 pub fn option2bool(option: &str, value: &str) -> bool {
     if option.starts_with("enable-") {
         value != "N"
-    } else if option.starts_with("allow-") || option == "stop-service" {
+    } else if option.starts_with("allow-") {
         value == "Y"
     } else {
         value != "N"

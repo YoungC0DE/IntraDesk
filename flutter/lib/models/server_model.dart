@@ -154,15 +154,10 @@ class ServerModel with ChangeNotifier {
         await bind.mainGetOption(key: "temporary-password-length");
     final numericOneTimePassword =
         await mainGetBoolOption(kOptionAllowNumericOneTimePassword);
-    var stopped = await mainGetBoolOption(kOptionStopService);
     final oldPwdText = _serverPasswd.text;
-    if (stopped) {
-      _serverPasswd.text = '-';
-    } else {
-      if (_serverPasswd.text != temporaryPassword &&
-          temporaryPassword.isNotEmpty) {
-        _serverPasswd.text = temporaryPassword;
-      }
+    if (_serverPasswd.text != temporaryPassword &&
+        temporaryPassword.isNotEmpty) {
+      _serverPasswd.text = temporaryPassword;
     }
     if (oldPwdText != _serverPasswd.text) {
       update = true;
@@ -236,107 +231,13 @@ class ServerModel with ChangeNotifier {
     }
   }
 
-  Future<bool> checkRequestNotificationPermission() async {
-    debugPrint("androidVersion $androidVersion");
-    if (androidVersion < 33) {
-      return true;
-    }
-    if (await AndroidPermissionManager.check(kAndroid13Notification)) {
-      debugPrint("notification permission already granted");
-      return true;
-    }
-    var res = await AndroidPermissionManager.request(kAndroid13Notification);
-    debugPrint("notification permission request result: $res");
-    return res;
-  }
-
-  Future<bool> checkFloatingWindowPermission() async {
-    debugPrint("androidVersion $androidVersion");
-    if (androidVersion < 23) {
-      return false;
-    }
-    if (await AndroidPermissionManager.check(kSystemAlertWindow)) {
-      debugPrint("alert window permission already granted");
-      return true;
-    }
-    var res = await AndroidPermissionManager.request(kSystemAlertWindow);
-    debugPrint("alert window permission request result: $res");
-    return res;
-  }
-
-  /// Toggle the screen sharing service.
-  toggleService() async {
-    if (_isStart) {
-      final res = await parent.target?.dialogManager
-          .show<bool>((setState, close, context) {
-        submit() => close(true);
-        return CustomAlertDialog(
-          title: Row(children: [
-            const Icon(Icons.warning_amber_sharp,
-                color: Colors.redAccent, size: 28),
-            const SizedBox(width: 10),
-            Text(translate("Warning")),
-          ]),
-          content: Text(translate("android_stop_service_tip")),
-          actions: [
-            TextButton(onPressed: close, child: Text(translate("Cancel"))),
-            TextButton(onPressed: submit, child: Text(translate("OK"))),
-          ],
-          onSubmit: submit,
-          onCancel: close,
-        );
-      });
-      if (res == true) {
-        stopService();
-      }
-    } else {
-      await checkRequestNotificationPermission();
-      if (bind.mainGetLocalOption(key: kOptionDisableFloatingWindow) != 'Y') {
-        await checkFloatingWindowPermission();
-      }
-      final res = await parent.target?.dialogManager
-          .show<bool>((setState, close, context) {
-        submit() => close(true);
-        return CustomAlertDialog(
-          title: Row(children: [
-            const Icon(Icons.warning_amber_sharp,
-                color: Colors.redAccent, size: 28),
-            const SizedBox(width: 10),
-            Text(translate("Warning")),
-          ]),
-          content: Text(translate("android_service_will_start_tip")),
-          actions: [
-            dialogButton("Cancel", onPressed: close, isOutline: true),
-            dialogButton("OK", onPressed: submit),
-          ],
-          onSubmit: submit,
-          onCancel: close,
-        );
-      });
-      if (res == true) {
-        startService();
-      }
-    }
-  }
-
   /// Start the screen sharing service.
   Future<void> startService() async {
     _isStart = true;
     notifyListeners();
     parent.target?.ffiModel.updateEventListener(parent.target!.sessionId, "");
     await parent.target?.invokeMethod("init_service");
-    // ugly is here, because for desktop, below is useless
-    await bind.mainStartService();
     updateClientState();
-  }
-
-  /// Stop the screen sharing service.
-  Future<void> stopService() async {
-    _isStart = false;
-    closeAll();
-    await parent.target?.invokeMethod("stop_service");
-    await bind.mainStopService();
-    notifyListeners();
   }
 
   fetchID() async {

@@ -247,8 +247,7 @@ pub fn set_options(m: HashMap<String, String>) {
 
 #[inline]
 pub fn set_option(key: String, value: String) {
-    if &key == "stop-service" {
-    } else if &key == "audio-input" {
+    if &key == "audio-input" {
         crate::audio_service::restart();
     }
     {
@@ -727,10 +726,6 @@ pub(crate) async fn send_to_cm(data: &ipc::Data) {
     if let Ok(mut c) = ipc::connect(1000, "_cm").await {
         c.send(data).await.ok();
     }
-}
-
-pub fn support_remove_wallpaper() -> bool {
-    return crate::platform::WallPaperRemover::support();
 }
 
 pub fn check_hwcodec() {

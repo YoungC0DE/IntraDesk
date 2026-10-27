@@ -19,7 +19,6 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use wallpaper;
 #[cfg(not(debug_assertions))]
 use winapi::um::libloaderapi::{LoadLibraryExW, LOAD_LIBRARY_SEARCH_USER_DIRS};
 use winapi::{
@@ -49,7 +48,6 @@ use winapi::{
             PSID, SECURITY_BUILTIN_DOMAIN_RID, SECURITY_NT_AUTHORITY, SID_IDENTIFIER_AUTHORITY,
             TOKEN_ELEVATION, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_TYPE,
         },
-        winreg::HKEY_CURRENT_USER,
         winuser::*,
     },
 };
@@ -2163,75 +2161,6 @@ pub fn message_box(text: &str) {
 pub fn alloc_console() {
     unsafe {
         alloc_console_and_redirect();
-    }
-}
-
-pub struct WallPaperRemover {
-    old_path: String,
-}
-
-impl WallPaperRemover {
-    pub fn new() -> ResultType<Self> {
-        let start = std::time::Instant::now();
-        if !Self::need_remove() {
-            bail!("already solid color");
-        }
-        let old_path = match Self::get_recent_wallpaper() {
-            Ok(old_path) => old_path,
-            Err(e) => {
-                log::info!("Failed to get recent wallpaper: {:?}, use fallback", e);
-                wallpaper::get().map_err(|e| anyhow!(e.to_string()))?
-            }
-        };
-        Self::set_wallpaper(None)?;
-        log::info!(
-            "created wallpaper remover,  old_path: {:?},  elapsed: {:?}",
-            old_path,
-            start.elapsed(),
-        );
-        Ok(Self { old_path })
-    }
-
-    pub fn support() -> bool {
-        wallpaper::get().is_ok() || !Self::get_recent_wallpaper().unwrap_or_default().is_empty()
-    }
-
-    fn get_recent_wallpaper() -> ResultType<String> {
-        // SystemParametersInfoW may return %appdata%\Microsoft\Windows\Themes\TranscodedWallpaper, not real path and may not real cache
-        // https://www.makeuseof.com/find-desktop-wallpapers-file-location-windows-11/
-        // https://superuser.com/questions/1218413/write-to-current-users-registry-through-a-different-admin-account
-        let (hkcu, sid) = if is_root() {
-            let sid = get_current_process_session_id().ok_or(anyhow!("failed to get sid"))?;
-            (RegKey::predef(HKEY_USERS), format!("{}\\", sid))
-        } else {
-            (RegKey::predef(HKEY_CURRENT_USER), "".to_string())
-        };
-        let explorer_key = hkcu.open_subkey_with_flags(
-            &format!(
-                "{}Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers",
-                sid
-            ),
-            KEY_READ,
-        )?;
-        Ok(explorer_key.get_value("BackgroundHistoryPath0")?)
-    }
-
-    fn need_remove() -> bool {
-        if let Ok(wallpaper) = wallpaper::get() {
-            return !wallpaper.is_empty();
-        }
-        false
-    }
-
-    fn set_wallpaper(path: Option<String>) -> ResultType<()> {
-        wallpaper::set_from_path(&path.unwrap_or_default()).map_err(|e| anyhow!(e.to_string()))
-    }
-}
-
-impl Drop for WallPaperRemover {
-    fn drop(&mut self) {
-        // If the old background is a slideshow, it will be converted into an image. AnyDesk does the same.
-        allow_err!(Self::set_wallpaper(Some(self.old_path.clone())));
     }
 }
 

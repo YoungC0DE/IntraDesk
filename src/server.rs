@@ -233,17 +233,6 @@ impl Server {
         self.connections.remove(&conn.id());
     }
 
-    pub fn close_connections(&mut self) {
-        let conn_inners: Vec<_> = self.connections.values_mut().collect();
-        for c in conn_inners {
-            let mut misc = Misc::new();
-            misc.set_stop_service(true);
-            let mut msg = Message::new();
-            msg.set_misc(misc);
-            c.send(Arc::new(msg));
-        }
-    }
-
     fn add_service(&mut self, service: Box<dyn Service>) {
         let name = service.name();
         self.services.insert(name, service);
@@ -453,15 +442,8 @@ async fn run_listeners() {
     });
     scrap::codec::test_av1();
     loop {
-        if is_service_stopped() {
-            server.write().unwrap().close_connections();
-        }
         hbb_common::sleep(1.).await;
     }
-}
-
-fn is_service_stopped() -> bool {
-    config::option2bool("stop-service", &Config::get_option("stop-service"))
 }
 
 fn get_direct_port() -> i32 {
@@ -482,8 +464,7 @@ async fn direct_server(server: ServerPtr) {
     let mut listener = None;
     let mut port = 0;
     loop {
-        let disabled = is_service_stopped();
-        if !disabled && listener.is_none() {
+        if listener.is_none() {
             port = get_direct_port();
             match tcp::listen_any(port as _).await {
                 Ok(l) => {
@@ -503,7 +484,7 @@ async fn direct_server(server: ServerPtr) {
             }
         }
         if let Some(l) = listener.as_mut() {
-            if disabled || port != get_direct_port() {
+            if port != get_direct_port() {
                 log::info!("Exit direct access listen");
                 listener = None;
                 continue;

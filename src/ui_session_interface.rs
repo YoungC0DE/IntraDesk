@@ -1,9 +1,6 @@
 use crate::{
     common::{get_supported_keyboard_modes, is_keyboard_mode_supported},
-    input::{
-        MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_MASK,
-        MOUSE_TYPE_TRACKPAD, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL,
-    },
+    input::{MOUSE_BUTTON_LEFT, MOUSE_TYPE_DOWN, MOUSE_TYPE_MASK, MOUSE_TYPE_UP},
 };
 use async_trait::async_trait;
 use base::message_proto::*;
@@ -34,7 +31,7 @@ use crate::client::io_loop::Remote;
 use crate::client::{
     check_if_retry, handle_hash, handle_login_error, handle_login_from_ui, handle_test_delay,
     input_os_password, send_mouse, send_pointer_device_event, FileManager, Key, LoginConfigHandler,
-    QualityStatus, KEY_MAP,
+    KEY_MAP,
 };
 use crate::common::GrabState;
 use crate::keyboard;
@@ -167,7 +164,6 @@ impl SessionPermissionConfig {
         *self.server_clipboard_enabled.read().unwrap()
             && *self.server_keyboard_enabled.read().unwrap()
             && !self.lc.read().unwrap().disable_clipboard.v
-            && !self.lc.read().unwrap().view_only.v
     }
 
 }
@@ -303,7 +299,6 @@ impl<T: InvokeUiSession> Session<T> {
         *self.server_clipboard_enabled.read().unwrap()
             && *self.server_keyboard_enabled.read().unwrap()
             && !self.lc.read().unwrap().disable_clipboard.v
-            && !self.lc.read().unwrap().view_only.v
     }
 
     pub fn is_file_clipboard_required(&self) -> bool {
@@ -311,7 +306,6 @@ impl<T: InvokeUiSession> Session<T> {
         *self.server_keyboard_enabled.read().unwrap()
             && *self.server_file_transfer_enabled.read().unwrap()
             && lc.enable_file_copy_paste.v
-            && !lc.view_only.v
     }
 
     pub fn refresh_video(&self, display: i32) {
@@ -806,7 +800,6 @@ impl<T: InvokeUiSession> Session<T> {
                 });
             }
             "pan_update" => {
-                let (x, y) = self.get_scroll_xy((x, y));
                 touch_evt.set_pan_update(TouchPanUpdate {
                     x,
                     y,
@@ -830,22 +823,9 @@ impl<T: InvokeUiSession> Session<T> {
         send_pointer_device_event(evt, alt, ctrl, shift, command, self);
     }
 
-    #[inline]
-    fn is_scroll_reverse_mode(&self) -> bool {
-        self.lc.read().unwrap().reverse_mouse_wheel.eq("Y")
-    }
-
-    #[inline]
-    fn get_scroll_xy(&self, xy: (i32, i32)) -> (i32, i32) {
-        if self.is_scroll_reverse_mode() {
-            return (-xy.0, -xy.1);
-        }
-        xy
-    }
-
     pub fn send_mouse(
         &self,
-        mut mask: i32,
+        mask: i32,
         x: i32,
         y: i32,
         alt: bool,
@@ -863,28 +843,9 @@ impl<T: InvokeUiSession> Session<T> {
 
         // Compute event type once using MOUSE_TYPE_MASK for reuse
         let event_type = mask & MOUSE_TYPE_MASK;
-        let (x, y) = if event_type == MOUSE_TYPE_WHEEL || event_type == MOUSE_TYPE_TRACKPAD {
-            self.get_scroll_xy((x, y))
-        } else {
-            (x, y)
-        };
-
         // #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let (alt, ctrl, shift, command) =
             keyboard::client::get_modifiers_state(alt, ctrl, shift, command);
-        let is_left = (mask & (MOUSE_BUTTON_LEFT << 3)) > 0;
-        let is_right = (mask & (MOUSE_BUTTON_RIGHT << 3)) > 0;
-        if is_left ^ is_right {
-            let swap_lr = self.get_toggle_option("swap-left-right-mouse".to_string());
-            if swap_lr {
-                if is_left {
-                    mask = (mask & (!(MOUSE_BUTTON_LEFT << 3))) | (MOUSE_BUTTON_RIGHT << 3);
-                } else {
-                    mask = (mask & (!(MOUSE_BUTTON_RIGHT << 3))) | (MOUSE_BUTTON_LEFT << 3);
-                }
-            }
-        }
-
         send_mouse(mask, x, y, alt, ctrl, shift, command, self);
         // on macos, ctrl + left button down = right button down, up won't emit, so we need to
         // emit up myself if peer is not macos
@@ -1152,7 +1113,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn set_platform_additions(&self, data: &str);
     fn on_connected(&self, conn_type: ConnType);
     fn set_permission(&self, name: &str, value: bool);
-    fn update_quality_status(&self, qs: QualityStatus);
     fn set_connection_type(&self, is_secured: bool);
     fn set_fingerprint(&self, fingerprint: String);
     fn job_error(&self, id: i32, err: String, file_num: i32);
@@ -1247,10 +1207,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
                 return;
             }
             self.try_change_init_resolution(pi.current_display);
-            let p = self.lc.read().unwrap().should_auto_login();
-            if !p.is_empty() {
-                crate::client::auto_login(p, &pi, self.clone());
-            }
         }
         // Save recent peers, then push event to flutter. So flutter can refresh peer page.
         self.lc.write().unwrap().handle_peer_info(&pi);
@@ -1298,11 +1254,6 @@ impl<T: InvokeUiSession> Interface for Session<T> {
 
     async fn handle_test_delay(&self, t: TestDelay, peer: &mut Stream) {
         if !t.from_client {
-            self.update_quality_status(QualityStatus {
-                delay: Some(t.last_delay as _),
-                target_bitrate: Some(t.target_bitrate as _),
-                ..Default::default()
-            });
             handle_test_delay(t, peer).await;
         }
     }

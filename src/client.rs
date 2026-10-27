@@ -55,7 +55,6 @@ use base::{
     fs::JobType,
     message_proto::{option_message::BoolOption, *},
 };
-pub use helper::*;
 use scrap::{codec::Decoder, CodecFormat, ImageFormat, ImageRgb};
 
 use crate::clipboard::CLIPBOARD_INTERVAL;
@@ -69,7 +68,6 @@ mod audio_playback_recovery;
 #[path = "client/tests/audio_state_tests.rs"]
 mod audio_state_tests;
 pub mod file_trait;
-pub mod helper;
 pub mod io_loop;
 
 pub const MILLI1: Duration = Duration::from_millis(1);
@@ -780,7 +778,6 @@ impl VideoHandler {
     pub fn handle_frame(
         &mut self,
         vf: VideoFrame,
-        chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         let format = CodecFormat::from(&vf);
         if format != self.decoder.format() {
@@ -788,7 +785,7 @@ impl VideoHandler {
         }
         match &vf.union {
             Some(frame) => {
-                let res = self.decoder.handle_video_frame(frame, &mut self.rgb, chroma);
+                let res = self.decoder.handle_video_frame(frame, &mut self.rgb);
                 if res.as_ref().is_ok_and(|x| *x) {
                     self.fail_counter = 0;
                 } else {
@@ -939,19 +936,6 @@ impl LoginConfigHandler {
         self.supported_encoding = Default::default();
         self.clear_restarting_remote_device();
         self.selected_windows_session_id = None;
-    }
-
-    /// Check if the client should auto login.
-    /// Return password if the client should auto login, otherwise return empty string.
-    pub fn should_auto_login(&self) -> String {
-        let l = self.lock_after_session_end.v;
-        let a = !self.get_option("auto-login").is_empty();
-        let p = self.get_option("os-password");
-        if !p.is_empty() && l && a {
-            p
-        } else {
-            "".to_owned()
-        }
     }
 
     /// Load [`PeerConfig`].
@@ -1140,29 +1124,13 @@ impl LoginConfigHandler {
                 *self.custom_fps.lock().unwrap() = Some(custom_fps as _);
             }
         }
-        let view_only = self.get_toggle_option("view-only");
-        if view_only {
-            msg.disable_keyboard = BoolOption::Yes.into();
-        }
-        if view_only || self.get_toggle_option("show-remote-cursor") {
-            msg.show_remote_cursor = BoolOption::Yes.into();
-        }
-        if self.get_toggle_option("follow-remote-cursor") {
-            msg.follow_remote_cursor = BoolOption::Yes.into();
-        }
-        if self.get_toggle_option("follow-remote-window") {
-            msg.follow_remote_window = BoolOption::Yes.into();
-        }
-        if !view_only && self.get_toggle_option("lock-after-session-end") {
-            msg.lock_after_session_end = BoolOption::Yes.into();
-        }
         if self.get_toggle_option("disable-audio") {
             msg.disable_audio = BoolOption::Yes.into();
         }
-        if !view_only && self.get_toggle_option(keys::OPTION_ENABLE_FILE_COPY_PASTE) {
+        if self.get_toggle_option(keys::OPTION_ENABLE_FILE_COPY_PASTE) {
             msg.enable_file_transfer = BoolOption::Yes.into();
         }
-        if view_only || self.get_toggle_option("disable-clipboard") {
+        if self.get_toggle_option("disable-clipboard") {
             msg.disable_clipboard = BoolOption::Yes.into();
         }
         msg.supported_decoding = MessageField::some(self.get_supported_decoding());
@@ -1206,26 +1174,14 @@ impl LoginConfigHandler {
     // `get_toggle_option()` is only called in a session.
     // Custom client advanced settings will not effect this function.
     pub fn get_toggle_option(&self, name: &str) -> bool {
-        if name == "show-remote-cursor" {
-            self.config.show_remote_cursor.v
-        } else if name == "lock-after-session-end" {
-            self.config.lock_after_session_end.v
-        } else if name == keys::OPTION_ENABLE_FILE_COPY_PASTE {
+        if name == keys::OPTION_ENABLE_FILE_COPY_PASTE {
             self.config.enable_file_copy_paste.v
         } else if name == "disable-audio" {
             self.config.disable_audio.v
         } else if name == "disable-clipboard" {
             self.config.disable_clipboard.v
-        } else if name == "show-quality-monitor" {
-            self.config.show_quality_monitor.v
         } else if name == "allow_swap_key" {
             self.config.allow_swap_key.v
-        } else if name == "view-only" {
-            self.config.view_only.v
-        } else if name == "follow-remote-cursor" {
-            self.config.follow_remote_cursor.v
-        } else if name == "follow-remote-window" {
-            self.config.follow_remote_window.v
         } else {
             !self.get_option(name).is_empty()
         }
@@ -1575,7 +1531,6 @@ pub fn start_video_thread<F, T>(
     video_receiver: mpsc::Receiver<MediaData>,
     video_queue: Arc<RwLock<ArrayQueue<VideoFrame>>>,
     fps: Arc<RwLock<Option<usize>>>,
-    chroma: Arc<RwLock<Option<Chroma>>>,
     discard_queue: Arc<RwLock<bool>>,
     video_callback: F,
 ) where
@@ -1583,7 +1538,6 @@ pub fn start_video_thread<F, T>(
     T: InvokeUiSession,
 {
     let mut video_callback = video_callback;
-    let mut last_chroma = None;
 
     std::thread::spawn(move || {
         sync_cpu_usage();
@@ -1623,17 +1577,10 @@ pub fn start_video_thread<F, T>(
                             video_handler = Some(VideoHandler::new(format, display));
                         }
                         if let Some(handler) = video_handler.as_mut() {
-                            let mut tmp_chroma = None;
                             let format_changed = handler.decoder.format() != format;
-                            match handler.handle_frame(vf, &mut tmp_chroma) {
+                            match handler.handle_frame(vf) {
                                 Ok(true) => {
                                     video_callback(display, &mut handler.rgb);
-
-                                    // chroma
-                                    if tmp_chroma.is_some() && last_chroma != tmp_chroma {
-                                        last_chroma = tmp_chroma;
-                                        *chroma.write().unwrap() = tmp_chroma;
-                                    }
 
                                     // fps calculation
                                     fps_calculate(
@@ -1976,32 +1923,6 @@ fn _input_os_password(p: String, activate: bool, interface: impl Interface) {
     key_event.set_control_key(ControlKey::Return);
     msg_out.set_key_event(key_event);
     interface.send(Data::Message(msg_out));
-}
-
-/// Auto Login. A peer that can check for its logon or lock screen gets the password and types it
-/// itself, only if it is there right then. Keys typed from here land in whatever has focus if the
-/// screen is not locked by the time they arrive.
-pub fn auto_login(p: String, pi: &PeerInfo, interface: impl Interface) {
-    if !is_peer_handling_os_login(pi) {
-        input_os_password(p, true, interface);
-        return;
-    }
-    std::thread::spawn(move || {
-        activate_os(&interface, true);
-        std::thread::sleep(Duration::from_millis(1200));
-        let mut msg_out = Message::new();
-        msg_out.set_os_login(OSLogin {
-            password: p,
-            ..Default::default()
-        });
-        interface.send(Data::Message(msg_out));
-    });
-}
-
-/// Windows and macOS peers from the 1.5.1 release handle `os_login`.
-fn is_peer_handling_os_login(pi: &PeerInfo) -> bool {
-    (pi.platform == crate::common::PLATFORM_WINDOWS || pi.platform == crate::common::PLATFORM_MACOS)
-        && hbb_common::get_version_number(&pi.version) >= hbb_common::get_version_number("1.5.1")
 }
 
 #[derive(Copy, Clone)]

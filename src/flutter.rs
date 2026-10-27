@@ -495,30 +495,6 @@ impl InvokeUiSession for FlutterHandler {
         self.push_event("permission", &[(name, &value.to_string())], &[]);
     }
 
-    fn update_quality_status(&self, status: QualityStatus) {
-        const NULL: String = String::new();
-        self.push_event(
-            "update_quality_status",
-            &[
-                ("speed", &status.speed.map_or(NULL, |it| it)),
-                (
-                    "fps",
-                    &serde_json::ser::to_string(&status.fps).unwrap_or(NULL.to_owned()),
-                ),
-                ("delay", &status.delay.map_or(NULL, |it| it.to_string())),
-                (
-                    "target_bitrate",
-                    &status.target_bitrate.map_or(NULL, |it| it.to_string()),
-                ),
-                (
-                    "codec_format",
-                    &status.codec_format.map_or(NULL, |it| it.to_string()),
-                ),
-                ("chroma", &status.chroma.map_or(NULL, |it| it.to_string())),
-            ],
-            &[],
-        );
-    }
 
     fn set_connection_type(&self, is_secured: bool) {
         self.push_event(
@@ -1267,12 +1243,6 @@ pub fn try_sync_peer_option(
     _value: Option<serde_json::Value>,
 ) {
     let mut event = Vec::new();
-    if key == "view-only" {
-        event = vec![
-            ("k", json!(key.to_string())),
-            ("v", json!(session.lc.read().unwrap().view_only.v)),
-        ];
-    }
     if ["keyboard_mode", "input_source"].contains(&key) {
         event = vec![("k", json!(key.to_string())), ("v", json!(""))];
     }

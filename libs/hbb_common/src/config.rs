@@ -234,10 +234,6 @@ pub struct PeerConfig {
     )]
     pub custom_image_quality: Vec<i32>,
     #[serde(flatten)]
-    pub show_remote_cursor: ShowRemoteCursor,
-    #[serde(flatten)]
-    pub lock_after_session_end: LockAfterSessionEnd,
-    #[serde(flatten)]
     pub allow_swap_key: AllowSwapKey,
     #[serde(flatten)]
     pub disable_audio: DisableAudio,
@@ -245,12 +241,6 @@ pub struct PeerConfig {
     pub disable_clipboard: DisableClipboard,
     #[serde(flatten)]
     pub enable_file_copy_paste: EnableFileCopyPaste,
-    #[serde(flatten)]
-    pub show_quality_monitor: ShowQualityMonitor,
-    #[serde(flatten)]
-    pub follow_remote_cursor: FollowRemoteCursor,
-    #[serde(flatten)]
-    pub follow_remote_window: FollowRemoteWindow,
     #[serde(
         default,
         deserialize_with = "deserialize_string",
@@ -258,16 +248,7 @@ pub struct PeerConfig {
     )]
     pub keyboard_mode: String,
     #[serde(flatten)]
-    pub view_only: ViewOnly,
-    #[serde(flatten)]
     pub sync_init_clipboard: SyncInitClipboard,
-    // Mouse wheel or touchpad scroll mode
-    #[serde(
-        default = "PeerConfig::default_reverse_mouse_wheel",
-        deserialize_with = "PeerConfig::deserialize_reverse_mouse_wheel",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub reverse_mouse_wheel: String,
     #[serde(
         rename = "trackpad-speed",
         default = "PeerConfig::default_trackpad_speed",
@@ -311,18 +292,11 @@ impl Default for PeerConfig {
             edge_scroll_edge_thickness: Self::default_edge_scroll_edge_thickness(),
             image_quality: Self::default_image_quality(),
             custom_image_quality: Self::default_custom_image_quality(),
-            show_remote_cursor: Default::default(),
-            lock_after_session_end: Default::default(),
             allow_swap_key: Default::default(),
             disable_audio: Default::default(),
             disable_clipboard: Default::default(),
             enable_file_copy_paste: Default::default(),
-            show_quality_monitor: Default::default(),
-            follow_remote_cursor: Default::default(),
-            follow_remote_window: Default::default(),
             keyboard_mode: Default::default(),
-            view_only: Default::default(),
-            reverse_mouse_wheel: Self::default_reverse_mouse_wheel(),
             trackpad_speed: Self::default_trackpad_speed(),
             custom_resolutions: Default::default(),
             options: Self::default_options(),
@@ -1378,11 +1352,6 @@ impl PeerConfig {
         deserialize_image_quality,
         UserDefaultConfig::read(keys::OPTION_IMAGE_QUALITY)
     );
-    serde_field_string!(
-        default_reverse_mouse_wheel,
-        deserialize_reverse_mouse_wheel,
-        UserDefaultConfig::read(keys::OPTION_REVERSE_MOUSE_WHEEL)
-    );
 
     fn default_custom_image_quality() -> Vec<i32> {
         let f: f64 = UserDefaultConfig::read(keys::OPTION_CUSTOM_IMAGE_QUALITY)
@@ -1405,17 +1374,10 @@ impl PeerConfig {
 
     fn default_options() -> HashMap<String, String> {
         let mut mp: HashMap<String, String> = Default::default();
-        let _ = [
-            keys::OPTION_CODEC_PREFERENCE,
-            keys::OPTION_CUSTOM_FPS,
-            keys::OPTION_ZOOM_CURSOR,
-            keys::OPTION_I444,
-            keys::OPTION_SWAP_LEFT_RIGHT_MOUSE,
-            keys::OPTION_COLLAPSE_TOOLBAR,
-        ]
-        .map(|key| {
-            mp.insert(key.to_owned(), UserDefaultConfig::read(key));
-        });
+        mp.insert(
+            keys::OPTION_CUSTOM_FPS.to_owned(),
+            UserDefaultConfig::read(keys::OPTION_CUSTOM_FPS),
+        );
         mp
     }
 
@@ -1457,31 +1419,6 @@ impl PeerConfig {
 }
 
 serde_field_bool!(
-    ShowRemoteCursor,
-    "show_remote_cursor",
-    default_show_remote_cursor,
-    "ShowRemoteCursor::default_show_remote_cursor"
-);
-serde_field_bool!(
-    FollowRemoteCursor,
-    "follow_remote_cursor",
-    default_follow_remote_cursor,
-    "FollowRemoteCursor::default_follow_remote_cursor"
-);
-
-serde_field_bool!(
-    FollowRemoteWindow,
-    "follow_remote_window",
-    default_follow_remote_window,
-    "FollowRemoteWindow::default_follow_remote_window"
-);
-serde_field_bool!(
-    ShowQualityMonitor,
-    "show_quality_monitor",
-    default_show_quality_monitor,
-    "ShowQualityMonitor::default_show_quality_monitor"
-);
-serde_field_bool!(
     DisableAudio,
     "disable_audio",
     default_disable_audio,
@@ -1499,25 +1436,12 @@ serde_field_bool!(
     default_disable_clipboard,
     "DisableClipboard::default_disable_clipboard"
 );
-serde_field_bool!(
-    LockAfterSessionEnd,
-    "lock_after_session_end",
-    default_lock_after_session_end,
-    "LockAfterSessionEnd::default_lock_after_session_end"
-);
 
 serde_field_bool!(
     AllowSwapKey,
     "allow_swap_key",
     default_allow_swap_key,
     "AllowSwapKey::default_allow_swap_key"
-);
-
-serde_field_bool!(
-    ViewOnly,
-    "view_only",
-    default_view_only,
-    "ViewOnly::default_view_only"
 );
 
 serde_field_bool!(
@@ -1778,9 +1702,6 @@ impl UserDefaultConfig {
             keys::OPTION_IMAGE_QUALITY => {
                 self.get_string(key, "balanced", vec!["best", "low", "custom"])
             }
-            keys::OPTION_CODEC_PREFERENCE => {
-                self.get_string(key, "auto", vec!["vp8", "vp9", "av1", "h264", "h265"])
-            }
             keys::OPTION_CUSTOM_IMAGE_QUALITY => self.get_num_string(key, 50.0, 10.0, 0xFFF as f64),
             keys::OPTION_CUSTOM_FPS => self.get_num_string(key, 30.0, 5.0, 120.0),
             keys::OPTION_ENABLE_FILE_COPY_PASTE => self.get_string(key, "Y", vec!["", "N"]),
@@ -1957,19 +1878,13 @@ pub fn option2bool(option: &str, value: &str) -> bool {
 
 pub mod keys {
     // Only the keys hbb_common itself references.
-    pub const OPTION_COLLAPSE_TOOLBAR: &str = "collapse_toolbar";
-    pub const OPTION_ZOOM_CURSOR: &str = "zoom-cursor";
     pub const OPTION_ENABLE_FILE_COPY_PASTE: &str = "enable-file-copy-paste";
-    pub const OPTION_I444: &str = "i444";
-    pub const OPTION_REVERSE_MOUSE_WHEEL: &str = "reverse_mouse_wheel";
-    pub const OPTION_SWAP_LEFT_RIGHT_MOUSE: &str = "swap-left-right-mouse";
     pub const OPTION_VIEW_STYLE: &str = "view_style";
     pub const OPTION_SCROLL_STYLE: &str = "scroll_style";
     pub const OPTION_EDGE_SCROLL_EDGE_THICKNESS: &str = "edge-scroll-edge-thickness";
     pub const OPTION_IMAGE_QUALITY: &str = "image_quality";
     pub const OPTION_CUSTOM_IMAGE_QUALITY: &str = "custom_image_quality";
     pub const OPTION_CUSTOM_FPS: &str = "custom-fps";
-    pub const OPTION_CODEC_PREFERENCE: &str = "codec-preference";
     pub const OPTION_LANGUAGE: &str = "lang";
     pub const OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD: &str = "allow-numeric-one-time-password";
     pub const OPTION_TRACKPAD_SPEED: &str = "trackpad-speed";

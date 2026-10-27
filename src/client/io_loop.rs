@@ -2,8 +2,7 @@ use crate::clipboard::{clipboard_listener, update_clipboard, ClipboardSide};
 use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::{
     client::{
-        self, Client, Data, HostKey, Interface, MediaData, MediaSender, QualityStatus, MILLI1,
-        SEC30,
+        self, Client, Data, HostKey, Interface, MediaData, MediaSender, MILLI1, SEC30,
     },
     ui_session_interface::{InvokeUiSession, Session},
 };
@@ -35,14 +34,10 @@ use hbb_common::{
     Stream,
 };
 use hbb_common::{tokio::sync::Mutex as TokioMutex, ResultType};
-use scrap::CodecFormat;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
 };
 
 pub struct Remote<T: InvokeUiSession> {
@@ -62,11 +57,8 @@ pub struct Remote<T: InvokeUiSession> {
     initial_clipboard_pending: bool,
     first_frame: bool,
     client_conn_id: i32, // used for file clipboard
-    data_count: Arc<AtomicUsize>,
-    video_format: CodecFormat,
     elevation_requested: bool,
     video_threads: HashMap<usize, VideoThread>,
-    chroma: Arc<RwLock<Option<Chroma>>>,
     sent_close_reason: bool,
     cursor_dedupe: CursorDedupe,
 }
@@ -91,11 +83,8 @@ impl<T: InvokeUiSession> Remote<T> {
             initial_clipboard_pending: false,
             first_frame: false,
             client_conn_id: 0,
-            data_count: Arc::new(AtomicUsize::new(0)),
-            video_format: CodecFormat::Unknown,
             elevation_requested: false,
             video_threads: Default::default(),
-            chroma: Default::default(),
             sent_close_reason: false,
             cursor_dedupe: Default::default(),
         }
@@ -179,7 +168,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                     }
                                     Ok(ref bytes) => {
                                         last_recv_time = Instant::now();
-                                        self.data_count.fetch_add(bytes.len(), Ordering::Relaxed);
                                         if !self.handle_msg_from_peer(bytes, &mut peer).await {
                                             break
                                         }
@@ -234,9 +222,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                 continue;
                             }
                             fps_instant = Instant::now();
-                            let mut speed = self.data_count.swap(0, Ordering::Relaxed);
-                            speed = speed * 1000 / elapsed as usize;
-                            let speed = format!("{:.2}kB/s", speed as f32 / 1024 as f32);
 
                             let fps = self.video_threads.iter().map(|(k, v)| {
                                 // Correcting the inaccuracy of status_timer
@@ -245,26 +230,7 @@ impl<T: InvokeUiSession> Remote<T> {
                             self.video_threads.iter().for_each(|(_, v)| {
                                 *v.frame_count.write().unwrap() = 0;
                             });
-                            self.fps_control(true, fps.clone());
-                            let chroma = self.chroma.read().unwrap().clone();
-                            let chroma = match chroma {
-                                Some(Chroma::I444) => "4:4:4",
-                                Some(Chroma::I420) => "4:2:0",
-                                None => "-",
-                            };
-                            let chroma = Some(chroma.to_string());
-                            let codec_format = if self.video_format == CodecFormat::Unknown {
-                                None
-                            } else {
-                                Some(self.video_format.clone())
-                            };
-                            self.handler.update_quality_status(QualityStatus {
-                                speed: Some(speed),
-                                fps,
-                                chroma,
-                                codec_format,
-                                ..Default::default()
-                            });
+                            self.fps_control(true, fps);
                         }
                     }
                 }
@@ -323,12 +289,11 @@ impl<T: InvokeUiSession> Remote<T> {
                         *self.handler.server_file_transfer_enabled.read().unwrap();
                     let file_transfer_enabled =
                         self.handler.lc.read().unwrap().enable_file_copy_paste.v;
-                    let view_only = self.handler.lc.read().unwrap().view_only.v;
                     let stop = is_stopping_allowed
-                        && (view_only || !(server_file_transfer_enabled && file_transfer_enabled));
+                        && !(server_file_transfer_enabled && file_transfer_enabled);
                     log::debug!(
-                        "Process clipboard message from system, view_only: {}, stop: {}, is_stopping_allowed: {}, server_file_transfer_enabled: {}, file_transfer_enabled: {}",
-                        view_only, stop, is_stopping_allowed, server_file_transfer_enabled, file_transfer_enabled
+                        "Process clipboard message from system, stop: {}, is_stopping_allowed: {}, server_file_transfer_enabled: {}, file_transfer_enabled: {}",
+                        stop, is_stopping_allowed, server_file_transfer_enabled, file_transfer_enabled
                     );
                     if stop {
                         {
@@ -1083,7 +1048,6 @@ impl<T: InvokeUiSession> Remote<T> {
                     if !self.first_frame {
                         self.first_frame = true;
                     }
-                    self.video_format = CodecFormat::from(&vf);
 
                     let display = vf.display as usize;
                     if !self.video_threads.contains_key(&display) {
@@ -1188,7 +1152,7 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::Clipboard(cb)) => {
                     let clipboard_allowed = {
                         let lc = self.handler.lc.read().unwrap();
-                        !lc.disable_clipboard.v && !lc.view_only.v
+                        !lc.disable_clipboard.v
                     };
                     if clipboard_allowed {
                         self.initial_clipboard_pending = false;
@@ -1198,7 +1162,7 @@ impl<T: InvokeUiSession> Remote<T> {
                 Some(message::Union::MultiClipboards(_mcb)) => {
                     let clipboard_allowed = {
                         let lc = self.handler.lc.read().unwrap();
-                        !lc.disable_clipboard.v && !lc.view_only.v
+                        !lc.disable_clipboard.v
                     };
                     if clipboard_allowed {
                         self.initial_clipboard_pending = false;
@@ -1648,7 +1612,6 @@ impl<T: InvokeUiSession> Remote<T> {
             video_receiver,
             video_queue,
             decode_fps,
-            self.chroma.clone(),
             discard_queue,
             move |display: usize, data: &mut scrap::ImageRgb| {
                 *frame_count.write().unwrap() += 1;

@@ -269,7 +269,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
       ));
     }
 
-    if (perms['keyboard'] != false && !ffi.ffiModel.viewOnly) {
+    if (perms['keyboard'] != false) {
       menu.add(RemoteMenuEntry.insertLock(sessionId, padding,
           dismissFunc: cancelFunc));
 

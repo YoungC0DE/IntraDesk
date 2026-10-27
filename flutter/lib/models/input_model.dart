@@ -454,7 +454,6 @@ class InputModel {
   String get id => parent.target?.id ?? '';
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
   String get peerVersion => parent.target?.ffiModel.pi.version ?? '';
-  bool get isViewOnly => parent.target!.ffiModel.viewOnly;
   double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
   int get trackpadSpeed => _trackpadSpeed;
   bool get useEdgeScroll =>
@@ -692,14 +691,9 @@ class InputModel {
 
   KeyEventResult handleRawKeyEvent(RawKeyEvent e) {
     if (_localFlutterShortcuts.tryDispatchRaw(e)) return KeyEventResult.handled;
-    if (isViewOnly) {
-      _tryDispatchRawFlutterShortcut(e, releaseModifiers: false);
-      return KeyEventResult.handled;
-    }
     if (!isInputSourceFlutter) {
       return KeyEventResult.handled;
     }
-    _syncFlutterShortcutModifiersAfterViewOnly(e.physicalKey, raw: true);
 
     if (_relativeMouse.handleRawKeyEvent(e)) {
       return KeyEventResult.handled;
@@ -778,14 +772,9 @@ class InputModel {
 
   KeyEventResult handleKeyEvent(KeyEvent e) {
     if (_localFlutterShortcuts.tryDispatch(e)) return KeyEventResult.handled;
-    if (isViewOnly) {
-      _tryDispatchFlutterShortcut(e, releaseModifiers: false);
-      return KeyEventResult.handled;
-    }
     if (!isInputSourceFlutter) {
       return KeyEventResult.handled;
     }
-    _syncFlutterShortcutModifiersAfterViewOnly(e.physicalKey);
     // Ignore meta keys. Because flutter window will loose focus if meta key is pressed.
     if (e.physicalKey == PhysicalKeyboardKey.metaLeft ||
         e.physicalKey == PhysicalKeyboardKey.metaRight) {
@@ -867,11 +856,10 @@ class InputModel {
               ));
   }
 
-  bool _tryDispatchFlutterShortcut(KeyEvent e, {bool releaseModifiers = true}) {
+  bool _tryDispatchFlutterShortcut(KeyEvent e) {
     final keyboard = HardwareKeyboard.instance;
     return _localFlutterShortcuts.tryDispatch(
       e,
-      viewOnly: isViewOnly,
       match: () {
         // AltGraph is text input on Windows/Linux; Apple Option stays bindable.
         if (keyboard.logicalKeysPressed.contains(LogicalKeyboardKey.altGraph)) {
@@ -883,16 +871,13 @@ class InputModel {
             shiftPressed: keyboard.isShiftPressed,
             commandPressed: keyboard.isMetaPressed);
       },
-      releaseModifiers:
-          releaseModifiers ? _releaseFlutterShortcutModifiers : null,
+      releaseModifiers: _releaseFlutterShortcutModifiers,
     );
   }
 
-  bool _tryDispatchRawFlutterShortcut(RawKeyEvent e,
-      {bool releaseModifiers = true}) {
+  bool _tryDispatchRawFlutterShortcut(RawKeyEvent e) {
     return _localFlutterShortcuts.tryDispatchRaw(
       e,
-      viewOnly: isViewOnly,
       match: () {
         final data = e.data;
         const gtkMod5Mask = 1 << 7;
@@ -908,9 +893,7 @@ class InputModel {
             shiftPressed: e.isShiftPressed,
             commandPressed: e.isMetaPressed);
       },
-      releaseModifiers: releaseModifiers
-          ? () => _releaseFlutterShortcutModifiers(raw: true)
-          : null,
+      releaseModifiers: () => _releaseFlutterShortcutModifiers(raw: true),
     );
   }
 
@@ -1009,24 +992,6 @@ class InputModel {
     );
   }
 
-  void _syncFlutterShortcutModifiersAfterViewOnly(PhysicalKeyboardKey incoming,
-      {bool raw = false}) {
-    if (!isInputSourceFlutter) return;
-    final pressed = raw
-        ? RawKeyboard.instance.physicalKeysPressed
-        : HardwareKeyboard.instance.physicalKeysPressed;
-    if (!_localFlutterShortcuts.resumeModifiersAfterViewOnly(incoming, pressed)) {
-      return;
-    }
-    ctrl = pressed.contains(PhysicalKeyboardKey.controlLeft) ||
-        pressed.contains(PhysicalKeyboardKey.controlRight);
-    alt = pressed.contains(PhysicalKeyboardKey.altLeft) ||
-        pressed.contains(PhysicalKeyboardKey.altRight);
-    shift = pressed.contains(PhysicalKeyboardKey.shiftLeft) ||
-        pressed.contains(PhysicalKeyboardKey.shiftRight);
-    command = pressed.contains(PhysicalKeyboardKey.metaLeft) ||
-        pressed.contains(PhysicalKeyboardKey.metaRight);
-  }
 
   void _restoreFlutterShortcutModifiers(KeyEvent e, {bool mapMode = true}) {
     final keys = _localFlutterShortcuts.takeModifiersToRestore(
@@ -1437,7 +1402,6 @@ class InputModel {
 
   void onPointHoverImage(PointerHoverEvent e) {
     _stopFling = true;
-    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     // May fix https://github.com/rustdesk/rustdesk/issues/13009
@@ -1463,7 +1427,6 @@ class InputModel {
   void onPointerPanZoomStart(PointerPanZoomStartEvent e) {
     _lastScale = 1.0;
     _stopFling = true;
-    if (isViewOnly) return;
     if (peerPlatform == kPeerPlatformAndroid) {
       handlePointerEvent('touch', kMouseEventTypePanStart, e.position);
     }
@@ -1471,7 +1434,6 @@ class InputModel {
 
   // https://docs.flutter.dev/release/breaking-changes/trackpad-gestures
   void onPointerPanZoomUpdate(PointerPanZoomUpdateEvent e) {
-    if (isViewOnly) return;
     if (peerPlatform != kPeerPlatformAndroid) {
       final scale = ((e.scale - _lastScale) * 1000).toInt();
       _lastScale = e.scale;
@@ -1636,7 +1598,6 @@ class InputModel {
     _queryOtherWindowCoords = true;
     _remoteWindowCoords = [];
     _windowRect = null;
-    if (isViewOnly) return;
 
     // Track mouse down events for duplicate detection on iOS.
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -1674,7 +1635,6 @@ class InputModel {
 
   void onPointUpImage(PointerUpEvent e) {
     _queryOtherWindowCoords = false;
-    if (isViewOnly) return;
 
     if (_relativeMouse.enabled.value) {
       _relativeMouse.updatePointerRegionTopLeftGlobal(e);
@@ -1695,7 +1655,6 @@ class InputModel {
   }
 
   void onPointMoveImage(PointerMoveEvent e) {
-    if (isViewOnly) return;
     if (e.kind != ui.PointerDeviceKind.mouse) return;
 
     if (_relativeMouse.enabled.value) {
@@ -1761,7 +1720,6 @@ class InputModel {
   /// scroll deltas that are independent of cursor position. Games and 3D applications
   /// handle scroll events the same way regardless of mouse mode.
   void onPointerSignalImage(PointerSignalEvent e) {
-    if (isViewOnly) return;
     if (e is PointerScrollEvent) {
       final rawDx = e.scrollDelta.dx;
       final rawDy = e.scrollDelta.dy;

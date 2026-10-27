@@ -19,7 +19,6 @@ import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
 import '../../models/shortcut_model.dart';
 import '../../common/shared_state.dart';
-import '../../utils/image.dart';
 import '../widgets/remote_toolbar.dart';
 import '../widgets/tabbar_widget.dart';
 import 'macos_full_screen_focus_recovery.dart';
@@ -94,8 +93,6 @@ class _RemotePageState extends State<RemotePage>
   final _macOSFullScreenFocusRecovery = MacOSFullScreenFocusRecovery();
   bool _macOSExplicitFocusRequestPending = false;
   final _cursorOverImage = false.obs;
-  late RxBool _showRemoteCursor;
-  late RxBool _zoomCursor;
   late RxBool _remoteCursorMoved;
   late RxBool _keyboardEnabled;
   final _uniqueKey = UniqueKey();
@@ -122,8 +119,6 @@ class _RemotePageState extends State<RemotePage>
   }
 
   void _initStates(String id) {
-    _zoomCursor = PeerBoolOption.find(id, kOptionZoomCursor);
-    _showRemoteCursor = ShowRemoteCursorState.find(id);
     _keyboardEnabled = KeyboardEnabledState.find(id);
     _remoteCursorMoved = RemoteCursorMovedState.find(id);
   }
@@ -164,14 +159,6 @@ class _RemotePageState extends State<RemotePage>
     WakelockManager.enable(_uniqueKey);
 
     _ffi.ffiModel.updateEventListener(sessionId, widget.id);
-    _ffi.qualityMonitorModel.checkShowQualityMonitor(sessionId);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Session option should be set after models.dart/FFI.start
-      _showRemoteCursor.value = bind.sessionGetToggleOptionSync(
-          sessionId: sessionId, arg: 'show-remote-cursor');
-      _zoomCursor.value = bind.sessionGetToggleOptionSync(
-          sessionId: sessionId, arg: kOptionZoomCursor);
-    });
     DesktopMultiWindow.addListener(this);
     // if (!_isCustomCursorInited) {
     //   customCursorController.registerNeedUpdateCursorCallback(
@@ -734,7 +721,6 @@ class _RemotePageState extends State<RemotePage>
                       _ffi.textureModel.updateCurrentDisplay(peerDisplay.value);
                       return ImagePaint(
                         id: widget.id,
-                        zoomCursor: _zoomCursor,
                         cursorOverImage: _cursorOverImage,
                         keyboardEnabled: _keyboardEnabled,
                         remoteCursorMoved: _remoteCursorMoved,
@@ -750,23 +736,6 @@ class _RemotePageState extends State<RemotePage>
       )
     ];
 
-    if (!_ffi.canvasModel.cursorEmbedded) {
-      paints
-          .add(Obx(() => _showRemoteCursor.isFalse || _remoteCursorMoved.isFalse
-              ? Offstage()
-              : CursorPaint(
-                  id: widget.id,
-                  zoomCursor: _zoomCursor,
-                )));
-    }
-    paints.add(
-      Positioned(
-        top: 10,
-        right: 10,
-        child: _buildRawTouchAndPointerRegion(
-            QualityMonitor(_ffi.qualityMonitorModel), null, null),
-      ),
-    );
     return Stack(
       children: paints,
     );
@@ -839,7 +808,6 @@ class _ViewStyleUpdaterState extends State<_ViewStyleUpdater> {
 class ImagePaint extends StatefulWidget {
   final FFI ffi;
   final String id;
-  final RxBool zoomCursor;
   final RxBool cursorOverImage;
   final RxBool keyboardEnabled;
   final RxBool remoteCursorMoved;
@@ -849,7 +817,6 @@ class ImagePaint extends StatefulWidget {
       {Key? key,
       required this.ffi,
       required this.id,
-      required this.zoomCursor,
       required this.cursorOverImage,
       required this.keyboardEnabled,
       required this.remoteCursorMoved,
@@ -865,7 +832,6 @@ class _ImagePaintState extends State<ImagePaint> {
   final _cursorDisplayScale = 1.0.obs;
 
   String get id => widget.id;
-  RxBool get zoomCursor => widget.zoomCursor;
   RxBool get cursorOverImage => widget.cursorOverImage;
   RxBool get keyboardEnabled => widget.keyboardEnabled;
   RxBool get remoteCursorMoved => widget.remoteCursorMoved;
@@ -947,31 +913,20 @@ class _ImagePaintState extends State<ImagePaint> {
   /// Matches desktop cursors to the rendered image and native pixel units.
   ///
   /// Windows cursor pixels are physical; NSCursor/GdkCursor use logical pixels.
-  /// Unzoomed Adaptive/Custom views preserve macOS cursors' point dimensions.
+  /// The cursor is never zoomed with the canvas; Adaptive/Custom views
+  /// preserve macOS cursors' point dimensions.
   double _getDesktopCursorScale(CanvasModel c, double dpr) {
     final peer = widget.ffi.ffiModel;
-    if (!zoomCursor.value &&
-        peer.pi.platform == kPeerPlatformMacOS &&
+    if (peer.pi.platform == kPeerPlatformMacOS &&
         (c.viewStyle.style == kRemoteViewStyleAdaptive ||
             c.viewStyle.style == kRemoteViewStyleCustom)) {
       return dpr;
     }
     if (peer.isPeerLinux && peer.pi.currentDisplay == kAllDisplayValue) {
-      if (!zoomCursor.value || c.viewStyle.style == kRemoteViewStyleOriginal) {
-        // Remove the host output's density without applying canvas zoom.
-        final scale = 1.0 / _cursorDisplayScale.value;
-        return scale;
-      }
-      final scale = c.scale / _cursorDisplayScale.value;
-      return scale * dpr;
+      // Remove the host output's density without applying canvas zoom.
+      return 1.0 / _cursorDisplayScale.value;
     }
-    if (!zoomCursor.value || c.viewStyle.style == kRemoteViewStyleOriginal) {
-      // Original and unzoomed views do not apply canvas zoom.
-      final scale = _getCursorScaleForDisplay(1.0);
-      return scale;
-    }
-    final scale = _getCursorScaleForDisplay(c.scale);
-    return scale * dpr;
+    return _getCursorScaleForDisplay(1.0);
   }
 
   double _getCursorScaleForDisplay(double scale) {
@@ -1152,66 +1107,3 @@ class _ImagePaintState extends State<ImagePaint> {
   }
 }
 
-class CursorPaint extends StatelessWidget {
-  final String id;
-  final RxBool zoomCursor;
-
-  const CursorPaint({
-    Key? key,
-    required this.id,
-    required this.zoomCursor,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final m = Provider.of<CursorModel>(context);
-    final c = Provider.of<CanvasModel>(context);
-    double hotx = m.hotx;
-    double hoty = m.hoty;
-    if (m.image == null) {
-      if (preDefaultCursor.image != null) {
-        hotx = preDefaultCursor.image!.width / 2;
-        hoty = preDefaultCursor.image!.height / 2;
-      }
-    }
-
-    double cx = c.x;
-    double cy = c.y;
-    if (c.viewStyle.style == kRemoteViewStyleOriginal &&
-        c.scrollStyle == ScrollStyle.scrollbar) {
-      final rect = c.parent.target!.ffiModel.rect;
-      if (rect == null) {
-        // unreachable!
-        debugPrint('unreachable! The displays rect is null.');
-        return Container();
-      }
-      if (cx < 0) {
-        final imageWidth = rect.width * c.scale;
-        cx = -imageWidth * c.scrollX;
-      }
-      if (cy < 0) {
-        final imageHeight = rect.height * c.scale;
-        cy = -imageHeight * c.scrollY;
-      }
-    }
-
-    double x = (m.x - hotx) * c.scale + cx;
-    double y = (m.y - hoty) * c.scale + cy;
-    double scale = 1.0;
-    final isViewOriginal = c.viewStyle.style == kRemoteViewStyleOriginal;
-    if (zoomCursor.value || isViewOriginal) {
-      x = m.x - hotx + cx / c.scale;
-      y = m.y - hoty + cy / c.scale;
-      scale = c.scale;
-    }
-
-    return CustomPaint(
-      painter: ImagePainter(
-        image: m.image ?? preDefaultCursor.image,
-        x: x,
-        y: y,
-        scale: scale,
-      ),
-    );
-  }
-}

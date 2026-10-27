@@ -422,14 +422,11 @@ fn can_exit_relative_mouse_mode_from_grab_loop() -> bool {
         return false;
     }
 
-    // Must have keyboard permission and not be in view-only mode.
+    // Must have keyboard permission.
     if !*session.server_keyboard_enabled.read().unwrap() {
         return false;
     }
     let lc = session.lc.read().unwrap();
-    if lc.view_only.v {
-        return false;
-    }
 
     // Peer must support relative mouse mode.
     crate::common::is_support_relative_mouse_mode_num(lc.version)

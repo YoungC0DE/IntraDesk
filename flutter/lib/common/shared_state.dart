@@ -89,29 +89,6 @@ class FingerprintState {
   static RxString find(String id) => Get.find<RxString>(tag: tag(id));
 }
 
-class ShowRemoteCursorState {
-  static String tag(String id) => 'show_remote_cursor_$id';
-
-  static void init(String id) {
-    final key = tag(id);
-    if (!Get.isRegistered<RxBool>(tag: key)) {
-      final RxBool state = false.obs;
-      Get.put<RxBool>(state, tag: key);
-    } else {
-      Get.find<RxBool>(tag: key).value = false;
-    }
-  }
-
-  static void delete(String id) {
-    final key = tag(id);
-    if (Get.isRegistered<RxBool>(tag: key)) {
-      Get.delete<RxBool>(tag: key);
-    }
-  }
-
-  static RxBool find(String id) => Get.find<RxBool>(tag: tag(id));
-}
-
 class KeyboardEnabledState {
   static String tag(String id) => 'keyboard_enabled_$id';
 
@@ -182,30 +159,6 @@ class RemoteCountState {
   static RxInt find() => Get.find<RxInt>(tag: tag());
 }
 
-class PeerBoolOption {
-  static String tag(String id, String opt) => 'peer_{$opt}_$id';
-
-  static void init(String id, String opt, bool Function() init_getter) {
-    final key = tag(id, opt);
-    if (!Get.isRegistered<RxBool>(tag: key)) {
-      final RxBool value = RxBool(init_getter());
-      Get.put<RxBool>(value, tag: key);
-    } else {
-      Get.find<RxBool>(tag: key).value = init_getter();
-    }
-  }
-
-  static void delete(String id, String opt) {
-    final key = tag(id, opt);
-    if (Get.isRegistered<RxBool>(tag: key)) {
-      Get.delete<RxBool>(tag: key);
-    }
-  }
-
-  static RxBool find(String id, String opt) =>
-      Get.find<RxBool>(tag: tag(id, opt));
-}
-
 class PeerStringOption {
   static String tag(String id, String opt) => 'peer_{$opt}_$id';
 
@@ -233,18 +186,14 @@ class PeerStringOption {
 initSharedStates(String id) {
   CurrentDisplayState.init(id);
   KeyboardEnabledState.init(id);
-  ShowRemoteCursorState.init(id);
   RemoteCursorMovedState.init(id);
   FingerprintState.init(id);
-  PeerBoolOption.init(id, kOptionZoomCursor, () => false);
    // desktop in other places
 }
 
 removeSharedStates(String id) {
   CurrentDisplayState.delete(id);
-  ShowRemoteCursorState.delete(id);
   KeyboardEnabledState.delete(id);
   RemoteCursorMovedState.delete(id);
   FingerprintState.delete(id);
-  PeerBoolOption.delete(id, kOptionZoomCursor);
 }

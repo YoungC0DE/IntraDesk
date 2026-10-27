@@ -16,8 +16,6 @@ class _Cursor extends CursorModel {
   _Cursor(FFI ffi) : super(WeakReference(ffi));
   @override
   Future<CursorShape?> fetchCursorShape(String id) => Future.value(null);
-  @override
-  bool get showsRemoteCursor => false;
 }
 
 class _FFI extends Fake implements FFI {

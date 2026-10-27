@@ -8,7 +8,6 @@ import 'package:flutter_hbb/desktop/pages/remote_page.dart';
 import 'package:flutter_hbb/models/input_model.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/native/custom_cursor.dart';
-import 'package:flutter_hbb/utils/image.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
@@ -39,6 +38,8 @@ class _Canvas extends ChangeNotifier implements CanvasModel {
   @override
   double get y => 0;
   @override
+  late WeakReference<FFI> parent;
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -62,6 +63,9 @@ class _Display extends Display {
 class _Peer extends Fake implements FfiModel {
   @override
   final pi = PeerInfo();
+  // No displays rect: the video paints nothing, the cursor is what is checked.
+  @override
+  Rect? get rect => null;
   @override
   bool get isPeerLinux => pi.platform == kPeerPlatformLinux;
   @override
@@ -69,7 +73,9 @@ class _Peer extends Fake implements FfiModel {
 }
 
 class _FFI extends Fake implements FFI {
-  _FFI(this.canvasModel);
+  _FFI(this.canvasModel) {
+    (canvasModel as _Canvas).parent = WeakReference(this);
+  }
   @override
   final CanvasModel canvasModel;
   @override
@@ -124,15 +130,13 @@ void main() {
     test('Windows peer cursor alpha survives resizing $pattern',
         () => _checkWindowsPeerAlpha(pattern, registrations));
   }
-  for (final (style, zoom) in [
-    (kRemoteViewStyleOriginal, false),
-    (kRemoteViewStyleAdaptive, false),
-    (kRemoteViewStyleAdaptive, true),
-    (kRemoteViewStyleCustom, false),
-    (kRemoteViewStyleCustom, true),
+  for (final style in [
+    kRemoteViewStyleOriginal,
+    kRemoteViewStyleAdaptive,
+    kRemoteViewStyleCustom,
   ]) {
-    testWidgets('$style zoom=$zoom follows the live DPR and peer scale',
-        (tester) => _checkView(tester, (style, zoom), registrations));
+    testWidgets('$style follows the live DPR and peer scale',
+        (tester) => _checkView(tester, style, registrations));
   }
 }
 
@@ -280,10 +284,10 @@ const _viewCases = [
   (2.0, kPeerPlatformMacOS, 1.0),
 ];
 
-Future<void> _checkView(WidgetTester tester, (String, bool) mode,
+Future<void> _checkView(WidgetTester tester, String style,
     List<Map<dynamic, dynamic>> registrations) async {
   const sourceSize = 64, customScale = 4.0;
-  final canvas = _Canvas(mode.$1);
+  final canvas = _Canvas(style);
   final ffi = _FFI(canvas);
   final display = _Display();
   ffi.ffiModel.pi.displays.addAll([Display(), display]);
@@ -295,9 +299,9 @@ Future<void> _checkView(WidgetTester tester, (String, bool) mode,
   for (final (dpr, peer, peerScale) in _viewCases) {
     ffi.ffiModel.pi.platform = peer;
     display.scale = peerScale;
-    canvas.scale = mode.$1 == kRemoteViewStyleCustom
+    canvas.scale = style == kRemoteViewStyleCustom
         ? customScale / dpr
-        : mode.$1 == kRemoteViewStyleOriginal
+        : style == kRemoteViewStyleOriginal
             ? 1.0 / dpr
             : canvas.viewStyle.scale;
     tester.view.devicePixelRatio = dpr;
@@ -312,20 +316,19 @@ Future<void> _checkView(WidgetTester tester, (String, bool) mode,
         child: ImagePaint(
           ffi: ffi,
           id: 'size',
-          zoomCursor: mode.$2.obs,
           cursorOverImage: true.obs,
           keyboardEnabled: true.obs,
           remoteCursorMoved: false.obs,
         ),
       ),
     ));
-    final video = tester.widget<CustomPaint>(find.byType(CustomPaint)).painter
-        as ImagePainter;
-    final scale = video.scale * (mode.$2 ? 1.0 : 1.0 / (canvas.scale * dpr));
+    // The video is painted at the canvas scale, per display density on Linux.
+    final videoScale =
+        peer == kPeerPlatformLinux ? canvas.scale / peerScale : canvas.scale;
+    final scale = videoScale / (canvas.scale * dpr);
     final size = sourceSize * (peer == kPeerPlatformMacOS ? peerScale : 1.0);
     final w = peer == kPeerPlatformMacOS &&
-            !mode.$2 &&
-            mode.$1 != kRemoteViewStyleOriginal
+            style != kRemoteViewStyleOriginal
         ? (sourceSize * (Platform.isWindows ? dpr : 1.0)).ceil()
         : (size * scale * (Platform.isWindows ? dpr : 1.0)).ceil();
     final key = cursor.nativeKey(cursor.cache, cursor.cache.scale);

@@ -5,14 +5,8 @@
 
 pub use hbb_common::config::keys::*;
 
-pub const OPTION_VIEW_ONLY: &str = "view_only";
-pub const OPTION_SHOW_REMOTE_CURSOR: &str = "show_remote_cursor";
-pub const OPTION_FOLLOW_REMOTE_CURSOR: &str = "follow_remote_cursor";
-pub const OPTION_FOLLOW_REMOTE_WINDOW: &str = "follow_remote_window";
-pub const OPTION_SHOW_QUALITY_MONITOR: &str = "show_quality_monitor";
 pub const OPTION_DISABLE_AUDIO: &str = "disable_audio";
 pub const OPTION_DISABLE_CLIPBOARD: &str = "disable_clipboard";
-pub const OPTION_LOCK_AFTER_SESSION_END: &str = "lock_after_session_end";
 pub const OPTION_TOUCH_MODE: &str = "touch-mode";
 pub const OPTION_SYNC_INIT_CLIPBOARD: &str = "sync-init-clipboard";
 pub const OPTION_THEME: &str = "theme";
@@ -111,28 +105,16 @@ pub const OPTION_PRE_ELEVATE_SERVICE: &str = "pre-elevate-service";
 
 // DEFAULT_DISPLAY_SETTINGS, OVERWRITE_DISPLAY_SETTINGS
 pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
-    OPTION_VIEW_ONLY,
-    OPTION_COLLAPSE_TOOLBAR,
-    OPTION_SHOW_REMOTE_CURSOR,
-    OPTION_FOLLOW_REMOTE_CURSOR,
-    OPTION_FOLLOW_REMOTE_WINDOW,
-    OPTION_ZOOM_CURSOR,
-    OPTION_SHOW_QUALITY_MONITOR,
     OPTION_DISABLE_AUDIO,
     OPTION_ENABLE_FILE_COPY_PASTE,
     OPTION_DISABLE_CLIPBOARD,
-    OPTION_LOCK_AFTER_SESSION_END,
     OPTION_TOUCH_MODE,
-    OPTION_I444,
-    OPTION_REVERSE_MOUSE_WHEEL,
-    OPTION_SWAP_LEFT_RIGHT_MOUSE,
     OPTION_VIEW_STYLE,
     OPTION_SCROLL_STYLE,
     OPTION_EDGE_SCROLL_EDGE_THICKNESS,
     OPTION_IMAGE_QUALITY,
     OPTION_CUSTOM_IMAGE_QUALITY,
     OPTION_CUSTOM_FPS,
-    OPTION_CODEC_PREFERENCE,
     OPTION_SYNC_INIT_CLIPBOARD,
     OPTION_TRACKPAD_SPEED,
 ];

@@ -20,8 +20,6 @@ class _Cursor extends CursorModel {
     return Future.value(core[id]);
   }
 
-  @override
-  bool get showsRemoteCursor => false;
 }
 
 String? _key(MouseCursor cursor) =>

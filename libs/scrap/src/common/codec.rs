@@ -537,33 +537,31 @@ impl Decoder {
         &mut self,
         frame: &video_frame::Union,
         rgb: &mut ImageRgb,
-        chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         match frame {
             video_frame::Union::Vp8s(vp8s) => {
                 if let Some(vp8) = &mut self.vp8 {
-                    Decoder::handle_vpxs_video_frame(vp8, vp8s, rgb, chroma)
+                    Decoder::handle_vpxs_video_frame(vp8, vp8s, rgb)
                 } else {
                     bail!("vp8 decoder not available");
                 }
             }
             video_frame::Union::Vp9s(vp9s) => {
                 if let Some(vp9) = &mut self.vp9 {
-                    Decoder::handle_vpxs_video_frame(vp9, vp9s, rgb, chroma)
+                    Decoder::handle_vpxs_video_frame(vp9, vp9s, rgb)
                 } else {
                     bail!("vp9 decoder not available");
                 }
             }
             video_frame::Union::Av1s(av1s) => {
                 if let Some(av1) = &mut self.av1 {
-                    Decoder::handle_av1s_video_frame(av1, av1s, rgb, chroma)
+                    Decoder::handle_av1s_video_frame(av1, av1s, rgb)
                 } else {
                     bail!("av1 decoder not available");
                 }
             }
             #[cfg(feature = "hwcodec")]
             video_frame::Union::H264s(h264s) => {
-                *chroma = Some(Chroma::I420);
                 if let Some(decoder) = &mut self.h264_ram {
                     return Decoder::handle_hwram_video_frame(decoder, h264s, rgb, &mut self.i420);
                 }
@@ -571,7 +569,6 @@ impl Decoder {
             }
             #[cfg(feature = "hwcodec")]
             video_frame::Union::H265s(h265s) => {
-                *chroma = Some(Chroma::I420);
                 if let Some(decoder) = &mut self.h265_ram {
                     return Decoder::handle_hwram_video_frame(decoder, h265s, rgb, &mut self.i420);
                 }
@@ -586,7 +583,6 @@ impl Decoder {
         decoder: &mut VpxDecoder,
         vpxs: &EncodedVideoFrames,
         rgb: &mut ImageRgb,
-        chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         let mut last_frame = vpxcodec::Image::new();
         for vpx in vpxs.frames.iter() {
@@ -602,7 +598,6 @@ impl Decoder {
         if last_frame.is_null() {
             Ok(false)
         } else {
-            *chroma = Some(last_frame.chroma());
             last_frame.to(rgb);
             Ok(true)
         }
@@ -613,7 +608,6 @@ impl Decoder {
         decoder: &mut AomDecoder,
         av1s: &EncodedVideoFrames,
         rgb: &mut ImageRgb,
-        chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         let mut last_frame = aom::Image::new();
         for av1 in av1s.frames.iter() {
@@ -629,7 +623,6 @@ impl Decoder {
         if last_frame.is_null() {
             Ok(false)
         } else {
-            *chroma = Some(last_frame.chroma());
             last_frame.to(rgb);
             Ok(true)
         }

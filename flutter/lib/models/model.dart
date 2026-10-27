@@ -100,7 +100,6 @@ class FfiModel with ChangeNotifier {
   Timer? _restartReconnectDelayTimer;
   var _reconnects = 1;
   DateTime? _offlineReconnectStartTime;
-  bool _viewOnly = false;
   WeakReference<FFI> parent;
   late final SessionID sessionId;
 
@@ -131,7 +130,6 @@ class FfiModel with ChangeNotifier {
   bool get isPeerLinux => _pi.platform == kPeerPlatformLinux;
   bool get isPeerWindows => _pi.platform == kPeerPlatformWindows;
 
-  bool get viewOnly => _viewOnly;
 
   FfiModel(this.parent) {
     clear();
@@ -304,8 +302,6 @@ class FfiModel with ChangeNotifier {
         parent.target?.serverModel.addConnection(evt);
       } else if (name == 'on_client_remove') {
         parent.target?.serverModel.onClientRemove(evt);
-      } else if (name == 'update_quality_status') {
-        parent.target?.qualityMonitorModel.updateQualityStatus(evt);
       } else if (name == 'show_elevation') {
         final show = evt['show'].toString() == 'true';
         parent.target?.serverModel.setShowElevation(show);
@@ -340,10 +336,7 @@ class FfiModel with ChangeNotifier {
 
   _handleSyncPeerOption(Map<String, dynamic> evt, String peer) {
     final k = evt['k'];
-    final v = evt['v'];
-    if (k == kOptionToggleViewOnly) {
-      setViewOnly(peer, v as bool);
-    } else if (k == 'keyboard_mode') {
+    if (k == 'keyboard_mode') {
       parent.target?.inputModel.updateKeyboardMode();
     } else if (k == 'input_source') {
       stateGlobal.getInputSource(force: true);
@@ -838,12 +831,6 @@ class FfiModel with ChangeNotifier {
       parent.target?.elevationModel.onPeerInfo(_pi);
     }
     if (connType == ConnType.defaultConn) {
-      setViewOnly(
-          peerId,
-          bind.sessionGetToggleOptionSync(
-              sessionId: sessionId, arg: kOptionToggleViewOnly));
-    }
-    if (connType == ConnType.defaultConn) {
       final platformAdditions = evt['platform_additions'];
       if (platformAdditions != null && platformAdditions != '') {
         try {
@@ -1098,26 +1085,6 @@ class FfiModel with ChangeNotifier {
     }
   }
 
-  void setViewOnly(String id, bool value) {
-    if (versionCmp(_pi.version, '1.2.0') < 0) return;
-    // tmp fix for https://github.com/rustdesk/rustdesk/pull/3706#issuecomment-1481242389
-    // because below rx not used in mobile version, so not initialized, below code will cause crash
-    // current our flutter code quality is fucking shit now. !!!!!!!!!!!!!!!!
-    try {
-      if (value) {
-        ShowRemoteCursorState.find(id).value = value;
-      } else {
-        ShowRemoteCursorState.find(id).value = bind.sessionGetToggleOptionSync(
-            sessionId: sessionId, arg: 'show-remote-cursor');
-      }
-    } catch (e) {
-      //
-    }
-    if (_viewOnly != value) {
-      _viewOnly = value;
-      notifyListeners();
-    }
-  }
 }
 
 class VirtualMouseMode with ChangeNotifier {
@@ -1734,7 +1701,6 @@ class CanvasModel with ChangeNotifier {
   }
 
   void updateLocalCursor(double x, double y) {
-    if (parent.target?.ffiModel.viewOnly == true) return;
     // If keyboard is not permitted, do not move cursor when mouse is moving.
     if (parent.target != null && parent.target!.ffiModel.keyboard) {
       // Draw cursor if is not desktop.
@@ -2832,21 +2798,10 @@ class CursorModel with ChangeNotifier {
     if (cache.id != kPreForbiddenCursorId) shownKey = key;
   }
 
-  /// Whether the desktop paints the peer's cursor over the remote image.
-  @protected
-  bool get showsRemoteCursor {
-    final tag = ShowRemoteCursorState.tag(parent.target?.id ?? '');
-    return Get.isRegistered<RxBool>(tag: tag) &&
-        Get.find<RxBool>(tag: tag).value;
-  }
-
-  // Painted images kept: mobile always paints the cursor, a desktop only when it shows the
-  // remote cursor, and otherwise the native cursors show the shapes.
-  int get _imageLimit => showsRemoteCursor ? kRecentShapes : 1;
-
   // `_images` is in order of use. The image painted is kept, whoever's it is.
   void _evictImages() {
-    var excess = _images.length - _imageLimit;
+    // The native cursors show the shapes; only the image in use is kept.
+    var excess = _images.length - 1;
     _images.removeWhere((id, shape) {
       if (excess <= 0 || id == _id || identical(shape.item1, _image)) {
         return false;
@@ -3020,82 +2975,6 @@ class CursorModel with ChangeNotifier {
   }
 }
 
-class QualityMonitorData {
-  String? speed;
-  String? fps;
-  String? delay;
-  String? targetBitrate;
-  String? codecFormat;
-  String? chroma;
-}
-
-class QualityMonitorModel with ChangeNotifier {
-  WeakReference<FFI> parent;
-
-  QualityMonitorModel(this.parent);
-  var _show = false;
-  final _data = QualityMonitorData();
-
-  bool get show => _show;
-  QualityMonitorData get data => _data;
-
-  checkShowQualityMonitor(SessionID sessionId) async {
-    final show = await bind.sessionGetToggleOption(
-            sessionId: sessionId, arg: 'show-quality-monitor') ==
-        true;
-    if (_show != show) {
-      _show = show;
-      notifyListeners();
-    }
-  }
-
-  updateQualityStatus(Map<String, dynamic> evt) {
-    try {
-      if (evt.containsKey('speed') && (evt['speed'] as String).isNotEmpty) {
-        _data.speed = evt['speed'];
-      }
-      if (evt.containsKey('fps') && (evt['fps'] as String).isNotEmpty) {
-        final fps = jsonDecode(evt['fps']) as Map<String, dynamic>;
-        final pi = parent.target?.ffiModel.pi;
-        if (pi != null) {
-          final currentDisplay = pi.currentDisplay;
-          if (currentDisplay != kAllDisplayValue) {
-            final fps2 = fps[currentDisplay.toString()];
-            if (fps2 != null) {
-              _data.fps = fps2.toString();
-            }
-          } else if (fps.isNotEmpty) {
-            final fpsList = [];
-            for (var i = 0; i < pi.displays.length; i++) {
-              fpsList.add((fps[i.toString()] ?? 0).toString());
-            }
-            _data.fps = fpsList.join(' ');
-          }
-        } else {
-          _data.fps = null;
-        }
-      }
-      if (evt.containsKey('delay') && (evt['delay'] as String).isNotEmpty) {
-        _data.delay = evt['delay'];
-      }
-      if (evt.containsKey('target_bitrate') &&
-          (evt['target_bitrate'] as String).isNotEmpty) {
-        _data.targetBitrate = evt['target_bitrate'];
-      }
-      if (evt.containsKey('codec_format') &&
-          (evt['codec_format'] as String).isNotEmpty) {
-        _data.codecFormat = evt['codec_format'];
-      }
-      if (evt.containsKey('chroma') && (evt['chroma'] as String).isNotEmpty) {
-        _data.chroma = evt['chroma'];
-      }
-      notifyListeners();
-    } catch (e) {
-      //
-    }
-  }
-}
-
 class ElevationModel with ChangeNotifier {
   WeakReference<FFI> parent;
   ElevationModel(this.parent);
@@ -3138,7 +3017,6 @@ class FFI {
   late final ServerModel serverModel; // global
   late final FileModel fileModel; // session
   late final PeerTabModel peerTabModel; // global
-  late final QualityMonitorModel qualityMonitorModel; // session
   late final InputModel inputModel; // session
   late final ElevationModel elevationModel; // session
   late final CmFileModel cmFileModel; // cm
@@ -3157,7 +3035,6 @@ class FFI {
     serverModel = ServerModel(WeakReference(this));
     fileModel = FileModel(WeakReference(this));
     peerTabModel = PeerTabModel(WeakReference(this));
-    qualityMonitorModel = QualityMonitorModel(WeakReference(this));
     inputModel = InputModel(WeakReference(this));
     elevationModel = ElevationModel(WeakReference(this));
     cmFileModel = CmFileModel(WeakReference(this));

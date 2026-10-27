@@ -20,7 +20,6 @@ class LocalFlutterShortcutDispatcher {
   final _releasedModifiers = <PhysicalKeyboardKey>{};
   final _forwardedKeyReleases =
       <PhysicalKeyboardKey, Future<void> Function()>{};
-  bool _viewOnlyShortcutPending = false;
   int _generation = 0;
 
   LocalFlutterShortcutDispatcher({required this.onTriggered});
@@ -31,7 +30,6 @@ class LocalFlutterShortcutDispatcher {
     _keyUpActions.removeWhere((_, pending) => identical(pending.$1, this));
     _releasedModifiers.clear();
     _forwardedKeyReleases.clear();
-    _viewOnlyShortcutPending = false;
     _generation++;
   }
 
@@ -53,15 +51,6 @@ class LocalFlutterShortcutDispatcher {
     } else {
       _forwardedKeyReleases.remove(key);
     }
-  }
-
-  bool resumeModifiersAfterViewOnly(
-      PhysicalKeyboardKey incoming, Set<PhysicalKeyboardKey> pressed) {
-    if (!_viewOnlyShortcutPending) return false;
-    _viewOnlyShortcutPending = false;
-    _releasedModifiers
-        .addAll(pressed.where((key) => key != incoming && _isModifier(key)));
-    return true;
   }
 
   List<PhysicalKeyboardKey> takeModifiersToRestore(
@@ -93,7 +82,6 @@ class LocalFlutterShortcutDispatcher {
 
   bool tryDispatch(
     KeyEvent event, {
-    bool viewOnly = false,
     String? Function()? match,
     Future<void> Function()? releaseModifiers,
   }) =>
@@ -101,14 +89,12 @@ class LocalFlutterShortcutDispatcher {
         event.physicalKey,
         down: event is KeyDownEvent,
         up: event is KeyUpEvent,
-        viewOnly: viewOnly,
         match: match,
         releaseModifiers: releaseModifiers,
       );
 
   bool tryDispatchRaw(
     RawKeyEvent event, {
-    bool viewOnly = false,
     String? Function()? match,
     Future<void> Function()? releaseModifiers,
   }) =>
@@ -116,7 +102,6 @@ class LocalFlutterShortcutDispatcher {
         event.physicalKey,
         down: event is RawKeyDownEvent && !event.repeat,
         up: event is RawKeyUpEvent,
-        viewOnly: viewOnly,
         match: match,
         releaseModifiers: releaseModifiers,
       );
@@ -125,7 +110,6 @@ class LocalFlutterShortcutDispatcher {
     PhysicalKeyboardKey key, {
     required bool down,
     required bool up,
-    required bool viewOnly,
     String? Function()? match,
     Future<void> Function()? releaseModifiers,
   }) {
@@ -148,7 +132,6 @@ class LocalFlutterShortcutDispatcher {
     final action = match?.call();
     if (action == null) return false;
     _firedKeys.add(key);
-    if (viewOnly) _viewOnlyShortcutPending = true;
     // macOS browsers can omit letter keyups while Cmd is held. Like the JS
     // input source, dispatch on keydown there; remote cleanup still runs first.
     final runOnKeyUp =

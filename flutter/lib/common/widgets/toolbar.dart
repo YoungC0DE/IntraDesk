@@ -184,7 +184,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
   }
   // ctrlAltDel
   if (isDefaultConn &&
-      !ffiModel.viewOnly &&
       ffiModel.keyboard &&
       (pi.platform == kPeerPlatformLinux || pi.sasEnabled)) {
     v.add(
@@ -209,7 +208,7 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
     );
   }
   // insertLock
-  if (isDefaultConn && !ffiModel.viewOnly && ffi.ffiModel.keyboard) {
+  if (isDefaultConn && ffi.ffiModel.keyboard) {
     v.add(
       TTextMenu(
           child: Text(translate('Insert Lock')),
@@ -346,37 +345,30 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
       ffiModel.keyboard &&
       perms['file'] != false &&
       (isSupportIfPeer_1_2_3 || isSupportIfPeer_1_2_4)) {
-    final enabled = !ffiModel.viewOnly;
     final value = bind.sessionGetToggleOptionSync(
         sessionId: sessionId, arg: kOptionEnableFileCopyPaste);
     v.add(TToggleMenu(
         value: value,
         actionId: kShortcutActionToggleEnableFileCopyPaste,
-        onChanged: enabled
-            ? (value) {
-                if (value == null) return;
-                bind.sessionToggleOption(
-                    sessionId: sessionId, value: kOptionEnableFileCopyPaste);
-              }
-            : null,
+        onChanged: (value) {
+          if (value == null) return;
+          bind.sessionToggleOption(
+              sessionId: sessionId, value: kOptionEnableFileCopyPaste);
+        },
         child: Text(translate('Enable file copy and paste'))));
   }
   // disable clipboard
   if (isDefaultConn && ffiModel.keyboard && perms['clipboard'] != false) {
-    final enabled = !ffiModel.viewOnly;
     final option = 'disable-clipboard';
-    var value =
+    final value =
         bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
-    if (ffiModel.viewOnly) value = true;
     v.add(TToggleMenu(
         value: value,
         actionId: kShortcutActionToggleDisableClipboard,
-        onChanged: enabled
-            ? (value) {
-                if (value == null) return;
-                bind.sessionToggleOption(sessionId: sessionId, value: option);
-              }
-            : null,
+        onChanged: (value) {
+          if (value == null) return;
+          bind.sessionToggleOption(sessionId: sessionId, value: option);
+        },
         child: Text(translate('Disable clipboard'))));
   }
   return _registerToggleMenuShortcuts(ffi, v,

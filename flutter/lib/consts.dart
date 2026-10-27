@@ -75,7 +75,6 @@ const String kOptionAllowNumericOneTimePassword =
     "allow-numeric-one-time-password";
 const String kOptionCollapseToolbar = "collapse_toolbar";
 const String kOptionHideToolbar = "hide-toolbar";
-const String kOptionZoomCursor = "zoom-cursor";
 const String kOptionDisableAudio = "disable_audio";
 const String kOptionEnableFileCopyPaste = "enable-file-copy-paste";
 // "Settings -> Display -> Other default options"
@@ -110,7 +109,6 @@ const String kOptionDisableUnlockPin = "disable-unlock-pin";
 const kHideUsernameOnCard = "hide-username-on-card";
 const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 
-const String kOptionToggleViewOnly = "view-only";
 
 
 const String kOptionKeepScreenOn = "keep-screen-on";

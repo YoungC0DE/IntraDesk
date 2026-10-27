@@ -252,24 +252,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
       ),
     ]);
 
-    if (tabController.state.value.tabs.length > 1) {
-      final splitAction = MenuEntryButton<String>(
-        childBuilder: (TextStyle? style) => Text(
-          translate('Move tab to new window'),
-          style: style,
-        ),
-        proc: () async {
-          await DesktopMultiWindow.invokeMethod(
-              kMainWindowId,
-              kWindowEventMoveTabToNewWindow,
-              '${windowId()},$key,$sessionId,RemoteDesktop');
-          cancelFunc();
-        },
-        padding: padding,
-      );
-      menu.insert(1, splitAction);
-    }
-
     if (perms['restart'] != false &&
         (pi.platform == kPeerPlatformLinux ||
             pi.platform == kPeerPlatformWindows ||

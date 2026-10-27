@@ -482,12 +482,6 @@ class _GeneralState extends State<_General> {
         _OptionCheckBox(context, 'Adaptive bitrate', kOptionEnableAbr),
       wallpaper(),
       if (!incomingOnly) ...[
-        _OptionCheckBox(
-          context,
-          'Open connection in new tab',
-          kOptionOpenNewConnInTabs,
-          isServer: false,
-        ),
         // though this is related to GUI, but opengl problem affects all users, so put in config rather than local
         Tooltip(
             message: translate('texture_render_tip'),

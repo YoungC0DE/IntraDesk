@@ -242,8 +242,11 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T4.1, T3.1 · Área: conforme bug · @dono:
 - [x] **T4.3** Área de transferência: garantir texto, imagem e arquivos (D1) nos dois sentidos. Teste do usuário em 2 PCs com o build da T5.2 ok (24/10/2026).
   dep: T4.1 · Área: `src/clipboard.rs`, `libs/clipboard` · @dono:
-- [ ] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
-  dep: T4.1, D13 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono:
+- [x] **T4.4** Sessões em abas: manter (como AnyDesk) ou limitar a uma sessão por janela, sem os menus de abas que dependiam de features removidas.
+  dep: T4.1, D13 · Área: `remote_tab_page.dart`, `tabbar_widget.dart` · @dono: claude
+  Feito (D13: uma janela, sessões em abas). O menu da aba (botão direito) já não tinha itens de features removidas; ficou: mostrar/ocultar barra, reiniciar, bloquear, Ctrl+Alt+Del, copiar impressão digital, fechar. Saíram "Mover aba para nova janela" (`kWindowEventMoveTabToNewWindow`, `moveTabToNewWindow`) e a opção "Abrir conexão em nova aba" (`enable-open-new-connections-in-tabs`, Dart e `keys.rs`): nova conexão de controle sempre abre como aba na janela existente. Também saíram as ações mortas "Abrir em nova aba/janela" do card (`allow-open-in-tabs/windows`). 3 chaves de tradução.
+  Ficou para a T5.3: "monitores em janelas separadas" (`sessionGetDisplaysAsIndividualWindows`, `openMonitorInNewTabOrWindow`, `openMonitorSession`) ainda abre janelas extras quando a opção está ligada; a opção só é definida pela página de configurações.
+  Checagem: `cargo check` ok; `flutter analyze` sem erros/avisos (253 infos).
 - [x] **T4.5** Bug relatado: depois de muito tempo de sessão, ao abrir um CSV grande no PC acessado, **a imagem congela** mas o áudio continua e o mouse mexe.
   Evidências (logs do RustDesk 1.5.1 portátil no notebook, out/2026):
   - Encoder em uso: **Intel Quick Sync H.265 por hardware** (`hevc_qsv`, caminho VRAM), tela 1366x768, ~1 GB de RAM livre.

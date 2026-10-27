@@ -367,24 +367,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         return RdPlatformChannel.instance.bumpMouse(
           dx: call.arguments['dx'],
           dy: call.arguments['dy']);
-      } else if (call.method == kWindowEventMoveTabToNewWindow) {
-        final args = call.arguments.split(',');
-        int? windowId;
-        try {
-          windowId = int.parse(args[0]);
-        } catch (e) {
-          debugPrint("Failed to parse window id '${call.arguments}': $e");
-        }
-        WindowType? windowType;
-        try {
-          windowType = WindowType.values.byName(args[3]);
-        } catch (e) {
-          debugPrint("Failed to parse window type '${call.arguments}': $e");
-        }
-        if (windowId != null && windowType != null) {
-          await rustDeskWinManager.moveTabToNewWindow(
-              windowId, args[1], args[2], windowType);
-        }
       } else if (call.method == kWindowEventOpenMonitorSession) {
         final args = jsonDecode(call.arguments);
         final windowId = args['window_id'] as int;

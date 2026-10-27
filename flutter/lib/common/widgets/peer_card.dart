@@ -418,34 +418,6 @@ abstract class BasePeerCard extends StatelessWidget {
     );
   }
 
-  Future<MenuEntryBase<String>> _openNewConnInAction(
-      String id, String label, String key) async {
-    return MenuEntrySwitch<String>(
-      switchType: SwitchType.scheckbox,
-      text: translate(label),
-      getter: () async => mainGetPeerBoolOptionSync(id, key),
-      setter: (bool v) async {
-        await bind.mainSetPeerOption(
-            id: id, key: key, value: bool2option(key, v));
-        showToast(translate('Successful'));
-      },
-      padding: menuPadding,
-      dismissOnClicked: true,
-    );
-  }
-
-  _openInTabsAction(String id) async =>
-      await _openNewConnInAction(id, 'Open in New Tab', kOptionOpenInTabs);
-
-  _openInWindowsAction(String id) async => await _openNewConnInAction(
-      id, 'Open in new window', kOptionOpenInWindows);
-
-  // ignore: unused_element
-  _openNewConnInOptAction(String id) async =>
-      mainGetLocalBoolOptionSync(kOptionOpenNewConnInTabs)
-          ? await _openInWindowsAction(id)
-          : await _openInTabsAction(id);
-
   @protected
   MenuEntryBase<String> _renameAction(String id) {
     return MenuEntryButton<String>(
@@ -630,7 +602,6 @@ class RecentPeerCard extends BasePeerCard {
 
     final List favs = (await bind.mainGetFav()).toList();
 
-    // menuItems.add(await _openNewConnInOptAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
     menuItems.add(_renameAction(peer.id));
@@ -670,7 +641,6 @@ class FavoritePeerCard extends BasePeerCard {
       _transferFileAction(context),
     ];
 
-    // menuItems.add(await _openNewConnInOptAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
     menuItems.add(MenuEntryDivider());
     menuItems.add(_renameAction(peer.id));
@@ -709,7 +679,6 @@ class DiscoveredPeerCard extends BasePeerCard {
 
     final List favs = (await bind.mainGetFav()).toList();
 
-    // menuItems.add(await _openNewConnInOptAction(peer.id));
     menuItems.add(_wolAction(peer.id));
     menuItems.add(_createShortCutAction(peer.id));
 

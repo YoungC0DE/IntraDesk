@@ -1913,8 +1913,6 @@ Future<bool> restoreWindowPosition(WindowType type,
 
   bool isRemotePeerPos = false;
   String? pos;
-  // No need to check mainGetLocalBoolOptionSync(kOptionOpenNewConnInTabs)
-  // Though "open in tabs" is true and the new window restore peer position, it's ok.
   if (type == WindowType.RemoteDesktop && windowId != null && peerId != null) {
     final peerPos = bind.mainGetPeerFlutterOptionSync(
         id: peerId, k: windowFramePrefix + type.name);

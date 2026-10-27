@@ -54,26 +54,6 @@ class RustDeskMultiWindowManager {
   final List<int> _remoteDesktopWindows = List.empty(growable: true);
   final List<int> _fileTransferWindows = List.empty(growable: true);
 
-  moveTabToNewWindow(int windowId, String peerId, String sessionId,
-      WindowType windowType) async {
-    var params = {
-      'type': windowType.index,
-      'id': peerId,
-      'tab_window_id': windowId,
-      'session_id': sessionId,
-    };
-    if (windowType == WindowType.RemoteDesktop) {
-      await _newSession(
-        false,
-        WindowType.RemoteDesktop,
-        kWindowEventNewRemoteDesktop,
-        peerId,
-        _remoteDesktopWindows,
-        jsonEncode(params),
-      );
-    }
-  }
-
   // This function must be called in the main window thread.
   // Because the _remoteDesktopWindows is managed in that thread.
   openMonitorSession(int windowId, String peerId, int display, int displayCount,
@@ -210,11 +190,7 @@ class RustDeskMultiWindowManager {
     }
     final msg = jsonEncode(params);
 
-    // separate window for file transfer is not supported
-    bool openInTabs = type != WindowType.RemoteDesktop ||
-        mainGetLocalBoolOptionSync(kOptionOpenNewConnInTabs);
-
-    if (windows.length > 1 || !openInTabs) {
+    if (windows.length > 1) {
       for (final windowId in windows) {
         if (await DesktopMultiWindow.invokeMethod(
             windowId, kWindowEventActiveSession, remoteId)) {
@@ -223,7 +199,7 @@ class RustDeskMultiWindowManager {
       }
     }
 
-    return _newSession(openInTabs, type, methodName, remoteId, windows, msg);
+    return _newSession(true, type, methodName, remoteId, windows, msg);
   }
 
   Future<MultiWindowCallResult> newRemoteDesktop(

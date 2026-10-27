@@ -143,7 +143,6 @@ class _RemotePageState extends State<RemotePage>
         registerToolbarShortcuts(context, widget.id, _ffi);
       }
     });
-    _ffi.canvasModel.initializeEdgeScrollFallback(this);
     _ffi.start(
       widget.id,
       password: widget.password,
@@ -618,8 +617,6 @@ class _RemotePageState extends State<RemotePage>
   }
 
   void enterView(PointerEnterEvent evt) {
-    _ffi.canvasModel.rearmEdgeScroll();
-
     _cursorOverImage.value = true;
     _firstEnterImage.value = true;
     if (_onEnterOrLeaveImage4Toolbar != null) {
@@ -642,7 +639,6 @@ class _RemotePageState extends State<RemotePage>
   }
 
   void leaveView(PointerExitEvent evt) {
-    _ffi.canvasModel.disableEdgeScroll();
 
     if (_ffi.ffiModel.keyboard) {
       _ffi.inputModel.tryMoveEdgeOnExit(evt.position);
@@ -878,35 +874,12 @@ class _ImagePaintState extends State<ImagePaint> {
               onHover: (evt) {},
               child: child);
         });
-    if (c.imageOverflow.isTrue && c.scrollStyle != ScrollStyle.scrollauto) {
-      final paintWidth = c.getDisplayWidth() * s;
-      final paintHeight = c.getDisplayHeight() * s;
-      final paintSize = Size(paintWidth, paintHeight);
+    if (c.size.width > 0 && c.size.height > 0) {
       final paintWidget = _BuildPaintTextureRender(
-          c, s, Offset.zero, paintSize, isViewOriginal());
-      return NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            c.updateScrollPercent();
-            return false;
-          },
-          child: mouseRegion(
-            child: Obx(() => _buildCrossScrollbarFromLayout(
-                  context,
-                  _buildListener(paintWidget),
-                  c.size,
-                  paintSize,
-                  c.scrollHorizontal,
-                  c.scrollVertical,
-                )),
-          ));
+          c, s, Offset(c.x, c.y), c.size, isViewOriginal());
+      return mouseRegion(child: _buildListener(paintWidget));
     } else {
-      if (c.size.width > 0 && c.size.height > 0) {
-        final paintWidget = _BuildPaintTextureRender(
-            c, s, Offset(c.x, c.y), c.size, isViewOriginal());
-        return mouseRegion(child: _buildListener(paintWidget));
-      } else {
-        return Container();
-      }
+      return Container();
     }
   }
 
@@ -1013,89 +986,6 @@ class _ImagePaintState extends State<ImagePaint> {
     final cursor = Provider.of<CursorModel>(context);
     final cache = preForbiddenCursor.cache;
     return buildCursorOfCache(cursor, scale, cache);
-  }
-
-  Widget _buildCrossScrollbarFromLayout(
-    BuildContext context,
-    Widget child,
-    Size layoutSize,
-    Size size,
-    ScrollController horizontal,
-    ScrollController vertical,
-  ) {
-    var widget = child;
-    if (layoutSize.width < size.width) {
-      widget = ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: SingleChildScrollView(
-          controller: horizontal,
-          scrollDirection: Axis.horizontal,
-          physics: cursorOverImage.isTrue
-              ? const NeverScrollableScrollPhysics()
-              : null,
-          child: widget,
-        ),
-      );
-    } else {
-      widget = Row(
-        children: [
-          Container(
-            width: ((layoutSize.width - size.width) ~/ 2).toDouble(),
-          ),
-          widget,
-        ],
-      );
-    }
-    if (layoutSize.height < size.height) {
-      widget = ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: SingleChildScrollView(
-          controller: vertical,
-          physics: cursorOverImage.isTrue
-              ? const NeverScrollableScrollPhysics()
-              : null,
-          child: widget,
-        ),
-      );
-    } else {
-      widget = Column(
-        children: [
-          Container(
-            height: ((layoutSize.height - size.height) ~/ 2).toDouble(),
-          ),
-          widget,
-        ],
-      );
-    }
-    if (layoutSize.width < size.width) {
-      widget = RawScrollbar(
-        thickness: kScrollbarThickness,
-        thumbColor: Colors.grey,
-        controller: horizontal,
-        thumbVisibility: false,
-        trackVisibility: false,
-        notificationPredicate: layoutSize.height < size.height
-            ? (notification) => notification.depth == 1
-            : defaultScrollNotificationPredicate,
-        child: widget,
-      );
-    }
-    if (layoutSize.height < size.height) {
-      widget = RawScrollbar(
-        thickness: kScrollbarThickness,
-        thumbColor: Colors.grey,
-        controller: vertical,
-        thumbVisibility: false,
-        trackVisibility: false,
-        child: widget,
-      );
-    }
-
-    return Container(
-      child: widget,
-      width: layoutSize.width,
-      height: layoutSize.height,
-    );
   }
 
   Widget _buildListener(Widget child) {

@@ -9,7 +9,6 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
@@ -27,7 +26,6 @@ import 'package:image/image.dart' as img2;
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:vector_math/vector_math.dart' show Vector2;
 
 import '../common.dart';
 import '../utils/image.dart' as img;
@@ -1024,8 +1022,6 @@ class FfiModel with ChangeNotifier {
         }
       }
     }
-    parent.target!.canvasModel
-        .tryUpdateScrollStyle(Duration(milliseconds: 300), null);
     notifyListeners();
   }
 
@@ -1222,8 +1218,6 @@ class ImageModel with ChangeNotifier {
     if (_disposeIfStale(image, isCurrentSession)) return;
     if (_image == null && image != null) {
       await parent.target?.canvasModel.updateViewStyle();
-      await parent.target?.canvasModel.updateScrollStyle();
-      await parent.target?.canvasModel.initializeEdgeScrollEdgeThickness();
       if (parent.target != null) {
         await initializeCursorAndCanvas(parent.target!);
       }
@@ -1262,59 +1256,6 @@ class ImageModel with ChangeNotifier {
   void disposeImage() {
     _image?.dispose();
     _image = null;
-  }
-}
-
-enum ScrollStyle {
-  scrollbar(kRemoteScrollStyleBar),
-  scrollauto(kRemoteScrollStyleAuto),
-  scrolledge(kRemoteScrollStyleEdge);
-
-  const ScrollStyle(this.stringValue);
-
-  final String stringValue;
-
-  String toJson() {
-    return name;
-  }
-
-  static ScrollStyle fromJson(String json, [ScrollStyle? fallbackValue]) {
-    switch (json) {
-      case 'scrollbar':
-        return scrollbar;
-      case 'scrollauto':
-        return scrollauto;
-      case 'scrolledge':
-        return scrolledge;
-    }
-
-    if (fallbackValue != null) {
-      return fallbackValue;
-    }
-
-    throw ArgumentError("Unknown ScrollStyle JSON value: '$json'");
-  }
-
-  @override
-  String toString() {
-    return stringValue;
-  }
-
-  static ScrollStyle fromString(String string, [ScrollStyle? fallbackValue]) {
-    switch (string) {
-      case kRemoteScrollStyleBar:
-        return scrollbar;
-      case kRemoteScrollStyleAuto:
-        return scrollauto;
-      case kRemoteScrollStyleEdge:
-        return scrolledge;
-    }
-
-    if (fallbackValue != null) {
-      return fallbackValue;
-    }
-
-    throw ArgumentError("Unknown ScrollStyle string value: '$string'");
   }
 }
 
@@ -1389,60 +1330,6 @@ class ViewStyle {
   }
 }
 
-enum EdgeScrollState {
-  inactive,
-  armed,
-  active,
-}
-
-class EdgeScrollFallbackState {
-  final CanvasModel _owner;
-
-  late Ticker _ticker;
-
-  Duration _lastTotalElapsed = Duration.zero;
-  bool _nextEventIsFirst = true;
-  Vector2 _encroachment = Vector2.zero();
-
-  EdgeScrollFallbackState(this._owner, TickerProvider tickerProvider) {
-    _ticker = tickerProvider.createTicker(emitTick);
-  }
-
-  void setEncroachment(Vector2 encroachment) {
-    _encroachment = encroachment;
-  }
-
-  void emitTick(Duration totalElapsed) {
-    if (_nextEventIsFirst) {
-      _lastTotalElapsed = totalElapsed;
-      _nextEventIsFirst = false;
-    } else {
-      final thisTickElapsed = totalElapsed - _lastTotalElapsed;
-
-      const double kFrameTime = 1000.0 / 60.0;
-      const double kSpeedFactor = 0.1;
-
-      var delta = _encroachment *
-          (kSpeedFactor * thisTickElapsed.inMilliseconds / kFrameTime);
-
-      _owner.performEdgeScroll(delta);
-
-      _lastTotalElapsed = totalElapsed;
-    }
-  }
-
-  void start() {
-    if (!_ticker.isActive) {
-      _nextEventIsFirst = true;
-      _ticker.start();
-    }
-  }
-
-  void stop() {
-    _ticker.stop();
-  }
-}
-
 class CanvasModel with ChangeNotifier {
   // image offset of canvas
   double _x = 0;
@@ -1460,20 +1347,6 @@ class CanvasModel with ChangeNotifier {
   // remote id
   String id = '';
   late final SessionID sessionId;
-  // scroll offset x percent
-  double _scrollX = 0.0;
-  // scroll offset y percent
-  double _scrollY = 0.0;
-  ScrollStyle _scrollStyle = ScrollStyle.scrollauto;
-  // edge scroll mode: trigger scrolling when the cursor is close to the edge of the view
-  int _edgeScrollEdgeThickness = 100;
-  // tracks whether edge scroll should be active, prevents spurious
-  // scrolling when the cursor enters the view from outside
-  EdgeScrollState _edgeScrollState = EdgeScrollState.inactive;
-  // fallback strategy for when Bump Mouse isn't available
-  late EdgeScrollFallbackState _edgeScrollFallbackState;
-  // to avoid hammering a non-functional Bump Mouse
-  bool _bumpMouseIsWorking = true;
   ViewStyle _lastViewStyle = ViewStyle.defaultViewStyle();
 
   Timer? _timerMobileFocusCanvasCursor;
@@ -1484,11 +1357,6 @@ class CanvasModel with ChangeNotifier {
   // `isMobileCanvasChanged` is used to avoid canvas reset when changing the input method
   // after showing the soft keyboard.
   bool isMobileCanvasChanged = false;
-
-  final ScrollController _horizontal = ScrollController();
-  final ScrollController _vertical = ScrollController();
-
-  final _imageOverflow = false.obs;
 
   WeakReference<FFI> parent;
 
@@ -1502,36 +1370,13 @@ class CanvasModel with ChangeNotifier {
   bool get locked => _locked;
   double get devicePixelRatio => _devicePixelRatio;
   Size get size => _size;
-  ScrollStyle get scrollStyle => _scrollStyle;
   ViewStyle get viewStyle => _lastViewStyle;
-  RxBool get imageOverflow => _imageOverflow;
 
   void setLocked(bool value) {
     if (_locked == value) return;
     _locked = value;
     notifyListeners();
   }
-
-  _resetScroll() => setScrollPercent(0.0, 0.0);
-
-  void setScrollPercent(double x, double y) {
-    _scrollX = x.isFinite ? x : 0.0;
-    _scrollY = y.isFinite ? y : 0.0;
-  }
-
-  void pushScrollPositionToUI(double scrollPixelX, double scrollPixelY) {
-    if (_horizontal.hasClients) {
-      _horizontal.jumpTo(scrollPixelX);
-    }
-    if (_vertical.hasClients) {
-      _vertical.jumpTo(scrollPixelY);
-    }
-  }
-
-  ScrollController get scrollHorizontal => _horizontal;
-  ScrollController get scrollVertical => _vertical;
-  double get scrollX => _scrollX;
-  double get scrollY => _scrollY;
 
   static double get leftToEdge =>
       windowBorderWidth + kDragToResizeAreaPadding.left;
@@ -1586,9 +1431,6 @@ class CanvasModel with ChangeNotifier {
         style != kRemoteViewStyleCustom) {
       return;
     }
-    if (_lastViewStyle.style != viewStyle.style) {
-      _resetScroll();
-    }
     _lastViewStyle = viewStyle;
     _scale = viewStyle.scale;
 
@@ -1612,61 +1454,17 @@ class CanvasModel with ChangeNotifier {
       }
     }
     _resetCanvasOffset(displayWidth, displayHeight);
-    final overflow = _x < 0 || y < 0;
-    if (_imageOverflow.value != overflow) {
-      _imageOverflow.value = overflow;
-    }
     if (notify) {
       notifyListeners();
     }
     if (refreshMousePos) {
       parent.target?.inputModel.refreshMousePos();
     }
-    tryUpdateScrollStyle(Duration.zero, style);
   }
 
   _resetCanvasOffset(int displayWidth, int displayHeight) {
     _x = (size.width - displayWidth * _scale) / 2;
     _y = (size.height - displayHeight * _scale) / 2;
-  }
-
-  tryUpdateScrollStyle(Duration duration, String? style) async {
-    if (_scrollStyle == ScrollStyle.scrollauto) return;
-    style ??= await bind.sessionGetViewStyle(sessionId: sessionId);
-    if (style != kRemoteViewStyleOriginal && style != kRemoteViewStyleCustom) {
-      return;
-    }
-
-    _resetScroll();
-
-    Future.delayed(duration, () async {
-      // Layout updates scroll extents and detaches scrollbars no longer needed.
-      await SchedulerBinding.instance.endOfFrame;
-      updateScrollPercent();
-    });
-  }
-
-  Future<void> updateScrollStyle() async {
-    final style = await bind.sessionGetScrollStyle(sessionId: sessionId);
-
-    _scrollStyle =
-        style != null ? ScrollStyle.fromString(style) : ScrollStyle.scrollauto;
-
-    if (_scrollStyle != ScrollStyle.scrollauto) {
-      // Scrollbar and Scroll Edge share controllers and retain their positions.
-      updateScrollPercent();
-    }
-
-    notifyListeners();
-  }
-
-  Future<void> initializeEdgeScrollEdgeThickness() async {
-    final savedValue =
-        await bind.sessionGetEdgeScrollEdgeThickness(sessionId: sessionId);
-
-    if (savedValue != null) {
-      _edgeScrollEdgeThickness = savedValue;
-    }
   }
 
   void update(double x, double y, double scale) {
@@ -1743,129 +1541,6 @@ class CanvasModel with ChangeNotifier {
     }
   }
 
-  void initializeEdgeScrollFallback(TickerProvider tickerProvider) {
-    _edgeScrollFallbackState = EdgeScrollFallbackState(this, tickerProvider);
-  }
-
-  void disableEdgeScroll() {
-    _edgeScrollState = EdgeScrollState.inactive;
-    cancelEdgeScroll();
-  }
-
-  void rearmEdgeScroll() {
-    _edgeScrollState = EdgeScrollState.armed;
-  }
-
-  void cancelEdgeScroll() {
-    _edgeScrollFallbackState.stop();
-  }
-
-  (Vector2, Vector2) getScrollInfo() {
-    final scrollPixel = Vector2(
-        _horizontal.hasClients ? _horizontal.position.pixels : 0,
-        _vertical.hasClients ? _vertical.position.pixels : 0);
-
-    final max = Vector2(
-        _horizontal.hasClients ? _horizontal.position.maxScrollExtent : 0,
-        _vertical.hasClients ? _vertical.position.maxScrollExtent : 0);
-
-    return (scrollPixel, max);
-  }
-
-  void edgeScrollMouse(double x, double y) async {
-    if ((_edgeScrollState == EdgeScrollState.inactive) ||
-        (size.width == 0 || size.height == 0) ||
-        !(_horizontal.hasClients || _vertical.hasClients)) {
-      return;
-    }
-
-    if (_edgeScrollState == EdgeScrollState.armed) {
-      // Edge scroll is armed to become active once the cursor
-      // is observed within the rectangle interior to the
-      // edge scroll regions. If the user has just moved the
-      // cursor in from outside of the window, edge scrolling
-      // doesn't happen yet.
-      final clientArea = Rect.fromLTWH(0, 0, size.width, size.height);
-
-      final innerZone = clientArea.deflate(_edgeScrollEdgeThickness.toDouble());
-
-      if (innerZone.contains(Offset(x, y))) {
-        _edgeScrollState = EdgeScrollState.active;
-      } else {
-        // Not yet.
-        return;
-      }
-    }
-
-    var dxOffset = 0.0;
-    var dyOffset = 0.0;
-
-    if (x < _edgeScrollEdgeThickness) {
-      dxOffset = x - _edgeScrollEdgeThickness;
-    } else if (x >= size.width - _edgeScrollEdgeThickness) {
-      dxOffset = x - (size.width - _edgeScrollEdgeThickness);
-    }
-
-    if (y < _edgeScrollEdgeThickness) {
-      dyOffset = y - _edgeScrollEdgeThickness;
-    } else if (y >= size.height - _edgeScrollEdgeThickness) {
-      dyOffset = y - (size.height - _edgeScrollEdgeThickness);
-    }
-
-    var encroachment = Vector2(dxOffset, dyOffset);
-
-    var (scrollPixel, max) = getScrollInfo();
-
-    encroachment.clamp(-scrollPixel, max - scrollPixel);
-
-    if (encroachment.length2 == 0) {
-      _edgeScrollFallbackState.stop();
-    } else {
-      var bumpAmount = -encroachment;
-
-      // Round away from 0: this ensures that the mouse will be bumped clear of
-      // whichever edge scroll zone(s) it is in
-      bumpAmount.x += bumpAmount.x.sign * 0.5;
-      bumpAmount.y += bumpAmount.y.sign * 0.5;
-
-      var bumpMouseSucceeded = _bumpMouseIsWorking &&
-          (await rustDeskWinManager.call(WindowType.Main, kWindowBumpMouse,
-                  {"dx": bumpAmount.x.round(), "dy": bumpAmount.y.round()}))
-              .result;
-
-      if (bumpMouseSucceeded) {
-        performEdgeScroll(encroachment);
-      } else {
-        // If we can't BumpMouse, then we switch to slower scrolling with autorepeat
-
-        // Don't keep hammering BumpMouse if it's not working.
-        _bumpMouseIsWorking = false;
-
-        // Keep scrolling as long as the user is overtop of an edge.
-        _edgeScrollFallbackState.setEncroachment(encroachment);
-        _edgeScrollFallbackState.start();
-      }
-    }
-  }
-
-  void performEdgeScroll(Vector2 delta) {
-    var (scrollPixel, max) = getScrollInfo();
-
-    scrollPixel += delta;
-
-    scrollPixel.clamp(Vector2.zero(), max);
-
-    var scrollPixelPercent = scrollPixel.clone();
-
-    scrollPixelPercent.divide(max);
-    scrollPixelPercent.scale(100.0);
-
-    setScrollPercent(scrollPixelPercent.x, scrollPixelPercent.y);
-    pushScrollPositionToUI(scrollPixel.x, scrollPixel.y);
-
-    notifyListeners();
-  }
-
   panX(double dx) {
     _x += dx;
     notifyListeners();
@@ -1922,22 +1597,6 @@ class CanvasModel with ChangeNotifier {
     _timerMobileRestoreCanvasOffset?.cancel();
     _offsetBeforeMobileSoftKeyboard = null;
     _scaleBeforeMobileSoftKeyboard = null;
-  }
-
-  updateScrollPercent() {
-    final percentX = _horizontal.hasClients
-        ? _horizontal.position.extentBefore /
-            (_horizontal.position.extentBefore +
-                _horizontal.position.extentInside +
-                _horizontal.position.extentAfter)
-        : 0.0;
-    final percentY = _vertical.hasClients
-        ? _vertical.position.extentBefore /
-            (_vertical.position.extentBefore +
-                _vertical.position.extentInside +
-                _vertical.position.extentAfter)
-        : 0.0;
-    setScrollPercent(percentX, percentY);
   }
 
   void mobileFocusCanvasCursor() {
@@ -3115,8 +2774,6 @@ class FFI {
       textureModel.updateCurrentDisplay(display ?? 0);
     }
 
-    inputModel.updateTrackpadSpeed();
-
     // CAUTION: `sessionStart()` and `sessionStartWithDisplays()` are an async functions.
     // Though the stream is returned immediately, the stream may not be ready.
     // Any operations that depend on the stream should be carefully handled.
@@ -3204,8 +2861,6 @@ class FFI {
       dialogManager.dismissAll();
       try {
         await canvasModel.updateViewStyle();
-        await canvasModel.updateScrollStyle();
-        await canvasModel.initializeEdgeScrollEdgeThickness();
         for (final cb in imageModel.callbacksOnFirstImage) {
           cb(id);
         }

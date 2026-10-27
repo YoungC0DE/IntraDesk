@@ -209,18 +209,6 @@ pub struct PeerConfig {
         skip_serializing_if = "String::is_empty"
     )]
     pub view_style: String,
-    // Image scroll style, scrolledge, scrollbar or scroll auto
-    #[serde(
-        default = "PeerConfig::default_scroll_style",
-        deserialize_with = "PeerConfig::deserialize_scroll_style",
-        skip_serializing_if = "String::is_empty"
-    )]
-    pub scroll_style: String,
-    #[serde(
-        default = "PeerConfig::default_edge_scroll_edge_thickness",
-        deserialize_with = "PeerConfig::deserialize_edge_scroll_edge_thickness"
-    )]
-    pub edge_scroll_edge_thickness: i32,
     #[serde(
         default = "PeerConfig::default_image_quality",
         deserialize_with = "PeerConfig::deserialize_image_quality",
@@ -249,12 +237,6 @@ pub struct PeerConfig {
     pub keyboard_mode: String,
     #[serde(flatten)]
     pub sync_init_clipboard: SyncInitClipboard,
-    #[serde(
-        rename = "trackpad-speed",
-        default = "PeerConfig::default_trackpad_speed",
-        deserialize_with = "PeerConfig::deserialize_trackpad_speed"
-    )]
-    pub trackpad_speed: i32,
 
     #[serde(
         default,
@@ -288,8 +270,6 @@ impl Default for PeerConfig {
             size_ft: Default::default(),
             size_pf: Default::default(),
             view_style: Self::default_view_style(),
-            scroll_style: Self::default_scroll_style(),
-            edge_scroll_edge_thickness: Self::default_edge_scroll_edge_thickness(),
             image_quality: Self::default_image_quality(),
             custom_image_quality: Self::default_custom_image_quality(),
             allow_swap_key: Default::default(),
@@ -297,7 +277,6 @@ impl Default for PeerConfig {
             disable_clipboard: Default::default(),
             enable_file_copy_paste: Default::default(),
             keyboard_mode: Default::default(),
-            trackpad_speed: Self::default_trackpad_speed(),
             custom_resolutions: Default::default(),
             options: Self::default_options(),
             ui_flutter: Default::default(),
@@ -1343,11 +1322,6 @@ impl PeerConfig {
         UserDefaultConfig::read(keys::OPTION_VIEW_STYLE)
     );
     serde_field_string!(
-        default_scroll_style,
-        deserialize_scroll_style,
-        UserDefaultConfig::read(keys::OPTION_SCROLL_STYLE)
-    );
-    serde_field_string!(
         default_image_quality,
         deserialize_image_quality,
         UserDefaultConfig::read(keys::OPTION_IMAGE_QUALITY)
@@ -1379,42 +1353,6 @@ impl PeerConfig {
             UserDefaultConfig::read(keys::OPTION_CUSTOM_FPS),
         );
         mp
-    }
-
-    fn default_trackpad_speed() -> i32 {
-        UserDefaultConfig::read(keys::OPTION_TRACKPAD_SPEED)
-            .parse()
-            .unwrap_or(100)
-    }
-
-    fn deserialize_trackpad_speed<'de, D>(deserializer: D) -> Result<i32, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let v: i32 = de::Deserialize::deserialize(deserializer)?;
-        if v >= 10 && v <= 1000 {
-            Ok(v)
-        } else {
-            Ok(Self::default_trackpad_speed())
-        }
-    }
-
-    fn default_edge_scroll_edge_thickness() -> i32 {
-        UserDefaultConfig::read(keys::OPTION_EDGE_SCROLL_EDGE_THICKNESS)
-            .parse()
-            .unwrap_or(100)
-    }
-
-    fn deserialize_edge_scroll_edge_thickness<'de, D>(deserializer: D) -> Result<i32, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        let v: i32 = de::Deserialize::deserialize(deserializer)?;
-        if v >= 20 && v <= 150 {
-            Ok(v)
-        } else {
-            Ok(Self::default_edge_scroll_edge_thickness())
-        }
     }
 }
 
@@ -1696,17 +1634,12 @@ impl UserDefaultConfig {
     pub fn get(&self, key: &str) -> String {
         match key {
             keys::OPTION_VIEW_STYLE => self.get_string(key, "original", vec!["adaptive"]),
-            keys::OPTION_SCROLL_STYLE => {
-                self.get_string(key, "scrollauto", vec!["scrolledge", "scrollbar"])
-            }
             keys::OPTION_IMAGE_QUALITY => {
                 self.get_string(key, "balanced", vec!["best", "low", "custom"])
             }
             keys::OPTION_CUSTOM_IMAGE_QUALITY => self.get_num_string(key, 50.0, 10.0, 0xFFF as f64),
             keys::OPTION_CUSTOM_FPS => self.get_num_string(key, 30.0, 5.0, 120.0),
             keys::OPTION_ENABLE_FILE_COPY_PASTE => self.get_string(key, "Y", vec!["", "N"]),
-            keys::OPTION_EDGE_SCROLL_EDGE_THICKNESS => self.get_num_string(key, 100, 20, 150),
-            keys::OPTION_TRACKPAD_SPEED => self.get_num_string(key, 100, 10, 1000),
             _ => self
                 .get_after(key)
                 .map(|v| v.to_string())
@@ -1880,14 +1813,11 @@ pub mod keys {
     // Only the keys hbb_common itself references.
     pub const OPTION_ENABLE_FILE_COPY_PASTE: &str = "enable-file-copy-paste";
     pub const OPTION_VIEW_STYLE: &str = "view_style";
-    pub const OPTION_SCROLL_STYLE: &str = "scroll_style";
-    pub const OPTION_EDGE_SCROLL_EDGE_THICKNESS: &str = "edge-scroll-edge-thickness";
     pub const OPTION_IMAGE_QUALITY: &str = "image_quality";
     pub const OPTION_CUSTOM_IMAGE_QUALITY: &str = "custom_image_quality";
     pub const OPTION_CUSTOM_FPS: &str = "custom-fps";
     pub const OPTION_LANGUAGE: &str = "lang";
     pub const OPTION_ALLOW_NUMERNIC_ONE_TIME_PASSWORD: &str = "allow-numeric-one-time-password";
-    pub const OPTION_TRACKPAD_SPEED: &str = "trackpad-speed";
     pub const OPTION_ALLOW_HOSTNAME_AS_ID: &str = "allow-hostname-as-id";
     pub const OPTION_DISABLE_CHANGE_PERMANENT_PASSWORD: &str = "disable-change-permanent-password";
     pub const OPTION_DISABLE_UNLOCK_PIN: &str = "disable-unlock-pin";

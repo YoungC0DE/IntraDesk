@@ -288,22 +288,6 @@ pub fn session_set_view_style(session_id: SessionID, value: String) {
     }
 }
 
-pub fn session_get_scroll_style(session_id: SessionID) -> Option<String> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        Some(session.get_scroll_style())
-    } else {
-        None
-    }
-}
-
-pub fn session_get_edge_scroll_edge_thickness(session_id: SessionID) -> Option<i32> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        Some(session.get_edge_scroll_edge_thickness())
-    } else {
-        None
-    }
-}
-
 pub fn session_get_image_quality(session_id: SessionID) -> Option<String> {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         Some(session.get_image_quality())
@@ -363,14 +347,6 @@ pub fn session_set_custom_image_quality(session_id: SessionID, value: i32) {
 pub fn session_set_custom_fps(session_id: SessionID, fps: i32) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.set_custom_fps(fps);
-    }
-}
-
-pub fn session_get_trackpad_speed(session_id: SessionID) -> Option<i32> {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        Some(session.get_trackpad_speed())
-    } else {
-        None
     }
 }
 

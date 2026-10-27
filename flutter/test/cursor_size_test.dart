@@ -28,8 +28,6 @@ class _Canvas extends ChangeNotifier implements CanvasModel {
   @override
   double scale = 0.25;
   @override
-  final imageOverflow = false.obs;
-  @override
   bool get cursorEmbedded => false;
   @override
   Size get size => const Size(200, 160);

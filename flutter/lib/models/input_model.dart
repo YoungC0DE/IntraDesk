@@ -35,9 +35,6 @@ class CanvasCoords {
   double x = 0;
   double y = 0;
   double scale = 1.0;
-  double scrollX = 0;
-  double scrollY = 0;
-  ScrollStyle scrollStyle = ScrollStyle.scrollauto;
   Size size = Size.zero;
 
   CanvasCoords();
@@ -47,9 +44,6 @@ class CanvasCoords {
       'x': x,
       'y': y,
       'scale': scale,
-      'scrollX': scrollX,
-      'scrollY': scrollY,
-      'scrollStyle': scrollStyle.toJson(),
       'size': {
         'w': size.width,
         'h': size.height,
@@ -62,10 +56,6 @@ class CanvasCoords {
     model.x = json['x'];
     model.y = json['y'];
     model.scale = json['scale'];
-    model.scrollX = json['scrollX'];
-    model.scrollY = json['scrollY'];
-    model.scrollStyle =
-        ScrollStyle.fromJson(json['scrollStyle'], ScrollStyle.scrollauto);
     model.size = Size(json['size']['w'], json['size']['h']);
     return model;
   }
@@ -75,9 +65,6 @@ class CanvasCoords {
     coords.x = model.x;
     coords.y = model.y;
     coords.scale = model.scale;
-    coords.scrollX = model.scrollX;
-    coords.scrollY = model.scrollY;
-    coords.scrollStyle = model.scrollStyle;
     coords.size = model.size;
     return coords;
   }
@@ -403,8 +390,6 @@ class InputModel {
   // Lock to dominant axis only when one axis is clearly stronger.
   // 1.6 means the dominant axis must be >= 60% larger than the other.
   static const double _trackpadAxisLockRatio = 1.6;
-  int _trackpadSpeed = kDefaultTrackpadSpeed;
-  double _trackpadSpeedInner = kDefaultTrackpadSpeed / 100.0;
   var _trackpadScrollUnsent = Offset.zero;
 
   // Mobile relative mouse delta accumulators (for slow/fine movements).
@@ -455,9 +440,6 @@ class InputModel {
   String? get peerPlatform => parent.target?.ffiModel.pi.platform;
   String get peerVersion => parent.target?.ffiModel.pi.version ?? '';
   double get devicePixelRatio => parent.target!.canvasModel.devicePixelRatio;
-  int get trackpadSpeed => _trackpadSpeed;
-  bool get useEdgeScroll =>
-      parent.target!.canvasModel.scrollStyle == ScrollStyle.scrolledge;
 
   /// Check if the connected server supports relative mouse mode.
   bool get isRelativeMouseModeSupported => _relativeMouse.isSupported;
@@ -548,28 +530,6 @@ class InputModel {
     // * Currently mobile does not enable map mode
     keyboardMode = await bind.sessionGetKeyboardMode(sessionId: sessionId) ??
         kKeyLegacyMode;
-  }
-
-  /// Updates the trackpad speed based on the session value.
-  ///
-  /// The expected format of the retrieved value is a string that can be parsed into a double.
-  /// If parsing fails or the value is out of bounds (less than `kMinTrackpadSpeed` or greater
-  /// than `kMaxTrackpadSpeed`), the trackpad speed is reset to the default
-  /// value (`kDefaultTrackpadSpeed`).
-  ///
-  /// Bounds:
-  /// - Minimum: `kMinTrackpadSpeed`
-  /// - Maximum: `kMaxTrackpadSpeed`
-  /// - Default: `kDefaultTrackpadSpeed`
-  Future<void> updateTrackpadSpeed() async {
-    _trackpadSpeed =
-        (await bind.sessionGetTrackpadSpeed(sessionId: sessionId) ??
-            kDefaultTrackpadSpeed);
-    if (_trackpadSpeed < kMinTrackpadSpeed ||
-        _trackpadSpeed > kMaxTrackpadSpeed) {
-      _trackpadSpeed = kDefaultTrackpadSpeed;
-    }
-    _trackpadSpeedInner = _trackpadSpeed / 100.0;
   }
 
   void handleKeyDownEventModifiers(KeyEvent e) {
@@ -1418,8 +1378,7 @@ class InputModel {
     if (isPhysicalMouse.value) {
       if (!_relativeMouse.handleRelativeMouseMove(e.localPosition)) {
         final canvasPosition = _pointerPositionForRemoteCanvas(e);
-        handleMouse(_getMouseEvent(e, _kMouseEventMove), canvasPosition,
-            edgeScroll: useEdgeScroll);
+        handleMouse(_getMouseEvent(e, _kMouseEventMove), canvasPosition);
       }
     }
   }
@@ -1448,7 +1407,7 @@ class InputModel {
       }
     }
 
-    var delta = e.panDelta * _trackpadSpeedInner;
+    var delta = e.panDelta;
     delta = _filterTrackpadDeltaAxis(delta);
     _trackpadLastDelta = delta;
 
@@ -1565,7 +1524,7 @@ class InputModel {
     _stopFling = false;
 
     // 2.0 is an experience value
-    double minFlingValue = 2.0 * _trackpadSpeedInner;
+    const minFlingValue = 2.0;
     if (_trackpadLastDelta.dx.abs() > minFlingValue ||
         _trackpadLastDelta.dy.abs() > minFlingValue) {
       _fling = true;
@@ -1670,8 +1629,7 @@ class InputModel {
     if (isPhysicalMouse.value) {
       if (!_relativeMouse.handleRelativeMouseMove(e.localPosition)) {
         final canvasPosition = _pointerPositionForRemoteCanvas(e);
-        handleMouse(_getMouseEvent(e, _kMouseEventMove), canvasPosition,
-            edgeScroll: useEdgeScroll);
+        handleMouse(_getMouseEvent(e, _kMouseEventMove), canvasPosition);
       }
     }
   }
@@ -1765,7 +1723,7 @@ class InputModel {
   void refreshMousePos() => handleMouse({
         'buttons': 0,
         'type': _kMouseEventMove,
-      }, lastMousePos, edgeScroll: useEdgeScroll);
+      }, lastMousePos);
 
   void tryMoveEdgeOnExit(Offset pos) => handleMouse(
         {
@@ -1871,7 +1829,6 @@ class InputModel {
     Offset offset, {
     bool onExit = false,
     bool moveCanvas = true,
-    bool edgeScroll = false,
   }) {
     final buttons = evt['buttons'];
     final isMatchingMouseUp = evt['type'] == _kMouseEventUp && buttons is int && mouseButtonsToPeer(buttons).isNotEmpty && _pressedMouseButtons & buttons != 0;
@@ -1915,7 +1872,6 @@ class InputModel {
       onExit: onExit,
       buttons: evt['buttons'],
       moveCanvas: moveCanvas,
-      edgeScroll: edgeScroll,
     );
     if (pos == null) {
       return null;
@@ -1953,10 +1909,9 @@ class InputModel {
     Offset offset, {
     bool onExit = false,
     bool moveCanvas = true,
-    bool edgeScroll = false,
   }) {
     final evtToPeer = processEventToPeer(evt, offset,
-        onExit: onExit, moveCanvas: moveCanvas, edgeScroll: edgeScroll);
+        onExit: onExit, moveCanvas: moveCanvas);
     if (evtToPeer != null) {
       bind.sessionSendMouse(
           sessionId: sessionId, msg: json.encode(modify(evtToPeer)));
@@ -1973,7 +1928,6 @@ class InputModel {
     bool onExit = false,
     int buttons = kPrimaryMouseButton,
     bool moveCanvas = true,
-    bool edgeScroll = false,
   }) {
     final ffiModel = parent.target!.ffiModel;
     CanvasCoords canvas =
@@ -2001,9 +1955,7 @@ class InputModel {
     if (isMove) {
       final canvasModel = parent.target!.canvasModel;
 
-      if (edgeScroll) {
-        canvasModel.edgeScrollMouse(x, y);
-      } else if (moveCanvas) {
+      if (moveCanvas) {
         canvasModel.moveDesktopMouse(x, y);
       }
 
@@ -2064,23 +2016,8 @@ class InputModel {
     final nearThr = 3;
     var nearRight = (canvas.size.width - x) < nearThr;
     var nearBottom = (canvas.size.height - y) < nearThr;
-    final imageWidth = rect.width * canvas.scale;
-    final imageHeight = rect.height * canvas.scale;
-    if (canvas.scrollStyle != ScrollStyle.scrollauto) {
-      x += imageWidth * canvas.scrollX;
-      y += imageHeight * canvas.scrollY;
-
-      // boxed size is a center widget
-      if (canvas.size.width > imageWidth) {
-        x -= ((canvas.size.width - imageWidth) / 2);
-      }
-      if (canvas.size.height > imageHeight) {
-        y -= ((canvas.size.height - imageHeight) / 2);
-      }
-    } else {
-      x -= canvas.x;
-      y -= canvas.y;
-    }
+    x -= canvas.x;
+    y -= canvas.y;
 
     x /= canvas.scale;
     y /= canvas.scale;

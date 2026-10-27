@@ -198,13 +198,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.read().unwrap().view_style.clone()
     }
 
-    pub fn get_scroll_style(&self) -> String {
-        self.lc.read().unwrap().scroll_style.clone()
-    }
-
-    pub fn get_edge_scroll_edge_thickness(&self) -> i32 {
-        self.lc.read().unwrap().edge_scroll_edge_thickness
-    }
 
     pub fn get_image_quality(&self) -> String {
         self.lc.read().unwrap().image_quality.clone()
@@ -218,9 +211,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.read().unwrap().version.clone()
     }
 
-    pub fn get_trackpad_speed(&self) -> i32 {
-        self.lc.read().unwrap().trackpad_speed
-    }
 
     pub fn fallback_keyboard_mode(&self) -> String {
         let peer_version = self.get_peer_version();

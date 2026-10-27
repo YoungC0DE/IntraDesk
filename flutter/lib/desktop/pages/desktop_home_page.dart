@@ -13,7 +13,6 @@ import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
-import 'package:flutter_hbb/utils/platform_channel.dart';
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 
@@ -321,19 +320,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     });
     rustDeskWinManager.registerActiveWindowListener(onActiveWindowChanged);
 
-    bool isChattyMethod(String methodName) {
-      switch (methodName) {
-        case kWindowBumpMouse: return true;
-      }
-
-      return false;
-    }
-
     rustDeskWinManager.setMethodHandler((call, fromWindowId) async {
-      if (!isChattyMethod(call.method)) {
-        debugPrint(
+      debugPrint(
           "[Main] call ${call.method} with args ${call.arguments} from window $fromWindowId");
-      }
       if (call.method == kWindowMainWindowOnTop) {
         windowOnTop(null);
       } else if (call.method == kWindowActionRebuild) {
@@ -349,10 +338,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           password: call.arguments['password'],
           connToken: call.arguments['connToken'],
         );
-      } else if (call.method == kWindowBumpMouse) {
-        return RdPlatformChannel.instance.bumpMouse(
-          dx: call.arguments['dx'],
-          dy: call.arguments['dy']);
       } else if (call.method == kWindowEventRemoteWindowCoords) {
         final windowId = int.tryParse(call.arguments);
         if (windowId != null) {

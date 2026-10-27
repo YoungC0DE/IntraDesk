@@ -25,7 +25,6 @@ const String kPeerPlatformMacOS = "Mac OS";
 const String kPeerPlatformAndroid = "Android";
 const String kPeerPlatformWebDesktop = "WebDesktop";
 
-const double kScrollbarThickness = 12.0;
 
 /// [kAppTypeMain] used by 'Desktop Main Page' , 'Mobile (Client and Server)', "Install Page"
 const String kAppTypeMain = "main";
@@ -43,7 +42,6 @@ const String kWindowActionRebuild = "rebuild";
 const String kWindowEventHide = "hide";
 const String kWindowEventShow = "show";
 const String kWindowConnect = "connect";
-const String kWindowBumpMouse = "bump_mouse";
 
 const String kWindowEventNewRemoteDesktop = "new_remote_desktop";
 const String kWindowEventNewFileTransfer = "new_file_transfer";
@@ -167,9 +165,6 @@ const double kMaxQuality = 100;
 const double kMaxMoreQuality = 2000;
 
 // trackpad speed
-const int kMinTrackpadSpeed = 10;
-const int kDefaultTrackpadSpeed = 100;
-const int kMaxTrackpadSpeed = 1000;
 
 // relative mouse mode
 /// Throttle duration (in milliseconds) for updating pointer lock center during
@@ -255,15 +250,6 @@ const kRemoteViewStyleAdaptive = 'adaptive';
 
 /// [kRemoteViewStyleCustom] Show remote image at a user-defined scale percent.
 const kRemoteViewStyleCustom = 'custom';
-
-/// [kRemoteScrollStyleAuto] Scroll image auto by position.
-const kRemoteScrollStyleAuto = 'scrollauto';
-
-/// [kRemoteScrollStyleBar] Scroll image with scroll bar.
-const kRemoteScrollStyleBar = 'scrollbar';
-
-/// [kRemoteScrollStyleEdge] Scroll image auto at edges.
-const kRemoteScrollStyleEdge = 'scrolledge';
 
 /// [kScrollModeDefault] Mouse or touchpad, the default scroll mode.
 const kScrollModeDefault = 'default';

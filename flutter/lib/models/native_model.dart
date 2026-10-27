@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -21,8 +20,6 @@ final class RgbaFrame extends Struct {
   external Pointer<Uint8> data;
 }
 
-typedef F3 = Pointer<Uint8> Function(Pointer<Utf8>, int);
-typedef F3Dart = Pointer<Uint8> Function(Pointer<Utf8>, Int32);
 typedef HandleEvent = Future<void> Function(Map<String, dynamic> evt);
 
 /// The Linux bundle keeps the core library at lib/librustdesk.so next to the
@@ -61,8 +58,6 @@ class PlatformFFI {
   RustdeskImpl get ffiBind => _ffiBind;
   @visibleForTesting
   void setBindingForTesting(RustdeskImpl binding) => _ffiBind = binding;
-
-  F3? _session_get_rgba;
 
   static get localeName => Platform.localeName;
 
@@ -107,31 +102,8 @@ class PlatformFFI {
   String translate(String name, String locale) =>
       _ffiBind.translate(name: name, locale: locale);
 
-  Uint8List? getRgba(SessionID sessionId, int display, int bufSize) {
-    if (_session_get_rgba == null) return null;
-    final sessionIdStr = sessionId.toString();
-    var a = sessionIdStr.toNativeUtf8();
-    try {
-      final buffer = _session_get_rgba!(a, display);
-      if (buffer == nullptr) {
-        return null;
-      }
-      final data = buffer.asTypedList(bufSize);
-      return data;
-    } finally {
-      malloc.free(a);
-    }
-  }
-
-  int getRgbaSize(SessionID sessionId, int display) =>
-      _ffiBind.sessionGetRgbaSize(sessionId: sessionId, display: display);
-  void nextRgba(SessionID sessionId, int display) =>
-      _ffiBind.sessionNextRgba(sessionId: sessionId, display: display);
   void registerPixelbufferTexture(SessionID sessionId, int display, int ptr) =>
       _ffiBind.sessionRegisterPixelbufferTexture(
-          sessionId: sessionId, display: display, ptr: ptr);
-  void registerGpuTexture(SessionID sessionId, int display, int ptr) =>
-      _ffiBind.sessionRegisterGpuTexture(
           sessionId: sessionId, display: display, ptr: ptr);
 
   /// Init the FFI class, loads the native Rust core library.
@@ -140,7 +112,6 @@ class PlatformFFI {
     final dylib = DynamicLibrary.open('librustdesk.dll');
     debugPrint('initializing FFI $_appType');
     try {
-      _session_get_rgba = dylib.lookupFunction<F3Dart, F3>("session_get_rgba");
       try {
         // SYSTEM user failed
         _dir = (await getApplicationDocumentsDirectory()).path;

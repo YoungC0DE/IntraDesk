@@ -4,9 +4,8 @@ const DISPLAY: &str = "adaptation";
 
 fn session(abr: bool) -> VideoQoS {
     let mut qos = super::smoke::session(FPS, Quality::Balanced);
-    qos.abr_config = abr;
     qos.new_display(DISPLAY.to_owned());
-    qos.set_support_changing_quality(DISPLAY, true);
+    qos.set_support_changing_quality(DISPLAY, abr);
     sync_bitrate(&mut qos);
     qos
 }

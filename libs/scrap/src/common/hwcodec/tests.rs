@@ -1,11 +1,11 @@
 use super::{CodecInfo, HwCodecConfig, CONFIG, CONFIG_SET_BY_IPC};
 use crate::{
     codec::enable_vram_option,
-    vram::{VRamDecoder, VRamEncoder},
+    vram::VRamEncoder,
     AdapterDevice, CodecFormat,
 };
-use base::config::keys::{OPTION_ALLOW_D3D_RENDER, OPTION_ENABLE_HWCODEC};
-use hbb_common::config::{OVERWRITE_LOCAL_SETTINGS, OVERWRITE_SETTINGS};
+use base::config::keys::OPTION_ENABLE_HWCODEC;
+use hbb_common::config::OVERWRITE_SETTINGS;
 use hwcodec::{
     common::{DataFormat, Driver},
     vram::{DecodeContext, FeatureContext},
@@ -16,7 +16,6 @@ struct RestoreConfig {
     config: Option<HwCodecConfig>,
     set_by_ipc: bool,
     options: HashMap<String, String>,
-    local_options: HashMap<String, String>,
 }
 
 impl Drop for RestoreConfig {
@@ -24,7 +23,6 @@ impl Drop for RestoreConfig {
         *CONFIG.lock().unwrap() = self.config.take();
         *CONFIG_SET_BY_IPC.lock().unwrap() = self.set_by_ipc;
         *OVERWRITE_SETTINGS.write().unwrap() = mem::take(&mut self.options);
-        *OVERWRITE_LOCAL_SETTINGS.write().unwrap() = mem::take(&mut self.local_options);
     }
 }
 
@@ -56,17 +54,12 @@ fn cached_sdk_entries_are_ignored_before_check_completes() {
         config: CONFIG.lock().unwrap().take(),
         set_by_ipc: mem::replace(&mut *CONFIG_SET_BY_IPC.lock().unwrap(), false),
         options: mem::take(&mut *OVERWRITE_SETTINGS.write().unwrap()),
-        local_options: mem::take(&mut *OVERWRITE_LOCAL_SETTINGS.write().unwrap()),
     };
     OVERWRITE_SETTINGS
         .write()
         .unwrap()
         .insert(OPTION_ENABLE_HWCODEC.into(), "Y".into());
-    OVERWRITE_LOCAL_SETTINGS
-        .write()
-        .unwrap()
-        .insert(OPTION_ALLOW_D3D_RENDER.into(), "Y".into());
-    assert!(enable_vram_option(false));
+    assert!(enable_vram_option());
 
     let formats = [
         (CodecFormat::H264, DataFormat::H264),
@@ -87,16 +80,9 @@ fn cached_sdk_entries_are_ignored_before_check_completes() {
     assert!(!HwCodecConfig::already_set());
     for (format, _) in formats {
         assert!(VRamEncoder::available(format).is_empty());
-        for luid in 1..=3 {
-            assert!(VRamDecoder::try_get(format, Some(luid)).is_none());
-        }
     }
-    assert_eq!(
-        VRamDecoder::possible_available_without_check(),
-        (false, false)
-    );
 
-    for (index, &(format, data_format)) in formats.iter().enumerate() {
+    for &(format, data_format) in formats.iter() {
         for vendor in [Driver::NV, Driver::MFX, Driver::AMF] {
             add_backend(&mut cached, Driver::FFMPEG, vendor, data_format);
         }
@@ -110,17 +96,7 @@ fn cached_sdk_entries_are_ignored_before_check_completes() {
                 ..Default::default()
             };
             assert_eq!(VRamEncoder::try_get(&device, format), Some(encoder.clone()));
-            let decoder = VRamDecoder::try_get(format, Some(encoder.luid)).unwrap();
-            assert_eq!(decoder.driver, Driver::FFMPEG);
-            assert_eq!(decoder.vendor, encoder.vendor);
-            assert_eq!(decoder.data_format, data_format);
         }
-        assert!(VRamDecoder::available(format, Some(99)).is_empty());
-        assert!(VRamDecoder::available(format, None).is_empty());
-        assert_eq!(
-            VRamDecoder::possible_available_without_check(),
-            (true, index == 1)
-        );
     }
     assert!(!HwCodecConfig::already_set());
     assert_eq!(

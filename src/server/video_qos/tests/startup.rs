@@ -4,9 +4,8 @@ fn session(cap: u32, abr: bool) -> VideoQoS {
     let mut qos = super::smoke::session(cap, Quality::Balanced);
     let joined = qos.now();
     qos.users.get_mut(&1).unwrap().joined_at = Some(joined);
-    qos.abr_config = abr;
     qos.new_display("startup".to_owned());
-    qos.set_support_changing_quality("startup", true);
+    qos.set_support_changing_quality("startup", abr);
     qos
 }
 

@@ -3,7 +3,6 @@ use super::*;
 pub(super) fn session(fps: u32, quality: Quality) -> VideoQoS {
     let mut qos = VideoQoS {
         fps: INIT_FPS.min(fps),
-        abr_config: false,
         ..Default::default()
     };
     qos.advance_ms(2000);

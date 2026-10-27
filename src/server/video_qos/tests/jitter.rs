@@ -29,10 +29,9 @@ fn bitrate_reduction_precedes_ordinary_fps_reduction() {
 
 #[test]
 fn unavailable_abr_or_minimum_bitrate_does_not_prevent_fps_reduction() {
-    for mode in ["disabled", "unsupported", "minimum"] {
+    for mode in ["unsupported", "minimum"] {
         let mut qos = abr_session();
         match mode {
-            "disabled" => qos.abr_config = false,
             "unsupported" => qos.set_support_changing_quality("test", false),
             "minimum" => qos.ratio = BR_MIN_HIGH_RESOLUTION,
             _ => unreachable!(),

@@ -873,7 +873,6 @@ class _ImagePaintState extends State<ImagePaint> {
 
   @override
   Widget build(BuildContext context) {
-    final m = Provider.of<ImageModel>(context);
     var c = Provider.of<CanvasModel>(context);
     final s = c.scale;
     // Read the live DPR while the canvas's post-frame update is pending.
@@ -917,11 +916,8 @@ class _ImagePaintState extends State<ImagePaint> {
       final paintWidth = c.getDisplayWidth() * s;
       final paintHeight = c.getDisplayHeight() * s;
       final paintSize = Size(paintWidth, paintHeight);
-      final paintWidget =
-          m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender
-              ? _BuildPaintTextureRender(
-                  c, s, Offset.zero, paintSize, isViewOriginal())
-              : _buildScrollbarNonTextureRender(m, paintSize, s);
+      final paintWidget = _BuildPaintTextureRender(
+          c, s, Offset.zero, paintSize, isViewOriginal());
       return NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             c.updateScrollPercent();
@@ -939,18 +935,8 @@ class _ImagePaintState extends State<ImagePaint> {
           ));
     } else {
       if (c.size.width > 0 && c.size.height > 0) {
-        final paintWidget =
-            m.useTextureRender || widget.ffi.ffiModel.pi.forceTextureRender
-                ? _BuildPaintTextureRender(
-                    c,
-                    s,
-                    Offset(
-                      c.x,
-                      c.y,
-                    ),
-                    c.size,
-                    isViewOriginal())
-                : _buildScrollAutoNonTextureRender(m, c, s);
+        final paintWidget = _BuildPaintTextureRender(
+            c, s, Offset(c.x, c.y), c.size, isViewOriginal());
         return mouseRegion(child: _buildListener(paintWidget));
       } else {
         return Container();
@@ -1008,40 +994,6 @@ class _ImagePaintState extends State<ImagePaint> {
     // See src/server/display_service.rs:650 (update_sync_displays) and
     // src/server/drm_capturer.rs:1523 (DRM's matching convention).
     return scale / displays.first.scale;
-  }
-
-  Widget _buildScrollbarNonTextureRender(
-      ImageModel m, Size imageSize, double s) {
-    double sizeScale = s;
-    if (widget.ffi.ffiModel.isPeerLinux) {
-      final displays = widget.ffi.ffiModel.pi.getCurDisplays();
-      if (displays.isNotEmpty) {
-        sizeScale = s / displays[0].scale;
-      }
-    }
-    return CustomPaint(
-      size: imageSize,
-      painter: ImagePainter(image: m.image, x: 0, y: 0, scale: sizeScale),
-    );
-  }
-
-  Widget _buildScrollAutoNonTextureRender(
-      ImageModel m, CanvasModel c, double s) {
-    double sizeScale = s;
-    if (widget.ffi.ffiModel.isPeerLinux) {
-      final displays = widget.ffi.ffiModel.pi.getCurDisplays();
-      if (displays.isNotEmpty) {
-        sizeScale = s / displays[0].scale;
-      }
-    }
-    return CustomPaint(
-      size: Size(c.size.width, c.size.height),
-      painter: ImagePainter(
-          image: m.image,
-          x: c.x / sizeScale,
-          y: c.y / sizeScale,
-          scale: sizeScale),
-    );
   }
 
   Widget _BuildPaintTextureRender(

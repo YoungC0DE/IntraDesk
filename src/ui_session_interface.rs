@@ -4,7 +4,6 @@ use crate::{
         MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_MASK,
         MOUSE_TYPE_TRACKPAD, MOUSE_TYPE_UP, MOUSE_TYPE_WHEEL,
     },
-    ui_interface::use_texture_render,
 };
 use async_trait::async_trait;
 use base::message_proto::*;
@@ -20,8 +19,6 @@ use hbb_common::{
     whoami, SessionID, Stream,
 };
 use rdev::{Event, EventType::*, KeyCode};
-#[cfg(feature = "vram")]
-use std::ffi::c_void;
 use std::{
     collections::HashMap,
     ops::{Deref, DerefMut},
@@ -376,17 +373,6 @@ impl<T: InvokeUiSession> Session<T> {
         self.lc.read().unwrap().remember
     }
 
-    pub fn update_supported_decodings(&self) {
-        let msg = self.lc.write().unwrap().update_supported_decodings();
-        self.send(Data::Message(msg));
-    }
-
-    pub fn use_texture_render_changed(&self) {
-        self.send(Data::ResetDecoder(None));
-        self.update_supported_decodings();
-        self.send(Data::Message(LoginConfigHandler::refresh()));
-    }
-
     pub fn restart_remote_device(&self) {
         let mut lc = self.lc.write().unwrap();
         lc.mark_restarting_remote_device();
@@ -563,10 +549,6 @@ impl<T: InvokeUiSession> Session<T> {
         let mut msg_out = Message::new();
         msg_out.set_misc(misc);
         self.send(Data::Message(msg_out));
-
-        if !use_texture_render() {
-            self.capture_displays(vec![], vec![], vec![display]);
-        }
     }
 
     pub fn enter(&self, keyboard_mode: String) {
@@ -1213,10 +1195,6 @@ pub trait InvokeUiSession: Send + Sync + Clone + 'static + Sized + Default {
     fn msgbox(&self, msgtype: &str, title: &str, text: &str, link: &str, retry: bool);
     fn cancel_msgbox(&self, tag: &str);
     fn portable_service_running(&self, running: bool);
-    fn get_rgba(&self, display: usize) -> *const u8;
-    fn next_rgba(&self, display: usize);
-    #[cfg(feature = "vram")]
-    fn on_texture(&self, display: usize, texture: *mut c_void);
     fn set_multiple_windows_session(&self, sessions: Vec<WindowsSession>);
     fn set_current_display(&self, disp_idx: i32);
     fn is_multi_ui_session(&self) -> bool;

@@ -13,7 +13,7 @@ use crate::{
     aom::{self, AomDecoder, AomEncoder, AomEncoderConfig},
     common::GoogleImage,
     vpxcodec::{self, VpxDecoder, VpxDecoderConfig, VpxEncoder, VpxEncoderConfig, VpxVideoCodecId},
-    CodecFormat, EncodeInput, EncodeYuvFormat, ImageRgb, ImageTexture,
+    CodecFormat, EncodeInput, EncodeYuvFormat, ImageRgb,
 };
 
 use base::message_proto::{
@@ -24,7 +24,7 @@ use hbb_common::config::option2bool;
 use hbb_common::{
     anyhow::anyhow,
     bail,
-    config::{Config, PeerConfig},
+    config::Config,
     lazy_static, log,
     sysinfo::System,
     ResultType,
@@ -100,10 +100,6 @@ pub struct Decoder {
     h264_ram: Option<HwRamDecoder>,
     #[cfg(feature = "hwcodec")]
     h265_ram: Option<HwRamDecoder>,
-    #[cfg(feature = "vram")]
-    h264_vram: Option<VRamDecoder>,
-    #[cfg(feature = "vram")]
-    h265_vram: Option<VRamDecoder>,
     format: CodecFormat,
     valid: bool,
     #[cfg(feature = "hwcodec")]
@@ -191,7 +187,7 @@ impl Encoder {
         #[allow(unused_mut)]
         let mut h265vram_encoding = false;
         #[cfg(feature = "vram")]
-        if enable_vram_option(true) {
+        if enable_vram_option() {
             if _all_support_h264_decoding {
                 if VRamEncoder::available(CodecFormat::H264).len() > 0 {
                     h264vram_encoding = true;
@@ -335,7 +331,7 @@ impl Encoder {
             encoding.h265 |= HwRamEncoder::try_get(CodecFormat::H265).is_some();
         }
         #[cfg(feature = "vram")]
-        if enable_vram_option(true) {
+        if enable_vram_option() {
             encoding.h264 |= VRamEncoder::available(CodecFormat::H264).len() > 0;
             encoding.h265 |= VRamEncoder::available(CodecFormat::H265).len() > 0;
         }
@@ -409,14 +405,7 @@ impl Encoder {
 }
 
 impl Decoder {
-    pub fn supported_decodings(
-        id_for_perfer: Option<&str>,
-        _use_texture_render: bool,
-        _luid: Option<i64>,
-        mark_unsupported: &Vec<CodecFormat>,
-    ) -> SupportedDecoding {
-        let (prefer, prefer_chroma) = Self::preference(id_for_perfer);
-
+    pub fn supported_decodings(mark_unsupported: &Vec<CodecFormat>) -> SupportedDecoding {
         #[allow(unused_mut)]
         let mut decoding = SupportedDecoding {
             ability_vp8: 1,
@@ -428,8 +417,8 @@ impl Decoder {
                 ..Default::default()
             })
             .into(),
-            prefer: prefer.into(),
-            prefer_chroma: prefer_chroma.into(),
+            prefer: PreferCodec::Auto.into(),
+            prefer_chroma: Chroma::I420.into(),
             ..Default::default()
         };
         #[cfg(feature = "hwcodec")]
@@ -440,19 +429,6 @@ impl Decoder {
                 0
             };
             decoding.ability_h265 |= if HwRamDecoder::try_get(CodecFormat::H265).is_some() {
-                1
-            } else {
-                0
-            };
-        }
-        #[cfg(feature = "vram")]
-        if enable_vram_option(false) && _use_texture_render {
-            decoding.ability_h264 |= if VRamDecoder::available(CodecFormat::H264, _luid).len() > 0 {
-                1
-            } else {
-                0
-            };
-            decoding.ability_h265 |= if VRamDecoder::available(CodecFormat::H265, _luid).len() > 0 {
                 1
             } else {
                 0
@@ -471,13 +447,11 @@ impl Decoder {
         decoding
     }
 
-    pub fn new(format: CodecFormat, _luid: Option<i64>) -> Decoder {
-        log::info!("try create new decoder, format: {format:?}, _luid: {_luid:?}");
+    pub fn new(format: CodecFormat) -> Decoder {
+        log::info!("try create new decoder, format: {format:?}");
         let (mut vp8, mut vp9, mut av1) = (None, None, None);
         #[cfg(feature = "hwcodec")]
         let (mut h264_ram, mut h265_ram) = (None, None);
-        #[cfg(feature = "vram")]
-        let (mut h264_vram, mut h265_vram) = (None, None);
         let mut valid = false;
 
         match format {
@@ -507,14 +481,6 @@ impl Decoder {
                 valid = av1.is_some();
             }
             CodecFormat::H264 => {
-                #[cfg(feature = "vram")]
-                if !valid && enable_vram_option(false) && _luid.clone().unwrap_or_default() != 0 {
-                    match VRamDecoder::new(format, _luid) {
-                        Ok(v) => h264_vram = Some(v),
-                        Err(e) => log::error!("create H264 vram decoder failed: {}", e),
-                    }
-                    valid = h264_vram.is_some();
-                }
                 #[cfg(feature = "hwcodec")]
                 if !valid {
                     match HwRamDecoder::new(format) {
@@ -525,14 +491,6 @@ impl Decoder {
                 }
             }
             CodecFormat::H265 => {
-                #[cfg(feature = "vram")]
-                if !valid && enable_vram_option(false) && _luid.clone().unwrap_or_default() != 0 {
-                    match VRamDecoder::new(format, _luid) {
-                        Ok(v) => h265_vram = Some(v),
-                        Err(e) => log::error!("create H265 vram decoder failed: {}", e),
-                    }
-                    valid = h265_vram.is_some();
-                }
                 #[cfg(feature = "hwcodec")]
                 if !valid {
                     match HwRamDecoder::new(format) {
@@ -559,10 +517,6 @@ impl Decoder {
             h264_ram,
             #[cfg(feature = "hwcodec")]
             h265_ram,
-            #[cfg(feature = "vram")]
-            h264_vram,
-            #[cfg(feature = "vram")]
-            h265_vram,
             format,
             valid,
             #[cfg(feature = "hwcodec")]
@@ -583,8 +537,6 @@ impl Decoder {
         &mut self,
         frame: &video_frame::Union,
         rgb: &mut ImageRgb,
-        _texture: &mut ImageTexture,
-        _pixelbuffer: &mut bool,
         chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         match frame {
@@ -609,29 +561,17 @@ impl Decoder {
                     bail!("av1 decoder not available");
                 }
             }
-            #[cfg(any(feature = "hwcodec", feature = "vram"))]
+            #[cfg(feature = "hwcodec")]
             video_frame::Union::H264s(h264s) => {
                 *chroma = Some(Chroma::I420);
-                #[cfg(feature = "vram")]
-                if let Some(decoder) = &mut self.h264_vram {
-                    *_pixelbuffer = false;
-                    return Decoder::handle_vram_video_frame(decoder, h264s, _texture);
-                }
-                #[cfg(feature = "hwcodec")]
                 if let Some(decoder) = &mut self.h264_ram {
                     return Decoder::handle_hwram_video_frame(decoder, h264s, rgb, &mut self.i420);
                 }
                 Err(anyhow!("don't support h264!"))
             }
-            #[cfg(any(feature = "hwcodec", feature = "vram"))]
+            #[cfg(feature = "hwcodec")]
             video_frame::Union::H265s(h265s) => {
                 *chroma = Some(Chroma::I420);
-                #[cfg(feature = "vram")]
-                if let Some(decoder) = &mut self.h265_vram {
-                    *_pixelbuffer = false;
-                    return Decoder::handle_vram_video_frame(decoder, h265s, _texture);
-                }
-                #[cfg(feature = "hwcodec")]
                 if let Some(decoder) = &mut self.h265_ram {
                     return Decoder::handle_hwram_video_frame(decoder, h265s, rgb, &mut self.i420);
                 }
@@ -715,57 +655,6 @@ impl Decoder {
         return Ok(ret);
     }
 
-    #[cfg(feature = "vram")]
-    fn handle_vram_video_frame(
-        decoder: &mut VRamDecoder,
-        frames: &EncodedVideoFrames,
-        texture: &mut ImageTexture,
-    ) -> ResultType<bool> {
-        let mut ret = false;
-        for h26x in frames.frames.iter() {
-            for image in decoder.decode(&h26x.data)? {
-                *texture = ImageTexture {
-                    texture: image.frame.texture,
-                    w: image.frame.width as _,
-                    h: image.frame.height as _,
-                };
-                ret = true;
-            }
-        }
-        return Ok(ret);
-    }
-
-    // rgb [in/out] fmt and stride must be set in ImageRgb
-
-    fn preference(id: Option<&str>) -> (PreferCodec, Chroma) {
-        let id = id.unwrap_or_default();
-        if id.is_empty() {
-            return (PreferCodec::Auto, Chroma::I420);
-        }
-        let options = PeerConfig::load(id).options;
-        let codec = options
-            .get("codec-preference")
-            .map_or("".to_owned(), |c| c.to_owned());
-        let codec = if codec == "vp8" {
-            PreferCodec::VP8
-        } else if codec == "vp9" {
-            PreferCodec::VP9
-        } else if codec == "av1" {
-            PreferCodec::AV1
-        } else if codec == "h264" {
-            PreferCodec::H264
-        } else if codec == "h265" {
-            PreferCodec::H265
-        } else {
-            PreferCodec::Auto
-        };
-        let chroma = if options.get("i444") == Some(&"Y".to_string()) {
-            Chroma::I444
-        } else {
-            Chroma::I420
-        };
-        (codec, chroma)
-    }
 }
 
 #[cfg(feature = "hwcodec")]
@@ -781,32 +670,13 @@ pub fn enable_hwcodec_option() -> bool {
     false
 }
 #[cfg(feature = "vram")]
-pub fn enable_vram_option(encode: bool) -> bool {
+pub fn enable_vram_option() -> bool {
     use base::config::keys::OPTION_ENABLE_HWCODEC;
 
-    if cfg!(windows) {
-        let enable = option2bool(
-            OPTION_ENABLE_HWCODEC,
-            &Config::get_option(OPTION_ENABLE_HWCODEC),
-        );
-        if encode {
-            enable && enable_directx_capture()
-        } else {
-            enable && allow_d3d_render()
-        }
-    } else {
-        false
-    }
-}
-
-pub fn enable_directx_capture() -> bool {
-    use base::config::keys::OPTION_ENABLE_DIRECTX_CAPTURE as OPTION;
-    option2bool(OPTION, &Config::get_option(OPTION))
-}
-
-pub fn allow_d3d_render() -> bool {
-    use base::config::keys::OPTION_ALLOW_D3D_RENDER as OPTION;
-    option2bool(OPTION, &hbb_common::config::LocalConfig::get_option(OPTION))
+    option2bool(
+        OPTION_ENABLE_HWCODEC,
+        &Config::get_option(OPTION_ENABLE_HWCODEC),
+    )
 }
 
 pub const BR_BEST: f32 = 1.5;

@@ -21,11 +21,6 @@ pub const OPTION_REMOTE_MENUBAR_DRAG_LEFT: &str = "remote-menubar-drag-left";
 pub const OPTION_REMOTE_MENUBAR_DRAG_RIGHT: &str = "remote-menubar-drag-right";
 pub const OPTION_HIDE_AB_TAGS_PANEL: &str = "hideAbTagsPanel";
 pub const OPTION_ENABLE_CONFIRM_CLOSING_TABS: &str = "enable-confirm-closing-tabs";
-pub const OPTION_TEXTURE_RENDER: &str = "use-texture-render";
-// Internal health record written by the texture-render watchdog/probe;
-// "failed-*" flips the texture-render default to opt-in on this machine.
-pub const OPTION_TEXTURE_RENDER_HEALTH: &str = "texture-render-health";
-pub const OPTION_ALLOW_D3D_RENDER: &str = "allow-d3d-render";
 pub const OPTION_SYNC_AB_WITH_RECENT_SESSIONS: &str = "sync-ab-with-recent-sessions";
 pub const OPTION_SYNC_AB_TAGS: &str = "sync-ab-tags";
 pub const OPTION_FILTER_AB_BY_INTERSECTION: &str = "filter-ab-by-intersection";
@@ -41,7 +36,6 @@ pub const OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION: &str = "allow-remote-config-m
 pub const OPTION_ENABLE_LAN_DISCOVERY: &str = "enable-lan-discovery";
 pub const OPTION_DIRECT_ACCESS_PORT: &str = "direct-access-port";
 pub const OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN: &str = "allow-only-conn-window-open";
-pub const OPTION_ENABLE_ABR: &str = "enable-abr";
 pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-render";
 pub const OPTION_ENABLE_HWCODEC: &str = "enable-hwcodec";
 pub const OPTION_TEMPORARY_PASSWORD_LENGTH: &str = "temporary-password-length";
@@ -53,7 +47,6 @@ pub const OPTION_PRESET_ADDRESS_BOOK_NOTE: &str = "preset-address-book-note";
 pub const OPTION_PRESET_DEVICE_USERNAME: &str = "preset-device-username";
 pub const OPTION_PRESET_DEVICE_NAME: &str = "preset-device-name";
 pub const OPTION_PRESET_NOTE: &str = "preset-note";
-pub const OPTION_ENABLE_DIRECTX_CAPTURE: &str = "enable-directx-capture";
 pub const OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE: &str =
     "enable-android-software-encoding-half-scale";
 pub const OPTION_AV1_TEST: &str = "av1-test";
@@ -161,8 +154,6 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_THEME,
     OPTION_LANGUAGE,
     OPTION_ENABLE_CONFIRM_CLOSING_TABS,
-    OPTION_TEXTURE_RENDER,
-    OPTION_ALLOW_D3D_RENDER,
     OPTION_SYNC_AB_WITH_RECENT_SESSIONS,
     OPTION_SYNC_AB_TAGS,
     OPTION_FILTER_AB_BY_INTERSECTION,
@@ -207,7 +198,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ENABLE_LAN_DISCOVERY,
     OPTION_DIRECT_ACCESS_PORT,
     OPTION_ALLOW_ONLY_CONN_WINDOW_OPEN,
-    OPTION_ENABLE_ABR,
     OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER,
     OPTION_ENABLE_HWCODEC,
     OPTION_TEMPORARY_PASSWORD_LENGTH,
@@ -219,7 +209,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_PRESET_DEVICE_USERNAME,
     OPTION_PRESET_DEVICE_NAME,
     OPTION_PRESET_NOTE,
-    OPTION_ENABLE_DIRECTX_CAPTURE,
     OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE,
     OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
 ];

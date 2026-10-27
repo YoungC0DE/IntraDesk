@@ -73,28 +73,6 @@ pub fn get_option<T: AsRef<str>>(key: T) -> String {
 }
 
 #[inline]
-pub fn use_texture_render() -> bool {
-
-
-
-    {
-        if !cfg!(feature = "flutter") {
-            return false;
-        }
-        // https://learn.microsoft.com/en-us/windows/win32/sysinfo/targeting-your-application-at-windows-8-1
-        #[cfg(debug_assertions)]
-        let default_texture = true;
-        #[cfg(not(debug_assertions))]
-        let default_texture = crate::platform::is_win_10_or_greater();
-        if default_texture {
-            LocalConfig::get_option(keys::OPTION_TEXTURE_RENDER) != "N"
-        } else {
-            return LocalConfig::get_option(keys::OPTION_TEXTURE_RENDER) == "Y";
-        }
-    }
-}
-
-#[inline]
 pub fn is_option_fixed(key: &str) -> bool {
     config::OVERWRITE_DISPLAY_SETTINGS
         .read()
@@ -561,26 +539,6 @@ pub fn has_hwcodec() -> bool {
 #[inline]
 pub fn has_vram() -> bool {
     cfg!(feature = "vram")
-}
-
-#[inline]
-pub fn supported_hwdecodings() -> (bool, bool) {
-    let decoding =
-        scrap::codec::Decoder::supported_decodings(None, use_texture_render(), None, &vec![]);
-    #[allow(unused_mut)]
-    let (mut h264, mut h265) = (decoding.ability_h264 > 0, decoding.ability_h265 > 0);
-    #[cfg(feature = "vram")]
-    {
-        // supported_decodings check runtime luid
-        let vram = scrap::vram::VRamDecoder::possible_available_without_check();
-        if vram.0 {
-            h264 = true;
-        }
-        if vram.1 {
-            h265 = true;
-        }
-    }
-    (h264, h265)
 }
 
 #[inline]

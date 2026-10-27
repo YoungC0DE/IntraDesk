@@ -324,8 +324,6 @@ class FfiModel with ChangeNotifier {
         _handleSyncPeerOption(evt, peerId);
       } else if (name == 'follow_current_display') {
         handleFollowCurrentDisplay(evt, sessionId, peerId);
-      } else if (name == 'use_texture_render') {
-        _handleUseTextureRender(evt, sessionId, peerId);
       } else if (name == 'exit_relative_mouse_mode') {
         // Handle exit shortcut from rdev grab loop (Ctrl+Alt on Win/Linux, Cmd+G on macOS)
         parent.target?.inputModel.exitRelativeMouseModeWithKeyRelease();
@@ -338,15 +336,6 @@ class FfiModel with ChangeNotifier {
         debugPrint('Event is not handled in the fixed branch: $name');
       }
     };
-  }
-
-  _handleUseTextureRender(
-      Map<String, dynamic> evt, SessionID sessionId, String peerId) {
-    parent.target?.imageModel.setUseTextureRender(evt['v'] == 'Y');
-    waitForFirstImage.value = true;
-    isRefreshing = true;
-    showConnectedWaitingForImage(parent.target!.dialogManager, sessionId,
-        'success', 'Successful', kMsgboxTextWaitingForImage);
   }
 
   _handleSyncPeerOption(Map<String, dynamic> evt, String peer) {
@@ -1257,8 +1246,6 @@ class ImageModel with ChangeNotifier {
 
   late final SessionID sessionId;
 
-  bool _useTextureRender = false;
-
   WeakReference<FFI> parent;
 
   final List<Function(String)> callbacksOnFirstImage = [];
@@ -1267,11 +1254,7 @@ class ImageModel with ChangeNotifier {
     sessionId = parent.target!.sessionId;
   }
 
-  get useTextureRender => _useTextureRender;
-
   addCallbackOnFirstImage(Function(String) cb) => callbacksOnFirstImage.add(cb);
-
-  clearImage() => _image = null;
 
   bool _webDecodingRgba = false;
   final List<Uint8List> _webRgbaList = List.empty(growable: true);
@@ -1292,15 +1275,6 @@ class ImageModel with ChangeNotifier {
       debugPrint('onRgba error: $e');
     }
     _webDecodingRgba = false;
-  }
-
-  onRgba(int display, Uint8List rgba) async {
-    try {
-      await decodeAndUpdate(display, rgba);
-    } catch (e) {
-      debugPrint('onRgba error: $e');
-    }
-    platformFFI.nextRgba(sessionId, display);
   }
 
   // web only: image already created from a decoded WebCodecs frame
@@ -1367,19 +1341,6 @@ class ImageModel with ChangeNotifier {
     final xscale = size.width / _image!.width;
     final yscale = size.height / _image!.height;
     return min(xscale, yscale) / 1.5;
-  }
-
-  updateUserTextureRender() {
-    final preValue = _useTextureRender;
-    _useTextureRender = bind.mainGetUseTextureRender();
-    if (preValue != _useTextureRender) {
-      notifyListeners();
-    }
-  }
-
-  setUseTextureRender(bool value) {
-    _useTextureRender = value;
-    notifyListeners();
   }
 
   void disposeImage() {
@@ -3346,8 +3307,6 @@ class FFI {
 
     final cb = ffiModel.startEventListener(sessionId, id);
 
-    imageModel.updateUserTextureRender();
-    final hasGpuTextureRender = bind.mainHasGpuTextureRender();
     final SimpleWrapper<bool> isToNewWindowNotified = SimpleWrapper(false);
     // Preserved for the rgba data.
     stream.listen((message) {
@@ -3394,34 +3353,10 @@ class FFI {
           if (event != null) {
             await cb(event);
           }
-        } else if (message is EventToUI_Rgba) {
-          final display = message.field0;
-          // Fetch the image buffer from rust codes.
-          final sz = platformFFI.getRgbaSize(sessionId, display);
-          if (sz == 0) {
-            platformFFI.nextRgba(sessionId, display);
-            return;
-          }
-          final rgba = platformFFI.getRgba(sessionId, display, sz);
-          if (rgba != null) {
-            onEvent2UIRgba();
-            await imageModel.onRgba(display, rgba);
-          } else {
-            platformFFI.nextRgba(sessionId, display);
-          }
         } else if (message is EventToUI_Cursor) {
           await ffiModel.handleCursorData(message.id, message.hotx,
               message.hoty, message.width, message.height, message.colors);
         } else if (message is EventToUI_Texture) {
-          final display = message.field0;
-          final gpuTexture = message.field1;
-          debugPrint(
-              "EventToUI_Texture display:$display, gpuTexture:$gpuTexture");
-          if (gpuTexture && !hasGpuTextureRender) {
-            debugPrint('the gpuTexture is not supported.');
-            return;
-          }
-          textureModel.setTextureType(display: display, gpuTexture: gpuTexture);
           onEvent2UIRgba();
         }
       }();
@@ -3592,7 +3527,6 @@ class PeerInfo with ChangeNotifier {
 
   bool get isSupportMultiDisplay =>
       isSupportMultiUiSession;
-  bool get forceTextureRender => currentDisplay == kAllDisplayValue;
 
   bool get cursorEmbedded => tryGetDisplay()?.cursorEmbedded ?? false;
 

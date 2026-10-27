@@ -27,9 +27,8 @@ fn automatic_floor_preserves_lower_custom_limits() {
         for abr in [false, true] {
             for timeout in [false, true] {
                 let mut qos = super::smoke::session(limit, Quality::Balanced);
-                qos.abr_config = abr;
                 qos.new_display("test".to_owned());
-                qos.set_support_changing_quality("test", true);
+                qos.set_support_changing_quality("test", abr);
                 for _ in 0..90 {
                     qos.user_network_delay(1, 10);
                 }

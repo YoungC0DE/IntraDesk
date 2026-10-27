@@ -15,10 +15,7 @@ use hbb_common::{
     rendezvous_proto::ConnType,
     ResultType,
 };
-use base::{
-    config::keys,
-    fs,
-};
+use base::fs;
 use std::{
     collections::HashMap,
     sync::{
@@ -62,8 +59,7 @@ pub fn stop_global_event_stream(app_type: String) {
 }
 pub enum EventToUI {
     Event(String),
-    Rgba(usize),
-    Texture(usize, bool), // (display, gpu_texture)
+    Texture(usize), // display
     // A shape's RGBA as bytes: as text it was four times the size and parsed on the UI thread.
     // The id stays text, since the peer's ids can exceed Dart's int.
     Cursor {
@@ -825,10 +821,6 @@ pub fn main_get_local_option(key: String) -> SyncReturn<String> {
     SyncReturn(get_local_option(key))
 }
 
-pub fn main_get_use_texture_render() -> SyncReturn<bool> {
-    SyncReturn(use_texture_render())
-}
-
 pub fn main_get_env(key: String) -> SyncReturn<String> {
     SyncReturn(std::env::var(key).unwrap_or_default())
 }
@@ -863,29 +855,7 @@ pub fn main_set_env(key: String, value: Option<String>) -> SyncReturn<()> {
 }
 
 pub fn main_set_local_option(key: String, value: String) {
-    let is_texture_render_key = key.eq(keys::OPTION_TEXTURE_RENDER);
-    let is_d3d_render_key = key.eq(keys::OPTION_ALLOW_D3D_RENDER);
-    set_local_option(key, value.clone());
-    let is_render_target = |session: &crate::flutter::FlutterSession| session.is_default();
-    if is_texture_render_key {
-        let session_event = [("v", &value)];
-        for session in sessions::get_sessions() {
-            if !is_render_target(&session) {
-                continue;
-            }
-            session.push_event("use_texture_render", &session_event, &[]);
-            session.use_texture_render_changed();
-            session.ui_handler.update_use_texture_render();
-        }
-    }
-    if is_d3d_render_key {
-        for session in sessions::get_sessions() {
-            if !is_render_target(&session) {
-                continue;
-            }
-            session.update_supported_decodings();
-        }
-    }
+    set_local_option(key, value);
 }
 
 // We do use use `main_get_local_option` and `main_set_local_option`.
@@ -1292,13 +1262,6 @@ pub fn main_has_vram() -> SyncReturn<bool> {
     SyncReturn(has_vram())
 }
 
-pub fn main_supported_hwdecodings() -> SyncReturn<String> {
-    let decoding = supported_hwdecodings();
-    let msg = HashMap::from([("h264", decoding.0), ("h265", decoding.1)]);
-
-    SyncReturn(serde_json::ser::to_string(&msg).unwrap_or("".to_owned()))
-}
-
 pub fn main_is_root() -> bool {
     is_root()
 }
@@ -1575,30 +1538,12 @@ pub fn translate(name: String, locale: String) -> SyncReturn<String> {
     SyncReturn(crate::client::translate_locale(name, &locale))
 }
 
-pub fn session_get_rgba_size(session_id: SessionID, display: usize) -> SyncReturn<usize> {
-    SyncReturn(super::flutter::session_get_rgba_size(session_id, display))
-}
-
-pub fn session_next_rgba(session_id: SessionID, display: usize) -> SyncReturn<()> {
-    SyncReturn(super::flutter::session_next_rgba(session_id, display))
-}
-
 pub fn session_register_pixelbuffer_texture(
     session_id: SessionID,
     display: usize,
     ptr: usize,
 ) -> SyncReturn<()> {
     SyncReturn(super::flutter::session_register_pixelbuffer_texture(
-        session_id, display, ptr,
-    ))
-}
-
-pub fn session_register_gpu_texture(
-    session_id: SessionID,
-    display: usize,
-    ptr: usize,
-) -> SyncReturn<()> {
-    SyncReturn(super::flutter::session_register_gpu_texture(
         session_id, display, ptr,
     ))
 }
@@ -1687,10 +1632,6 @@ pub fn main_hide_dock() -> SyncReturn<bool> {
 pub fn main_has_file_clipboard() -> SyncReturn<bool> {
     let ret = cfg!(any(target_os = "windows", feature = "unix-file-copy-paste",));
     SyncReturn(ret)
-}
-
-pub fn main_has_gpu_texture_render() -> SyncReturn<bool> {
-    SyncReturn(cfg!(feature = "vram"))
 }
 
 pub fn cm_init() {

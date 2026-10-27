@@ -65,22 +65,6 @@ impl ImageRgb {
     }
 }
 
-pub struct ImageTexture {
-    pub texture: *mut c_void,
-    pub w: usize,
-    pub h: usize,
-}
-
-impl Default for ImageTexture {
-    fn default() -> Self {
-        Self {
-            texture: std::ptr::null_mut(),
-            w: 0,
-            h: 0,
-        }
-    }
-}
-
 #[inline]
 pub fn would_block_if_equal(old: &mut Vec<u8>, b: &[u8]) -> std::io::Result<()> {
     // does this really help?

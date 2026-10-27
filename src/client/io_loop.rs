@@ -38,7 +38,6 @@ use hbb_common::{tokio::sync::Mutex as TokioMutex, ResultType};
 use scrap::CodecFormat;
 use std::{
     collections::{HashMap, HashSet},
-    ffi::c_void,
     path::PathBuf,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -1671,17 +1670,9 @@ impl<T: InvokeUiSession> Remote<T> {
             decode_fps,
             self.chroma.clone(),
             discard_queue,
-            move |display: usize,
-                  data: &mut scrap::ImageRgb,
-                  _texture: *mut c_void,
-                  pixelbuffer: bool| {
+            move |display: usize, data: &mut scrap::ImageRgb| {
                 *frame_count.write().unwrap() += 1;
-                if pixelbuffer {
-                    handler.on_rgba(display, data);
-                } else {
-                    #[cfg(feature = "vram")]
-                    handler.on_texture(display, _texture);
-                }
+                handler.on_rgba(display, data);
             },
         );
         self.video_threads.insert(display, video_thread);

@@ -26,9 +26,8 @@ fn stable_path_change_recovers_without_reconnecting() {
     for abr in [false, true] {
         for delay in [310, 410, 500] {
             let mut qos = super::smoke::session(FPS, Quality::Balanced);
-            qos.abr_config = abr;
             qos.new_display("baseline".to_owned());
-            qos.set_support_changing_quality("baseline", true);
+            qos.set_support_changing_quality("baseline", abr);
             let second = |qos: &mut VideoQoS, delay| {
                 qos.advance_ms(1000);
                 let bitrate = (6000.0 * qos.ratio()) as u32;

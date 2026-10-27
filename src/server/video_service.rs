@@ -396,10 +396,6 @@ fn run(vs: VideoService) -> ResultType<()> {
         c.set_gdi();
         log::info!("dxgi recovery exhausted, fall back to gdi");
     }
-    if !scrap::codec::enable_directx_capture() && !c.is_gdi() {
-        log::info!("disable dxgi with option, fall back to gdi");
-        c.set_gdi();
-    }
     let mut video_qos = VIDEO_QOS.lock().unwrap();
     let mut spf = video_qos.spf();
     let mut quality = video_qos.ratio();

@@ -9,7 +9,7 @@ use hbb_common::dlopen::{
     Error as LibError,
 };
 use hbb_common::{
-    anyhow::anyhow, bail, config::LocalConfig, log,
+    bail, config::LocalConfig, log,
     rendezvous_proto::ConnType, ResultType,
 };
 use base::message_proto::*;
@@ -20,9 +20,8 @@ use std::{
     collections::{HashMap, HashSet},
     ffi::CString,
     os::raw::{c_char, c_int, c_void},
-    str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::AtomicUsize,
         Arc, RwLock,
     },
 };
@@ -52,9 +51,6 @@ lazy_static::lazy_static! {
 
 
 
-lazy_static::lazy_static! {
-    pub static ref TEXTURE_GPU_RENDERER_PLUGIN: Result<Library, LibError> = load_plugin_in_app_path("flutter_gpu_texture_renderer_plugin.dll");
-}
 
 // Move this function into `src/platform/windows.rs` if there're more calls to load plugins.
 // Load dll with full path.
@@ -175,38 +171,22 @@ struct SessionHandler {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum RenderType {
     PixelBuffer,
-    #[cfg(feature = "vram")]
-    Texture,
 }
 
 #[derive(Clone)]
 pub struct FlutterHandler {
     // ui session id -> display handler data
     session_handlers: Arc<RwLock<HashMap<SessionID, SessionHandler>>>,
-    display_rgbas: Arc<RwLock<HashMap<usize, RgbaData>>>,
     peer_info: Arc<RwLock<PeerInfo>>,
-    use_texture_render: Arc<AtomicBool>,
 }
 
 impl Default for FlutterHandler {
     fn default() -> Self {
         Self {
             session_handlers: Default::default(),
-            display_rgbas: Default::default(),
             peer_info: Default::default(),
-            use_texture_render: Arc::new(
-                AtomicBool::new(crate::ui_interface::use_texture_render()),
-            ),
         }
     }
-}
-
-#[derive(Default, Clone)]
-struct RgbaData {
-    // SAFETY: [rgba] is guarded by [rgba_valid], and it's safe to reach [rgba] with `rgba_valid == true`.
-    // We must check the `rgba_valid` before reading [rgba].
-    data: Vec<u8>,
-    valid: bool,
 }
 
 pub type FlutterRgbaRendererPluginOnRgba = unsafe extern "C" fn(
@@ -218,21 +198,12 @@ pub type FlutterRgbaRendererPluginOnRgba = unsafe extern "C" fn(
     dst_rgba_stride: c_int,
 );
 
-#[cfg(feature = "vram")]
-pub type FlutterGpuTextureRendererPluginCApiSetTexture =
-    unsafe extern "C" fn(output: *mut c_void, texture: *mut c_void);
-
-#[cfg(feature = "vram")]
-pub type FlutterGpuTextureRendererPluginCApiGetAdapterLuid = unsafe extern "C" fn() -> i64;
-
 pub(super) type TextureRgbaPtr = usize;
 
 struct DisplaySessionInfo {
     // TextureRgba pointer in flutter native.
     texture_rgba_ptr: TextureRgbaPtr,
     size: (usize, usize),
-    #[cfg(feature = "vram")]
-    gpu_output_ptr: usize,
     notify_render_type: Option<RenderType>,
 }
 
@@ -242,8 +213,6 @@ struct VideoRenderer {
     is_support_multi_ui_session: bool,
     map_display_sessions: Arc<RwLock<HashMap<usize, DisplaySessionInfo>>>,
     on_rgba_func: Option<Symbol<'static, FlutterRgbaRendererPluginOnRgba>>,
-    #[cfg(feature = "vram")]
-    on_texture_func: Option<Symbol<'static, FlutterGpuTextureRendererPluginCApiSetTexture>>,
 }
 
 impl Default for VideoRenderer {
@@ -266,34 +235,10 @@ impl Default for VideoRenderer {
                 None
             }
         };
-        #[cfg(feature = "vram")]
-        let on_texture_func = match &*TEXTURE_GPU_RENDERER_PLUGIN {
-            Ok(lib) => {
-                let find_sym_res = unsafe {
-                    lib.symbol::<FlutterGpuTextureRendererPluginCApiSetTexture>(
-                        "FlutterGpuTextureRendererPluginCApiSetTexture",
-                    )
-                };
-                match find_sym_res {
-                    Ok(sym) => Some(sym),
-                    Err(e) => {
-                        log::error!("Failed to find symbol FlutterGpuTextureRendererPluginCApiSetTexture, {e}");
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                log::error!("Failed to load texture gpu renderer plugin, {e}");
-                None
-            }
-        };
-
         Self {
             map_display_sessions: Default::default(),
             is_support_multi_ui_session: false,
             on_rgba_func,
-            #[cfg(feature = "vram")]
-            on_texture_func,
         }
     }
 }
@@ -311,8 +256,6 @@ impl VideoRenderer {
                 DisplaySessionInfo {
                     texture_rgba_ptr: usize::default(),
                     size: (width, height),
-                    #[cfg(feature = "vram")]
-                    gpu_output_ptr: usize::default(),
                     notify_render_type: None,
                 },
             );
@@ -325,10 +268,6 @@ impl VideoRenderer {
             if let Some(info) = sessions_lock.get_mut(&display) {
                 if info.texture_rgba_ptr != usize::default() {
                     info.texture_rgba_ptr = usize::default();
-                }
-                #[cfg(feature = "vram")]
-                if info.gpu_output_ptr != usize::default() {
-                    return;
                 }
             }
             sessions_lock.remove(&display);
@@ -352,48 +291,6 @@ impl VideoRenderer {
                         DisplaySessionInfo {
                             texture_rgba_ptr: ptr as _,
                             size: (0, 0),
-                            #[cfg(feature = "vram")]
-                            gpu_output_ptr: usize::default(),
-                            notify_render_type: None,
-                        },
-                    );
-                }
-            }
-        }
-    }
-
-    #[cfg(feature = "vram")]
-    pub fn register_gpu_output(&self, display: usize, ptr: usize) {
-        let mut sessions_lock = self.map_display_sessions.write().unwrap();
-        if ptr == 0 {
-            if let Some(info) = sessions_lock.get_mut(&display) {
-                if info.gpu_output_ptr != usize::default() {
-                    info.gpu_output_ptr = usize::default();
-                }
-                if info.texture_rgba_ptr != usize::default() {
-                    return;
-                }
-            }
-            sessions_lock.remove(&display);
-        } else {
-            if let Some(info) = sessions_lock.get_mut(&display) {
-                if info.gpu_output_ptr != usize::default() && info.gpu_output_ptr != ptr {
-                    log::error!(
-                        "gpu_output_ptr is not null and not equal to ptr, relace {} to {}",
-                        info.gpu_output_ptr,
-                        ptr
-                    );
-                }
-                info.gpu_output_ptr = ptr as _;
-                info.notify_render_type = None;
-            } else {
-                if ptr != usize::default() {
-                    sessions_lock.insert(
-                        display,
-                        DisplaySessionInfo {
-                            texture_rgba_ptr: usize::default(),
-                            size: (0, 0),
-                            gpu_output_ptr: ptr,
                             notify_render_type: None,
                         },
                     );
@@ -444,31 +341,6 @@ impl VideoRenderer {
         }
         if info.notify_render_type != Some(RenderType::PixelBuffer) {
             info.notify_render_type = Some(RenderType::PixelBuffer);
-            true
-        } else {
-            false
-        }
-    }
-
-    #[cfg(feature = "vram")]
-    pub fn on_texture(&self, display: usize, texture: *mut c_void) -> bool {
-        let mut write_lock = self.map_display_sessions.write().unwrap();
-        let opt_info = if !self.is_support_multi_ui_session {
-            write_lock.values_mut().next()
-        } else {
-            write_lock.get_mut(&display)
-        };
-        let Some(info) = opt_info else {
-            return false;
-        };
-        if info.gpu_output_ptr == usize::default() {
-            return false;
-        }
-        if let Some(func) = &self.on_texture_func {
-            unsafe { func(info.gpu_output_ptr as _, texture) };
-        }
-        if info.notify_render_type != Some(RenderType::Texture) {
-            info.notify_render_type = Some(RenderType::Texture);
             true
         } else {
             false
@@ -586,12 +458,6 @@ impl FlutterHandler {
             msg_vec.push(h);
         }
         serde_json::ser::to_string(&msg_vec).unwrap_or("".to_owned())
-    }
-
-    pub fn update_use_texture_render(&self) {
-        self.use_texture_render
-            .store(crate::ui_interface::use_texture_render(), Ordering::Relaxed);
-        self.display_rgbas.write().unwrap().clear();
     }
 }
 
@@ -767,24 +633,10 @@ impl InvokeUiSession for FlutterHandler {
 
     #[inline]
     fn on_rgba(&self, display: usize, rgba: &mut scrap::ImageRgb) {
-        let use_texture_render = self.use_texture_render.load(Ordering::Relaxed);
-        self.on_rgba_flutter_texture_render(use_texture_render, display, rgba);
-        if !use_texture_render {
-            self.on_rgba_soft_render(display, rgba);
-        }
-    }
-
-
-    #[inline]
-    #[cfg(feature = "vram")]
-    fn on_texture(&self, display: usize, texture: *mut c_void) {
-        if !self.use_texture_render.load(Ordering::Relaxed) {
-            return;
-        }
         for (_, session) in self.session_handlers.read().unwrap().iter() {
-            if session.renderer.on_texture(display, texture) {
+            if session.renderer.on_rgba(display, rgba) {
                 if let Some(stream) = &session.event_stream {
-                    stream.add(EventToUI::Texture(display, true));
+                    stream.add(EventToUI::Texture(display));
                 }
             }
         }
@@ -934,97 +786,6 @@ impl InvokeUiSession for FlutterHandler {
             &[],
         );
     }
-
-    #[inline]
-    fn get_rgba(&self, _display: usize) -> *const u8 {
-        if let Some(rgba_data) = self.display_rgbas.read().unwrap().get(&_display) {
-            if rgba_data.valid {
-                return rgba_data.data.as_ptr();
-            }
-        }
-        std::ptr::null_mut()
-    }
-
-    #[inline]
-    fn next_rgba(&self, _display: usize) {
-        if let Some(rgba_data) = self.display_rgbas.write().unwrap().get_mut(&_display) {
-            rgba_data.valid = false;
-        }
-    }
-
-}
-
-impl FlutterHandler {
-    #[inline]
-    fn on_rgba_soft_render(&self, display: usize, rgba: &mut scrap::ImageRgb) {
-        // If the current rgba is not fetched by flutter, i.e., is valid.
-        // We give up sending a new event to flutter.
-        let mut rgba_write_lock = self.display_rgbas.write().unwrap();
-        if let Some(rgba_data) = rgba_write_lock.get_mut(&display) {
-            if rgba_data.valid {
-                return;
-            } else {
-                rgba_data.valid = true;
-            }
-            // Return the rgba buffer to the video handler for reusing allocated rgba buffer.
-            std::mem::swap::<Vec<u8>>(&mut rgba.raw, &mut rgba_data.data);
-        } else {
-            let mut rgba_data = RgbaData::default();
-            std::mem::swap::<Vec<u8>>(&mut rgba.raw, &mut rgba_data.data);
-            rgba_data.valid = true;
-            rgba_write_lock.insert(display, rgba_data);
-        }
-        drop(rgba_write_lock);
-
-        let mut is_sent = false;
-        let is_multi_sessions = self.is_multi_ui_session();
-        for h in self.session_handlers.read().unwrap().values() {
-            // The soft renderer does not support multi-displays session for now.
-            if h.displays.len() > 1 {
-                continue;
-            }
-            // If there're multiple ui sessions, we only notify the ui session that has the display.
-            if is_multi_sessions {
-                if !h.displays.contains(&display) {
-                    continue;
-                }
-            }
-            if let Some(stream) = &h.event_stream {
-                stream.add(EventToUI::Rgba(display));
-                is_sent = true;
-            }
-        }
-        // We need `is_sent` here. Because we use texture render for multi-displays session.
-        //
-        // Eg. We have two windows, one is display 1, the other is displays 0&1.
-        // When image of display 0 is received, we will not send the event.
-        //
-        // 1. "display 1" will not send the event.
-        // 2. "displays 0&1" will not send the event. Because it uses texutre render for now.
-        if !is_sent {
-            if let Some(rgba_data) = self.display_rgbas.write().unwrap().get_mut(&display) {
-                rgba_data.valid = false;
-            }
-        }
-    }
-
-    #[inline]
-    fn on_rgba_flutter_texture_render(
-        &self,
-        use_texture_render: bool,
-        display: usize,
-        rgba: &mut scrap::ImageRgb,
-    ) {
-        for (_, session) in self.session_handlers.read().unwrap().iter() {
-            if use_texture_render || session.displays.len() > 1 {
-                if session.renderer.on_rgba(display, rgba) {
-                    if let Some(stream) = &session.event_stream {
-                        stream.add(EventToUI::Texture(display, false));
-                    }
-                }
-            }
-        }
-    }
 }
 
 // This function is only used for the default connection session.
@@ -1079,7 +840,6 @@ pub fn session_add(
     session.lc.write().unwrap().initialize(
         id.to_owned(),
         conn_type,
-        get_adapter_luid(),
         conn_token,
     );
 
@@ -1124,11 +884,7 @@ pub fn session_start_(
     if let Some(session) = sessions::get_session_by_session_id(session_id) {
         let is_first_ui_session = session.session_handlers.read().unwrap().len() == 1;
         if !is_connected && is_first_ui_session {
-            log::info!(
-                "Session {} start, use texture render: {}",
-                id,
-                session.use_texture_render.load(Ordering::Relaxed)
-            );
+            log::info!("Session {} start", id);
             let session = (*session).clone();
             std::thread::spawn(move || {
                 let round = session.connection_round_state.lock().unwrap().new_round();
@@ -1345,44 +1101,6 @@ fn serialize_resolutions(resolutions: &Vec<Resolution>) -> String {
     serde_json::ser::to_string(&v).unwrap_or("".to_string())
 }
 
-fn char_to_session_id(c: *const char) -> ResultType<SessionID> {
-    if c.is_null() {
-        bail!("Session id ptr is null");
-    }
-    let cstr = unsafe { std::ffi::CStr::from_ptr(c as _) };
-    let str = cstr.to_str()?;
-    SessionID::from_str(str).map_err(|e| anyhow!("{:?}", e))
-}
-
-pub fn session_get_rgba_size(session_id: SessionID, display: usize) -> usize {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        return session
-            .display_rgbas
-            .read()
-            .unwrap()
-            .get(&display)
-            .map_or(0, |rgba| rgba.data.len());
-    }
-    0
-}
-
-#[no_mangle]
-pub extern "C" fn session_get_rgba(session_uuid_str: *const char, display: usize) -> *const u8 {
-    if let Ok(session_id) = char_to_session_id(session_uuid_str) {
-        if let Some(s) = sessions::get_session_by_session_id(&session_id) {
-            return s.ui_handler.get_rgba(display);
-        }
-    }
-
-    std::ptr::null()
-}
-
-pub fn session_next_rgba(session_id: SessionID, display: usize) {
-    if let Some(s) = sessions::get_session_by_session_id(&session_id) {
-        return s.ui_handler.next_rgba(display);
-    }
-}
-
 #[inline]
 pub fn session_set_size(session_id: SessionID, display: usize, width: usize, height: usize) {
     for s in sessions::get_sessions() {
@@ -1418,61 +1136,6 @@ pub fn session_register_pixelbuffer_texture(session_id: SessionID, display: usiz
             break;
         }
     }
-}
-
-#[inline]
-pub fn session_register_gpu_texture(_session_id: SessionID, _display: usize, _output_ptr: usize) {
-    #[cfg(feature = "vram")]
-    for s in sessions::get_sessions() {
-        if let Some(h) = s
-            .ui_handler
-            .session_handlers
-            .read()
-            .unwrap()
-            .get(&_session_id)
-        {
-            h.renderer.register_gpu_output(_display, _output_ptr);
-            break;
-        }
-    }
-}
-
-#[inline]
-#[cfg(not(feature = "vram"))]
-pub fn get_adapter_luid() -> Option<i64> {
-    None
-}
-
-#[cfg(feature = "vram")]
-pub fn get_adapter_luid() -> Option<i64> {
-    if !crate::ui_interface::use_texture_render() {
-        return None;
-    }
-    let get_adapter_luid_func = match &*TEXTURE_GPU_RENDERER_PLUGIN {
-        Ok(lib) => {
-            let find_sym_res = unsafe {
-                lib.symbol::<FlutterGpuTextureRendererPluginCApiGetAdapterLuid>(
-                    "FlutterGpuTextureRendererPluginCApiGetAdapterLuid",
-                )
-            };
-            match find_sym_res {
-                Ok(sym) => Some(sym),
-                Err(e) => {
-                    log::error!("Failed to find symbol FlutterGpuTextureRendererPluginCApiGetAdapterLuid, {e}");
-                    None
-                }
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to load texture gpu renderer plugin, {e}");
-            None
-        }
-    };
-    let adapter_luid = match get_adapter_luid_func {
-        Some(get_adapter_luid_func) => unsafe { Some(get_adapter_luid_func()) },
-        None => Default::default(),
-    };
-    return adapter_luid;
 }
 
 #[inline]
@@ -1780,8 +1443,6 @@ pub mod sessions {
                     // This operation will also cause the peer to send a switch display message.
                     // The switch display message will contain `SupportedResolutions`, which is useful when changing resolutions.
                     s.switch_display(value[0]);
-                    // Reset the valid flag of the display.
-                    s.next_rgba(value[0] as usize);
 
                     if !is_desktop {
                         s.capture_displays(vec![], vec![], value);
@@ -1855,11 +1516,6 @@ pub mod sessions {
                 .write()
                 .unwrap()
                 .insert(session_id, h);
-            // If the session is a single display session, it may be a software rgba rendered display.
-            // If this is the second time the display is opened, the old valid flag may be true.
-            if displays.len() == 1 {
-                s.ui_handler.next_rgba(displays[0] as usize);
-            }
             true
         } else {
             false

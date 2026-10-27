@@ -294,7 +294,6 @@ pub struct VideoQoS {
     displays: HashMap<String, DisplayData>,
     bitrate_store: u32,
     adjust_ratio_instant: Instant,
-    abr_config: bool,
     first_reply_adjusts_ratio: bool, // false on Linux, where it can create vaapi twice
     #[cfg(test)]
     test_now: Option<Instant>,
@@ -309,7 +308,6 @@ impl Default for VideoQoS {
             displays: Default::default(),
             bitrate_store: 0,
             adjust_ratio_instant: Instant::now(),
-            abr_config: true,
             first_reply_adjusts_ratio: !cfg!(target_os = "linux"),
             #[cfg(test)]
             test_now: None,
@@ -380,7 +378,7 @@ impl VideoQoS {
 
     // Check if variable bitrate encoding is supported and enabled
     pub fn in_vbr_state(&self) -> bool {
-        self.abr_config && self.displays.iter().all(|e| e.1.support_changing_quality)
+        self.displays.iter().all(|e| e.1.support_changing_quality)
     }
 }
 
@@ -393,7 +391,6 @@ impl VideoQoS {
             ..Default::default()
         };
         self.users.insert(id, user);
-        self.abr_config = Config::get_option("enable-abr") != "N";
     }
 
     // Clean up user session

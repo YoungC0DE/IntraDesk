@@ -44,8 +44,6 @@ class _Canvas extends ChangeNotifier implements CanvasModel {
 
 class _Image extends ChangeNotifier implements ImageModel {
   @override
-  bool get useTextureRender => false;
-  @override
   ui.Image? get image => null;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

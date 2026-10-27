@@ -10,7 +10,6 @@ use ringbuf::{ring_buffer::RbBase, Rb};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    ffi::c_void,
     ops::Deref,
     str::FromStr,
     sync::{
@@ -24,7 +23,7 @@ use crate::{
     common::input::{MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP},
     create_symmetric_key_msg, decode_id_pk_kx, get_pk,
     is_keyboard_mode_supported,
-    ui_interface::{get_builtin_option, use_texture_render},
+    ui_interface::get_builtin_option,
     ui_session_interface::{InvokeUiSession, Session},
 };
 pub use file_trait::FileManager;
@@ -57,7 +56,7 @@ use base::{
     message_proto::{option_message::BoolOption, *},
 };
 pub use helper::*;
-use scrap::{codec::Decoder, CodecFormat, ImageFormat, ImageRgb, ImageTexture};
+use scrap::{codec::Decoder, CodecFormat, ImageFormat, ImageRgb};
 
 use crate::clipboard::CLIPBOARD_INTERVAL;
 use crate::clipboard::{check_clipboard, ClipboardSide};
@@ -752,21 +751,15 @@ mod audio_format_tests {
 pub struct VideoHandler {
     decoder: Decoder,
     pub rgb: ImageRgb,
-    pub texture: ImageTexture,
     _display: usize, // useful for debug
     fail_counter: usize,
     first_frame: bool,
 }
 
 impl VideoHandler {
-    pub fn get_adapter_luid() -> Option<i64> {
-        crate::flutter::get_adapter_luid()
-    }
-
     /// Create a new video handler.
     pub fn new(format: CodecFormat, _display: usize) -> Self {
-        let luid = Self::get_adapter_luid();
-        log::info!("new video handler for display #{_display}, format: {format:?}, luid: {luid:?}");
+        log::info!("new video handler for display #{_display}, format: {format:?}");
         let rgba_format =
             if cfg!(feature = "flutter") && (cfg!(windows) || cfg!(target_os = "linux")) {
                 ImageFormat::ABGR
@@ -774,9 +767,8 @@ impl VideoHandler {
                 ImageFormat::ARGB
             };
         VideoHandler {
-            decoder: Decoder::new(format, luid),
+            decoder: Decoder::new(format),
             rgb: ImageRgb::new(rgba_format, crate::get_dst_align_rgba()),
-            texture: Default::default(),
             _display,
             fail_counter: 0,
             first_frame: true,
@@ -788,7 +780,6 @@ impl VideoHandler {
     pub fn handle_frame(
         &mut self,
         vf: VideoFrame,
-        pixelbuffer: &mut bool,
         chroma: &mut Option<Chroma>,
     ) -> ResultType<bool> {
         let format = CodecFormat::from(&vf);
@@ -797,13 +788,7 @@ impl VideoHandler {
         }
         match &vf.union {
             Some(frame) => {
-                let res = self.decoder.handle_video_frame(
-                    frame,
-                    &mut self.rgb,
-                    &mut self.texture,
-                    pixelbuffer,
-                    chroma,
-                );
+                let res = self.decoder.handle_video_frame(frame, &mut self.rgb, chroma);
                 if res.as_ref().is_ok_and(|x| *x) {
                     self.fail_counter = 0;
                 } else {
@@ -833,9 +818,8 @@ impl VideoHandler {
             "reset video handler for display #{}, format: {format:?}",
             self._display
         );
-        let luid = Self::get_adapter_luid();
         let format = format.unwrap_or(self.decoder.format());
-        self.decoder = Decoder::new(format, luid);
+        self.decoder = Decoder::new(format);
         self.fail_counter = 0;
         self.first_frame = true;
     }
@@ -902,7 +886,6 @@ pub struct LoginConfigHandler {
     pub save_ab_password_to_recent: bool, // true: connected with ab password
     pub custom_fps: Arc<Mutex<Option<usize>>>,
     pub last_auto_fps: Option<usize>,
-    pub adapter_luid: Option<i64>,
     pub mark_unsupported: Vec<CodecFormat>,
     pub selected_windows_session_id: Option<u32>,
     pub peer_info: Option<PeerInfo>,
@@ -928,7 +911,6 @@ impl LoginConfigHandler {
         &mut self,
         id: String,
         conn_type: ConnType,
-        adapter_luid: Option<i64>,
         conn_token: Option<String>,
     ) {
         self.id = id;
@@ -956,7 +938,6 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.clear_restarting_remote_device();
-        self.adapter_luid = adapter_luid;
         self.selected_windows_session_id = None;
     }
 
@@ -1189,12 +1170,7 @@ impl LoginConfigHandler {
     }
 
     pub fn get_supported_decoding(&self) -> SupportedDecoding {
-        Decoder::supported_decodings(
-            Some(&self.id),
-            use_texture_render(),
-            self.adapter_luid,
-            &self.mark_unsupported,
-        )
+        Decoder::supported_decodings(&self.mark_unsupported)
     }
 
     /// Parse the image quality option.
@@ -1518,12 +1494,7 @@ impl LoginConfigHandler {
     }
 
     pub fn update_supported_decodings(&self) -> Message {
-        let decoding = scrap::codec::Decoder::supported_decodings(
-            Some(&self.id),
-            use_texture_render(),
-            self.adapter_luid,
-            &self.mark_unsupported,
-        );
+        let decoding = scrap::codec::Decoder::supported_decodings(&self.mark_unsupported);
         let mut misc = Misc::new();
         misc.set_option(OptionMessage {
             supported_decoding: hbb_common::protobuf::MessageField::some(decoding),
@@ -1608,7 +1579,7 @@ pub fn start_video_thread<F, T>(
     discard_queue: Arc<RwLock<bool>>,
     video_callback: F,
 ) where
-    F: 'static + FnMut(usize, &mut scrap::ImageRgb, *mut c_void, bool) + Send,
+    F: 'static + FnMut(usize, &mut scrap::ImageRgb) + Send,
     T: InvokeUiSession,
 {
     let mut video_callback = video_callback;
@@ -1652,17 +1623,11 @@ pub fn start_video_thread<F, T>(
                             video_handler = Some(VideoHandler::new(format, display));
                         }
                         if let Some(handler) = video_handler.as_mut() {
-                            let mut pixelbuffer = true;
                             let mut tmp_chroma = None;
                             let format_changed = handler.decoder.format() != format;
-                            match handler.handle_frame(vf, &mut pixelbuffer, &mut tmp_chroma) {
+                            match handler.handle_frame(vf, &mut tmp_chroma) {
                                 Ok(true) => {
-                                    video_callback(
-                                        display,
-                                        &mut handler.rgb,
-                                        handler.texture.texture,
-                                        pixelbuffer,
-                                    );
+                                    video_callback(display, &mut handler.rgb);
 
                                     // chroma
                                     if tmp_chroma.is_some() && last_chroma != tmp_chroma {

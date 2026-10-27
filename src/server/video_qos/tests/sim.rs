@@ -336,11 +336,8 @@ pub fn run(sc: &Scenario) -> Report {
         .collect();
 
     let mut qos = super::smoke::session(sc.limit, sc.quality);
-    qos.abr_config = sc.abr;
-    if sc.abr {
-        qos.new_display("sim".to_owned());
-        qos.set_support_changing_quality("sim", true);
-    }
+    qos.new_display("sim".to_owned());
+    qos.set_support_changing_quality("sim", sc.abr);
 
     let mut queue: VecDeque<Packet> = VecDeque::new();
     let mut queued_bits = 0.0_f64;

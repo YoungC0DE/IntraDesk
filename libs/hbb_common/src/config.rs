@@ -2547,16 +2547,18 @@ mod tests {
     #[test]
     fn test_peer_config_deserialize() {
         let default_peer_config = toml::from_str::<PeerConfig>("").unwrap();
-        // test custom_resolution
+        // test custom_resolution; scroll_style is a field of older files, now ignored
         {
             let wrong_type_str = r#"
             view_style = "adaptive"
             scroll_style = "scrollbar"
+            view_only = true
+            show_remote_cursor = true
+            reverse_mouse_wheel = "Y"
             custom_resolutions = true
             "#;
             let mut cfg_to_compare = default_peer_config.clone();
             cfg_to_compare.view_style = "adaptive".to_string();
-            cfg_to_compare.scroll_style = "scrollbar".to_string();
             let cfg = toml::from_str::<PeerConfig>(wrong_type_str);
             assert_eq!(cfg, Ok(cfg_to_compare), "Failed to test wrong_type_str");
 
@@ -2569,7 +2571,6 @@ mod tests {
             "#;
             let mut cfg_to_compare = default_peer_config.clone();
             cfg_to_compare.view_style = "adaptive".to_string();
-            cfg_to_compare.scroll_style = "scrollbar".to_string();
             let cfg = toml::from_str::<PeerConfig>(wrong_type_str);
             assert_eq!(cfg, Ok(cfg_to_compare), "Failed to test wrong_type_str");
 

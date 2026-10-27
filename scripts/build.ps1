@@ -110,8 +110,14 @@ try {
     }
 
     Write-Step 'Build (Rust + Flutter)'
-    Invoke-Native 'python' (@('build.py') + $BuildArgs)
     $releaseDir = 'flutter\build\windows\x64\runner\Release'
+    # The Flutter install step only adds files: a DLL dropped from the build would stay
+    # here and still be packed into the .exe.
+    if (Test-Path $releaseDir) { Remove-Item -Recurse -Force $releaseDir }
+    Invoke-Native 'python' (@('build.py') + $BuildArgs)
+
+    Write-Step 'Dependências de runtime'
+    & (Join-Path $PSScriptRoot 'check-runtime-deps.ps1') $releaseDir
     if ($NoPack) {
         Write-Host "Pronto: $RepoRoot\$releaseDir\IntraDesk.exe" -ForegroundColor Green
         return

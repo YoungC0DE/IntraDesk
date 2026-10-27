@@ -114,6 +114,9 @@ jobs:
           python3 .\build.py @buildArgs
           mv ./flutter/build/windows/x64/runner/Release ./intradesk
 
+      - name: Check runtime dependencies
+        run: .\scripts\check-runtime-deps.ps1 .\intradesk
+
       - name: Build self-extracted executable
         shell: bash
         run: |

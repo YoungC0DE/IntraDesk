@@ -1487,6 +1487,25 @@ pub fn main_check_super_user_permission() -> bool {
     check_super_user_permission()
 }
 
+pub fn main_is_elevated() -> SyncReturn<bool> {
+    SyncReturn(crate::platform::is_elevated(None).unwrap_or(false))
+}
+
+/// Restarts the app elevated. Returns only if the UAC prompt was declined or failed.
+pub fn main_run_as_admin() -> bool {
+    match crate::platform::windows::run_as_admin() {
+        Ok(true) => std::process::exit(0),
+        Ok(false) => {
+            log::info!("Run as administrator was declined");
+            false
+        }
+        Err(err) => {
+            log::error!("Failed to run as administrator: {}", err);
+            false
+        }
+    }
+}
+
 pub fn main_get_unlock_pin() -> SyncReturn<String> {
     SyncReturn(get_unlock_pin())
 }

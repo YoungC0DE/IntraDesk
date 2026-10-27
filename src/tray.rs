@@ -31,9 +31,15 @@ fn make_tray() -> hbb_common::ResultType<()> {
 
     // Duplicated tray icons kept piling up through the blind spots of
     // `check_process("--tray", ..)`. https://github.com/rustdesk/rustdesk/issues/15689
-    if !crate::platform::windows::try_lock_tray_single_instance() {
-        log::info!("Another tray process is already running in this session, exit");
-        return Ok(());
+    // Retried for a moment: after "Run as administrator" the tray of the instance being
+    // replaced only exits once it notices its main process is gone.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !crate::platform::windows::try_lock_tray_single_instance() {
+        if Instant::now() > deadline {
+            log::info!("Another tray process is already running in this session, exit");
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(500));
     }
 
     let icon;

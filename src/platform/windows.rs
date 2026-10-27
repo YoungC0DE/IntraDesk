@@ -1271,6 +1271,30 @@ pub fn elevate(arg: &str) -> ResultType<bool> {
     )
 }
 
+/// Passed to the elevated copy started by [`run_as_admin`]: it waits for this process to exit
+/// before starting, or the runner's single-instance check would hand over to the old window.
+pub const WAIT_FOR_PID_ARG: &str = "--wait-for-pid=";
+
+/// Starts this executable elevated (UAC prompt). `Ok(false)` when the user declines it.
+pub fn run_as_admin() -> ResultType<bool> {
+    elevate(&format!("{}{}", WAIT_FOR_PID_ARG, std::process::id()))
+}
+
+/// Waits up to `timeout` for the process `pid` to exit. Returns at once if it is already gone.
+pub fn wait_for_process_exit(pid: DWORD, timeout: std::time::Duration) {
+    unsafe {
+        let handle = OpenProcess(winapi::um::winnt::SYNCHRONIZE, FALSE, pid);
+        if handle.is_null() {
+            return;
+        }
+        let ms = timeout.as_millis().min(u32::MAX as u128) as DWORD;
+        if winapi::um::synchapi::WaitForSingleObject(handle, ms) != winapi::um::winbase::WAIT_OBJECT_0 {
+            log::warn!("Process {} did not exit within {:?}", pid, timeout);
+        }
+        CloseHandle(handle);
+    }
+}
+
 pub fn run_as_system(arg: &str) -> ResultType<()> {
     let exe = std::env::current_exe()?.to_string_lossy().to_string();
     if impersonate_system::run_as_system(&exe, arg).is_err() {

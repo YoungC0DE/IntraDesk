@@ -98,5 +98,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("shortcut-key-not-supported", "\"{}\" can't be used as a shortcut."),
         ("host-key-changed-tip", "This computer's identity key is different from the one saved on the first connection.\nThis happens if its IntraDesk settings were reset, but it may also be another computer impersonating it.\nContinue only if you know why the key changed."),
         ("intradesk-license-tip", "IntraDesk is free software, licensed under the GNU AGPL-3.0. It is based on RustDesk."),
+        ("run_as_admin_tip", "Lets remote sessions control elevated windows and UAC prompts. IntraDesk restarts and open sessions are closed."),
     ].iter().cloned().collect();
 }

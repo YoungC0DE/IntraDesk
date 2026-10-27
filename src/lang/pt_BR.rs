@@ -381,5 +381,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("License", "Licença"),
         ("intradesk-license-tip", "O IntraDesk é software livre, sob a licença GNU AGPL-3.0. É baseado no RustDesk."),
         ("Copy password", "Copiar senha"),
+        ("Run as administrator", "Executar como administrador"),
+        ("run_as_admin_tip", "Permite que as sessões remotas controlem janelas elevadas e os avisos do UAC. O IntraDesk reinicia e as sessões abertas são encerradas."),
     ].iter().cloned().collect();
 }

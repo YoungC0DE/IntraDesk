@@ -100,6 +100,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               buildNameBoard(context),
               buildIpBoard(context),
               buildPasswordBoard(context),
+              if (!bind.mainIsElevated()) buildRunAsAdminButton(context),
             ],
           ),
         ),
@@ -296,6 +297,18 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               onHover: (value) => editHover.value = value,
             ),
         ],
+      ),
+    );
+  }
+
+  /// Restarts the app elevated, so sessions can control elevated windows and UAC (D7).
+  Widget buildRunAsAdminButton(BuildContext context) {
+    return Tooltip(
+      message: translate('run_as_admin_tip'),
+      child: OutlinedButton.icon(
+        icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+        label: Text(translate('Run as administrator')),
+        onPressed: () => bind.mainRunAsAdmin(),
       ),
     );
   }

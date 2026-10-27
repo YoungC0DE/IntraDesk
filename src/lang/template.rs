@@ -381,5 +381,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("License", ""),
         ("intradesk-license-tip", ""),
         ("Copy password", ""),
+        ("Run as administrator", ""),
+        ("run_as_admin_tip", ""),
     ].iter().cloned().collect();
 }

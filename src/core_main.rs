@@ -43,6 +43,7 @@ pub fn core_main() -> Option<CoreMainAction> {
     let mut _is_quick_support = false;
     let mut _is_flutter_invoke_new_connection = false;
     let mut no_server = false;
+    let mut wait_for_pid = None;
     let mut arg_exe = Default::default();
     for arg in std::env::args() {
         if i == 0 {
@@ -65,11 +66,16 @@ pub fn core_main() -> Option<CoreMainAction> {
                 _is_quick_support = true;
             } else if arg == "--no-server" {
                 no_server = true;
+            } else if let Some(pid) = arg.strip_prefix(crate::platform::windows::WAIT_FOR_PID_ARG) {
+                wait_for_pid = pid.parse::<u32>().ok();
             } else {
                 args.push(arg);
             }
         }
         i += 1;
+    }
+    if let Some(pid) = wait_for_pid {
+        crate::platform::windows::wait_for_process_exit(pid, std::time::Duration::from_secs(15));
     }
     #[cfg(not(debug_assertions))]
     register_breakdown_handler(breakdown_callback);

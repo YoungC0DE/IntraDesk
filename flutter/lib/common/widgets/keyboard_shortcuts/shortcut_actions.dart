@@ -58,7 +58,6 @@ final List<KeyboardShortcutActionGroup> kKeyboardShortcutActionGroups = [
     KeyboardShortcutActionEntry(
         kShortcutActionRestartRemote, 'Restart remote device'),
     KeyboardShortcutActionEntry(kShortcutActionInsertLock, 'Insert Lock'),
-    KeyboardShortcutActionEntry(kShortcutActionSwitchSides, 'Switch Sides'),
     KeyboardShortcutActionEntry(kShortcutActionRefresh, 'Refresh'),
   ]),
   // Display: subgroups (View Mode → Image Quality) first, then the direct
@@ -153,9 +152,6 @@ List<KeyboardShortcutActionGroup> filterKeyboardShortcutActionGroupsForPlatform(
       return false;
     }
     if (!cap.includeCloseTabShortcut && id == kShortcutActionCloseTab) {
-      return false;
-    }
-    if (!cap.includeSwitchSidesShortcut && id == kShortcutActionSwitchSides) {
       return false;
     }
     if (!cap.includePinToolbarShortcut && id == kShortcutActionPinToolbar) {

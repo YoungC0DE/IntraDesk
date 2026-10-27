@@ -112,7 +112,6 @@ class ShortcutPlatformCapabilities {
   final bool includeTabShortcuts;
   final bool includeToolbarShortcut;
   final bool includeCloseTabShortcut;
-  final bool includeSwitchSidesShortcut;
   final bool includePinToolbarShortcut;
   final bool includeViewModeShortcut;
   final Set<String> excludedActions;
@@ -122,7 +121,6 @@ class ShortcutPlatformCapabilities {
     required this.includeTabShortcuts,
     required this.includeToolbarShortcut,
     required this.includeCloseTabShortcut,
-    required this.includeSwitchSidesShortcut,
     required this.includePinToolbarShortcut,
     required this.includeViewModeShortcut,
     this.excludedActions = const {},
@@ -158,10 +156,6 @@ List<Map<String, dynamic>> filterDefaultBindingsForPlatform(
       continue;
     }
     if (!cap.includeCloseTabShortcut && action == kShortcutActionCloseTab) {
-      continue;
-    }
-    if (!cap.includeSwitchSidesShortcut &&
-        action == kShortcutActionSwitchSides) {
       continue;
     }
     if (!cap.includePinToolbarShortcut && action == kShortcutActionPinToolbar) {

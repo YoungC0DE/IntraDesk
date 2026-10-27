@@ -16,7 +16,6 @@ const _kToolbarOwnedActionIds = <String>[
   kShortcutActionSendCtrlAltDel,
   kShortcutActionRestartRemote,
   kShortcutActionInsertLock,
-  kShortcutActionSwitchSides,
   kShortcutActionRefresh,
 ];
 
@@ -217,14 +216,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
           onPressed: () => bind.sessionLockScreen(sessionId: sessionId),
           actionId: kShortcutActionInsertLock),
     );
-  }
-  // switchSides
-  if (isDefaultConn && ffiModel.keyboard && pi.platform != kPeerPlatformAndroid && versionCmp(pi.version, '1.2.0') >= 0 && bind.peerGetSessionsCount(id: id, connType: ffi.connType.index) == 1) {
-    v.add(TTextMenu(
-        child: Text(translate('Switch Sides')),
-        onPressed: () =>
-            showConfirmSwitchSidesDialog(sessionId, id, ffi.dialogManager),
-        actionId: kShortcutActionSwitchSides));
   }
   // refresh
   if (pi.version.isNotEmpty) {

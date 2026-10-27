@@ -311,10 +311,6 @@ class FfiModel with ChangeNotifier {
         parent.target?.serverModel.setShowElevation(show);
       } else if (name == 'cancel_msgbox') {
         cancelMsgBox(evt, sessionId);
-      } else if (name == 'switch_back') {
-        final peer_id = evt['peer_id'].toString();
-        await bind.sessionSwitchSides(sessionId: sessionId);
-        closeConnection(id: peer_id);
       } else if (name == 'portable_service_running') {
         _handlePortableServiceRunning(peerId, evt);
       } else if (name == 'on_url_scheme_received') {
@@ -3285,7 +3281,6 @@ class FFI {
   void start(
     String id, {
     bool isFileTransfer = false,
-    String? switchUuid,
     String? password,
     String? connToken,
     int? tabWindowId,
@@ -3311,7 +3306,6 @@ class FFI {
         sessionId: sessionId,
         id: id,
         isFileTransfer: isFileTransfer,
-        switchUuid: switchUuid ?? '',
         password: password ?? '',
         connToken: connToken,
       );

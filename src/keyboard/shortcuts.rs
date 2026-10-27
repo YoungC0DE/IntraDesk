@@ -24,7 +24,6 @@ pub mod action_id {
     pub const SWITCH_DISPLAY_ALL: &str   = "switch_display_all";
     pub const INSERT_LOCK: &str          = "insert_lock";
     pub const REFRESH: &str              = "refresh";
-    pub const SWITCH_SIDES: &str         = "switch_sides";
     pub const CLOSE_TAB: &str            = "close_tab";
     pub const TOGGLE_TOOLBAR: &str       = "toggle_toolbar";
     pub const RESTART_REMOTE: &str       = "restart_remote";
@@ -245,7 +244,7 @@ fn action_available_on_platform(action: &str, platform: &str) -> bool {
     let mobile = matches!(platform, "android" | "ios");
     match action {
         action_id::TOGGLE_FULLSCREEN | action_id::SWITCH_TAB_NEXT
-        | action_id::SWITCH_TAB_PREV | action_id::CLOSE_TAB | action_id::SWITCH_SIDES
+        | action_id::SWITCH_TAB_PREV | action_id::CLOSE_TAB
         | action_id::TOGGLE_TOOLBAR | action_id::PIN_TOOLBAR | action_id::SWITCH_DISPLAY_ALL
         | action_id::TOGGLE_ENABLE_FILE_COPY_PASTE => !mobile,
         _ => true,
@@ -331,7 +330,6 @@ const RELEASE_ACTION_IDS: &[&str] = &[
     action_id::SWITCH_TAB_NEXT,
     action_id::SWITCH_TAB_PREV,
     action_id::RESTART_REMOTE,
-    action_id::SWITCH_SIDES,
 ];
 
 pub fn runs_on_release(action_id: &str) -> bool {

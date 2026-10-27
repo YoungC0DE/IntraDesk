@@ -19,7 +19,6 @@ use std::{
         Arc, Mutex, RwLock,
     },
 };
-use uuid::Uuid;
 
 use crate::{
     check_port,
@@ -150,11 +149,10 @@ impl Client {
     /// found by LAN discovery.
     pub async fn start(
         peer: &str,
-        conn_type: ConnType,
         interface: impl Interface,
     ) -> ResultType<(Stream, HostKey)> {
         debug_assert!(peer == interface.get_id());
-        if config::is_incoming_only() && !is_switch_sides_back(conn_type, &interface).await {
+        if config::is_incoming_only() {
             bail!("Incoming only mode");
         }
         for addr in peer_addrs(peer) {
@@ -904,8 +902,6 @@ pub struct LoginConfigHandler {
     // Start time of the restart grace window. On Windows the peer may briefly
     // reconnect before the real reboot disconnect.
     restart_remote_device_at: Option<Instant>,
-    switch_uuid: Option<String>,
-    switch_back_allowed: bool,
     pub save_ab_password_to_recent: bool, // true: connected with ab password
     pub custom_fps: Arc<Mutex<Option<usize>>>,
     pub last_auto_fps: Option<usize>,
@@ -936,7 +932,6 @@ impl LoginConfigHandler {
         &mut self,
         id: String,
         conn_type: ConnType,
-        switch_uuid: Option<String>,
         adapter_luid: Option<i64>,
         conn_token: Option<String>,
     ) {
@@ -965,25 +960,8 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.clear_restarting_remote_device();
-        {
-            self.switch_back_allowed = false;
-        }
-        self.switch_uuid = switch_uuid;
         self.adapter_luid = adapter_luid;
         self.selected_windows_session_id = None;
-    }
-
-    pub fn allow_switch_back_once(&mut self) {
-        self.switch_back_allowed = true;
-    }
-
-    pub fn consume_switch_back_permission(&mut self) -> bool {
-        if self.switch_back_allowed {
-            self.switch_back_allowed = false;
-            true
-        } else {
-            false
-        }
     }
 
     /// Check if the client should auto login.
@@ -2140,8 +2118,6 @@ pub fn handle_login_error(
     }
 }
 
-// "Switch sides" requires the incoming-only client to connect back to its
-// controlling peer; verify the local pending uuid before opening the connection.
 /// Addresses to try for `peer`: the address itself, or the IPs LAN discovery saw for that ID.
 fn peer_addrs(peer: &str) -> Vec<String> {
     if hbb_common::is_ip_str(peer) || hbb_common::is_domain_port_str(peer) {
@@ -2154,74 +2130,6 @@ fn peer_addrs(peer: &str) -> Vec<String> {
         .flat_map(|p| p.ip_mac.into_keys())
         .map(|ip| check_port(ip, RELAY_PORT + 1))
         .collect()
-}
-
-async fn is_switch_sides_back(conn_type: ConnType, interface: &impl Interface) -> bool {
-    if conn_type != ConnType::DEFAULT_CONN {
-        return false;
-    }
-    let (id, uuid) = {
-        let lch = interface.get_lch();
-        let lc = lch.read().unwrap();
-        let Some(uuid) = lc.switch_uuid.as_deref() else {
-            return false;
-        };
-        let Ok(uuid) = Uuid::parse_str(uuid) else {
-            return false;
-        };
-        (lc.id.clone(), uuid)
-    };
-    if !request_local_switch_sides_uuid(
-        &id,
-        &uuid,
-        crate::ipc::SwitchSidesUuidAction::Check,
-    )
-    .await
-    {
-        return false;
-    }
-    let lch = interface.get_lch();
-    let lc = lch.read().unwrap();
-    let current_uuid = lc
-        .switch_uuid
-        .as_deref()
-        .and_then(|value| Uuid::parse_str(value).ok());
-    lc.id == id && current_uuid.as_ref() == Some(&uuid)
-}
-
-
-async fn request_local_switch_sides_uuid(
-    id: &str,
-    uuid: &Uuid,
-    action: crate::ipc::SwitchSidesUuidAction,
-) -> bool {
-    let Ok(mut conn) = crate::ipc::connect(1000, "").await else {
-        return false;
-    };
-    let uuid = uuid.to_string();
-    if conn
-        .send(&crate::ipc::Data::SwitchSidesUuid(
-            uuid.clone(),
-            id.to_owned(),
-            action,
-            None,
-        ))
-        .await
-        .is_err()
-    {
-        return false;
-    }
-    match conn.next_timeout(1000).await {
-        Ok(Some(crate::ipc::Data::SwitchSidesUuid(
-            returned_uuid,
-            returned_id,
-            returned_action,
-            Some(true),
-        ))) => {
-            returned_uuid == uuid && returned_id == id && returned_action == action
-        }
-        _ => false,
-    }
 }
 
 /// Handle hash message sent by peer.
@@ -2243,42 +2151,6 @@ pub async fn handle_hash(
     lc.write().unwrap().hash = hash.clone();
     // Take care of password application order
 
-    // switch_uuid
-    {
-        let uuid = lc.write().unwrap().switch_uuid.take();
-        if let Some(uuid) = uuid {
-            if let Ok(uuid) = uuid::Uuid::from_str(&uuid) {
-                let id = lc.read().unwrap().id.clone();
-                if !request_local_switch_sides_uuid(
-                    &id,
-                    &uuid,
-                    crate::ipc::SwitchSidesUuidAction::Consume,
-                )
-                .await
-                {
-                    log::warn!("Ignored untrusted switch_uuid");
-                } else {
-                    lc.write().unwrap().allow_switch_back_once();
-                    send_switch_login_request(lc.clone(), peer, uuid).await;
-                    lc.write().unwrap().password_source = Default::default();
-                    return true;
-                }
-            }
-        }
-        // Incoming-only may connect out solely for a verified switch-back;
-        // never fall through to password login, including on repeated hashes.
-        if config::is_incoming_only() {
-            interface.msgbox("error", "Connection Error", "Incoming only mode", "");
-            let mut misc = Misc::new();
-            misc.set_close_reason(
-                "Connection not allowed in incoming-only mode".to_owned(),
-            );
-            let mut msg = Message::new();
-            msg.set_misc(misc);
-            allow_err!(peer.send(&msg).await);
-            return false;
-        }
-    }
     // last password
     let mut password = lc.read().unwrap().password.clone();
     // preset password
@@ -2382,26 +2254,6 @@ pub async fn handle_login_from_ui(
     send_login(lc.clone(), hash_password, peer).await;
 }
 
-async fn send_switch_login_request(
-    lc: Arc<RwLock<LoginConfigHandler>>,
-    peer: &mut Stream,
-    uuid: Uuid,
-) {
-    let mut msg_out = Message::new();
-    msg_out.set_switch_sides_response(SwitchSidesResponse {
-        uuid: Bytes::from(uuid.as_bytes().to_vec()),
-        lr: hbb_common::protobuf::MessageField::some(
-            lc.read()
-                .unwrap()
-                .create_login_msg(vec![])
-                .login_request()
-                .to_owned(),
-        ),
-        ..Default::default()
-    });
-    allow_err!(peer.send(&msg_out).await);
-}
-
 /// Interface for client to send data and commands.
 #[async_trait]
 pub trait Interface: Send + Clone + 'static + Sized {
@@ -2427,16 +2279,6 @@ pub trait Interface: Send + Clone + 'static + Sized {
 
     fn get_id(&self) -> String {
         self.get_lch().read().unwrap().id.clone()
-    }
-
-    fn get_switch_code(&self) -> String {
-        match self.get_lch().read().unwrap().switch_uuid.clone() {
-            Some(u) if !u.is_empty() => {
-                use hbb_common::sodiumoxide::crypto::hash::sha256;
-                crate::encode64(sha256::hash(u.as_bytes()).0)
-            }
-            _ => String::new(),
-        }
     }
 
     fn swap_modifier_mouse(&self, _msg: &mut base::protos::message::MouseEvent) {}

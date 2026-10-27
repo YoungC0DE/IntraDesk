@@ -13,7 +13,6 @@ ShortcutPlatformCapabilities capabilities({
   bool includeTabShortcuts = true,
   bool includeToolbarShortcut = true,
   bool includeCloseTabShortcut = true,
-  bool includeSwitchSidesShortcut = true,
   bool includePinToolbarShortcut = true,
   bool includeViewModeShortcut = true,
   Set<String> excludedActions = const {},
@@ -23,7 +22,6 @@ ShortcutPlatformCapabilities capabilities({
     includeTabShortcuts: includeTabShortcuts,
     includeToolbarShortcut: includeToolbarShortcut,
     includeCloseTabShortcut: includeCloseTabShortcut,
-    includeSwitchSidesShortcut: includeSwitchSidesShortcut,
     includePinToolbarShortcut: includePinToolbarShortcut,
     includeViewModeShortcut: includeViewModeShortcut,
     excludedActions: excludedActions,
@@ -174,7 +172,6 @@ void main() {
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
-        includeSwitchSidesShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),
@@ -196,7 +193,6 @@ void main() {
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
-        includeSwitchSidesShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),
@@ -206,7 +202,6 @@ void main() {
     expect(ids, isNot(contains(kShortcutActionToggleFullscreen)));
     expect(ids, isNot(contains(kShortcutActionToggleToolbar)));
     expect(ids, isNot(contains(kShortcutActionCloseTab)));
-    expect(ids, isNot(contains(kShortcutActionSwitchSides)));
     expect(ids, isNot(contains(kShortcutActionPinToolbar)));
     expect(ids, isNot(contains(kShortcutActionViewModeOriginal)));
     expect(ids, isNot(contains(kShortcutActionViewModeAdaptive)));
@@ -239,7 +234,6 @@ void main() {
         includeTabShortcuts: false,
         includeToolbarShortcut: false,
         includeCloseTabShortcut: false,
-        includeSwitchSidesShortcut: false,
         includePinToolbarShortcut: false,
         includeViewModeShortcut: false,
       ),

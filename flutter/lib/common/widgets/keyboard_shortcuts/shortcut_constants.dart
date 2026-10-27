@@ -7,7 +7,6 @@ const kShortcutActionSwitchDisplayPrev = 'switch_display_prev';
 const kShortcutActionSwitchDisplayAll = 'switch_display_all';
 const kShortcutActionInsertLock = 'insert_lock';
 const kShortcutActionRefresh = 'refresh';
-const kShortcutActionSwitchSides = 'switch_sides';
 const kShortcutActionCloseTab = 'close_tab';
 const kShortcutActionToggleToolbar = 'toggle_toolbar';
 const kShortcutActionRestartRemote = 'restart_remote';
@@ -26,7 +25,6 @@ const kShortcutActionsRunOnKeyUp = {
   kShortcutActionSwitchTabNext,
   kShortcutActionSwitchTabPrev,
   kShortcutActionRestartRemote,
-  kShortcutActionSwitchSides,
 };
 const kShortcutActionToggleMute = 'toggle_mute';
 const kShortcutActionPinToolbar = 'pin_toolbar';

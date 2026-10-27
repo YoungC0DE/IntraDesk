@@ -106,7 +106,6 @@ pub fn session_add_sync(
     session_id: SessionID,
     id: String,
     is_file_transfer: bool,
-    switch_uuid: String,
     password: String,
     conn_token: Option<String>,
 ) -> SyncReturn<String> {
@@ -114,7 +113,6 @@ pub fn session_add_sync(
         &session_id,
         &id,
         is_file_transfer,
-        &switch_uuid,
         password,
         conn_token,
     );
@@ -728,12 +726,6 @@ pub fn session_elevate_direct(session_id: SessionID) {
 pub fn session_elevate_with_logon(session_id: SessionID, username: String, password: String) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         session.elevate_with_logon(username, password);
-    }
-}
-
-pub fn session_switch_sides(session_id: SessionID) {
-    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.switch_sides();
     }
 }
 
@@ -1575,10 +1567,6 @@ pub fn cm_can_elevate() -> SyncReturn<bool> {
 
 pub fn cm_elevate_portable(conn_id: i32) {
     crate::ui_cm_interface::elevate_portable(conn_id);
-}
-
-pub fn cm_switch_back(conn_id: i32) {
-    crate::ui_cm_interface::switch_back(conn_id);
 }
 
 pub fn main_get_build_date() -> String {

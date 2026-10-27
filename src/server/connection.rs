@@ -172,13 +172,6 @@ lazy_static::lazy_static! {
     static ref WAKELOCK_KEEP_AWAKE_OPTION: Arc::<Mutex<Option<bool>>> = Default::default();
 }
 
-const SWITCH_SIDES_UUID_TTL: Duration = Duration::from_secs(10);
-
-lazy_static::lazy_static! {
-    static ref SWITCH_SIDES_UUID: Arc::<Mutex<HashMap<String, (Instant, uuid::Uuid)>>> = Default::default();
-    static ref PENDING_SWITCH_SIDES_UUID: Arc::<Mutex<HashMap<String, (Instant, uuid::Uuid, bool)>>> = Default::default();
-}
-
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -302,7 +295,6 @@ pub struct Connection {
     session_last_recv_time: Option<Arc<Mutex<Instant>>>,
     file_transferred: bool,
     portable: PortableState,
-    from_switch: bool,
     options_in_login: Option<OptionMessage>,
     pressed_modifiers: HashSet<rdev::Key>,
     closed: bool,
@@ -447,7 +439,6 @@ impl Connection {
             session_last_recv_time: None,
             file_transferred: false,
             portable: Default::default(),
-            from_switch: false,
             options_in_login: None,
             pressed_modifiers: Default::default(),
             closed: false,
@@ -627,15 +618,6 @@ impl Connection {
                             if let Err(e) = portable_client::start_portable_service(portable_client::StartPara::Direct) {
                                 log::error!("Failed to start portable service from cm: {:?}", e);
                             }
-                        }
-                        #[cfg(feature = "flutter")]
-                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                        ipc::Data::SwitchSidesBack => {
-                            let mut misc = Misc::new();
-                            misc.set_switch_back(SwitchBack::default());
-                            let mut msg = Message::new();
-                            msg.set_misc(misc);
-                            conn.send(msg).await;
                         }
                         ipc::Data::ReadJobInitResult { id, file_num, include_hidden, conn_id, result } => {
                             if conn_id == conn.inner.id() {
@@ -1005,7 +987,7 @@ impl Connection {
         if self.authorized {
             return true;
         }
-        if self.require_2fa.is_some() && !self.is_recent_session(true) && !self.from_switch {
+        if self.require_2fa.is_some() && !self.is_recent_session(true) {
             self.awaiting_2fa = true;
             self.send_login_error(crate::client::REQUIRE_2FA).await;
             // Keep the connection alive so the client can continue with 2FA.
@@ -1244,7 +1226,6 @@ impl Connection {
             file: self.file,
             file_transfer_enabled: self.file,
             restart: self.restart,
-            from_switch: self.from_switch,
         });
     }
 
@@ -1828,44 +1809,6 @@ impl Connection {
                     self.network_delay = new_delay;
                 }
             }
-        } else if let Some(message::Union::SwitchSidesResponse(_s)) = msg.union {
-            if let Some(lr) = _s.lr.clone().take() {
-                SWITCH_SIDES_UUID
-                    .lock()
-                    .unwrap()
-                    .retain(|_, v| v.0.elapsed() < SWITCH_SIDES_UUID_TTL);
-                let uuid_old = SWITCH_SIDES_UUID.lock().unwrap().remove(&lr.my_id);
-                if let Ok(uuid) = uuid::Uuid::from_slice(_s.uuid.to_vec().as_ref()) {
-                    if let Some((_instant, uuid_old)) = uuid_old {
-                        if uuid == uuid_old {
-                            if lr.union.is_some() {
-                                log::warn!(
-                                    "Rejected switch sides response for non-remote-desktop session; closing connection"
-                                );
-                                self.send_login_error("Connection not allowed").await;
-                                return false;
-                            }
-                            self.reset_session_scope_for_login();
-                            self.handle_login_request_without_validation(&lr).await;
-                            // Switching sides authorizes without a password, so it must not bypass
-                            // the whitelist, which can be a locked policy pushed by the server.
-                            if !self.check_id_whitelist().await {
-                                return false;
-                            }
-                            self.from_switch = true;
-                            if !self.send_logon_response_and_keep_alive().await {
-                                return false;
-                            }
-                            self.try_start_cm(
-                                lr.my_id.clone(),
-                                lr.my_name.clone(),
-                                self.authorized,
-                            );
-                            self.try_start_cm_ipc();
-                        }
-                    }
-                }
-            }
         } else if self.authorized {
             match msg.union {
                 #[allow(unused_mut)]
@@ -2313,24 +2256,6 @@ impl Connection {
                         }
                         _ => {}
                     },
-                    Some(misc::Union::SwitchSidesRequest(s)) => {
-                        if let Ok(uuid) = uuid::Uuid::from_slice(&s.uuid.to_vec()[..]) {
-                            if crate::server::insert_pending_switch_sides_uuid(
-                                self.lr.my_id.clone(),
-                                uuid.clone(),
-                            ) {
-                                crate::run_me(vec![
-                                    "--connect",
-                                    &self.lr.my_id,
-                                    "--switch_uuid",
-                                    uuid.to_string().as_ref(),
-                                ])
-                                .ok();
-                            }
-                            self.on_close("switch sides", false).await;
-                            return false;
-                        }
-                    }
                     Some(misc::Union::ChangeResolution(r)) => {
                         self.change_resolution(None, &r);
                     }
@@ -3527,53 +3452,10 @@ impl Connection {
             Some(misc::Union::ChangeDisplayResolution(_)) => "misc.change_display_resolution",
             Some(misc::Union::MessageQuery(_)) => "misc.message_query",
             Some(misc::Union::FollowCurrentDisplay(_)) => "misc.follow_current_display",
-            Some(misc::Union::SwitchSidesRequest(_)) => "misc.switch_sides_request",
             Some(_) => "misc.other",
             None => "misc.empty",
         }
     }
-
-
-
-}
-
-pub fn insert_switch_sides_uuid(id: String, uuid: uuid::Uuid) {
-    SWITCH_SIDES_UUID
-        .lock()
-        .unwrap()
-        .insert(id, (tokio::time::Instant::now(), uuid));
-}
-
-pub fn insert_pending_switch_sides_uuid(id: String, uuid: uuid::Uuid) -> bool {
-    let mut uuids = PENDING_SWITCH_SIDES_UUID.lock().unwrap();
-    uuids.retain(|_, (instant, _, _)| instant.elapsed() < SWITCH_SIDES_UUID_TTL);
-    if uuids.get(&id).map(|(_, stored_uuid, _)| stored_uuid) == Some(&uuid) {
-        return false;
-    }
-    uuids.insert(id, (tokio::time::Instant::now(), uuid, false));
-    true
-}
-
-pub fn has_pending_switch_sides_uuid(id: &str, uuid: &uuid::Uuid) -> bool {
-    let mut uuids = PENDING_SWITCH_SIDES_UUID.lock().unwrap();
-    uuids.retain(|_, (instant, _, _)| instant.elapsed() < SWITCH_SIDES_UUID_TTL);
-    uuids
-        .get(id)
-        .map(|(_, stored_uuid, claimed)| stored_uuid == uuid && !*claimed)
-        == Some(true)
-}
-
-pub fn claim_pending_switch_sides_uuid(id: &str, uuid: &uuid::Uuid) -> bool {
-    let mut uuids = PENDING_SWITCH_SIDES_UUID.lock().unwrap();
-    uuids.retain(|_, (instant, _, _)| instant.elapsed() < SWITCH_SIDES_UUID_TTL);
-    // Keep claimed entries until expiry so replaying a request cannot launch another connection.
-    if let Some((_, stored_uuid, claimed)) = uuids.get_mut(id) {
-        if stored_uuid == uuid && !*claimed {
-            *claimed = true;
-            return true;
-        }
-    }
-    false
 }
 
 // IPC bootstrap summary:
@@ -4393,24 +4275,6 @@ mod test {
     }
 
     #[test]
-    fn test_pending_switch_sides_uuid_is_claimed_once() {
-        let id = uuid::Uuid::new_v4().to_string();
-        let uuid = uuid::Uuid::new_v4();
-        let other_uuid = uuid::Uuid::new_v4();
-        assert!(insert_pending_switch_sides_uuid(id.clone(), uuid.clone()));
-
-        assert!(!insert_pending_switch_sides_uuid(id.clone(), uuid.clone()));
-        assert!(has_pending_switch_sides_uuid(&id, &uuid));
-        assert!(!has_pending_switch_sides_uuid(&id, &other_uuid));
-        assert!(!claim_pending_switch_sides_uuid("other-peer", &uuid));
-        assert!(!claim_pending_switch_sides_uuid(&id, &other_uuid));
-        assert!(claim_pending_switch_sides_uuid(&id, &uuid));
-        assert!(!has_pending_switch_sides_uuid(&id, &uuid));
-        assert!(!claim_pending_switch_sides_uuid(&id, &uuid));
-        assert!(!insert_pending_switch_sides_uuid(id, uuid));
-    }
-
-    #[test]
     fn login_scope_latches_session_scope_across_login_retries() {
         let file_transfer = |dir: &str| {
             let mut lr = LoginRequest::new();
@@ -4592,10 +4456,6 @@ mod test {
                         misc_msg(|m| m.set_capture_displays(CaptureDisplays::new())),
                         Some("misc.capture_displays"),
                     ),
-                    (
-                        misc_msg(|m| m.set_switch_sides_request(SwitchSidesRequest::new())),
-                        Some("misc.switch_sides_request"),
-                    ),
                     (msg(|m| m.set_clipboard(Clipboard::new())), None),
                     (
                         msg(|m| m.set_multi_clipboards(MultiClipboards::new())),
@@ -4632,10 +4492,6 @@ mod test {
                         None,
                     ),
                     (msg(|m| m.set_terminal_action(TerminalAction::new())), None),
-                    (
-                        misc_msg(|m| m.set_switch_sides_request(SwitchSidesRequest::new())),
-                        None,
-                    ),
                 ],
             ),
         ];

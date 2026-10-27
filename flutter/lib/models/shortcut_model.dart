@@ -183,8 +183,6 @@ class ShortcutModel {
   ///   * Fullscreen / Toolbar / Pin: rendered wherever the
   ///     desktop layout applies (native desktop + Web). Native mobile is
   ///     permanently full-screen and doesn't have a desktop-style toolbar.
-  ///   * Switch Sides: native desktop only; mobile toolbars don't surface
-  ///     it.
   ///   * Tab navigation / Close Tab: only native desktop ships
   ///     `DesktopTabController`; Web's `RemotePage` is invoked without one.
   static ShortcutPlatformCapabilities currentPlatformCapabilities() {
@@ -193,7 +191,6 @@ class ShortcutModel {
       includeTabShortcuts: true,
       includeToolbarShortcut: true,
       includeCloseTabShortcut: true,
-      includeSwitchSidesShortcut: true,
       includePinToolbarShortcut: true,
       includeViewModeShortcut: true,
       excludedActions: Set.unmodifiable({

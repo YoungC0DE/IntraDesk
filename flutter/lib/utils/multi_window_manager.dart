@@ -198,7 +198,6 @@ class RustDeskMultiWindowManager {
     String remoteId,
     List<int> windows, {
     String? password,
-    String? switchUuid,
     String? connToken,
   }) async {
     var params = {
@@ -206,9 +205,6 @@ class RustDeskMultiWindowManager {
       "id": remoteId,
       "password": password,
     };
-    if (switchUuid != null) {
-      params['switch_uuid'] = switchUuid;
-    }
     if (connToken != null) {
       params['connToken'] = connToken;
     }
@@ -233,7 +229,6 @@ class RustDeskMultiWindowManager {
   Future<MultiWindowCallResult> newRemoteDesktop(
     String remoteId, {
     String? password,
-    String? switchUuid,
   }) async {
     return await newSession(
       WindowType.RemoteDesktop,
@@ -241,7 +236,6 @@ class RustDeskMultiWindowManager {
       remoteId,
       _remoteDesktopWindows,
       password: password,
-      switchUuid: switchUuid,
     );
   }
 

@@ -927,10 +927,6 @@ impl InvokeUiSession for FlutterHandler {
     }
 
 
-    fn switch_back(&self, peer_id: &str) {
-        self.push_event("switch_back", &[("peer_id", peer_id)], &[]);
-    }
-
     fn portable_service_running(&self, running: bool) {
         self.push_event(
             "portable_service_running",
@@ -1051,7 +1047,6 @@ pub fn session_add(
     session_id: &SessionID,
     id: &str,
     is_file_transfer: bool,
-    switch_uuid: &str,
     password: String,
     conn_token: Option<String>,
 ) -> ResultType<FlutterSession> {
@@ -1081,16 +1076,9 @@ pub fn session_add(
         ..Default::default()
     };
 
-    let switch_uuid = if switch_uuid.is_empty() {
-        None
-    } else {
-        Some(switch_uuid.to_string())
-    };
-
     session.lc.write().unwrap().initialize(
         id.to_owned(),
         conn_type,
-        switch_uuid,
         get_adapter_luid(),
         conn_token,
     );

@@ -2126,7 +2126,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
   UriLinkType? type;
   String? id;
   String? password;
-  String? switchUuid;
   for (int i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--connect':
@@ -2144,10 +2143,6 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
         password = args[i + 1];
         i++;
         break;
-      case '--switch_uuid':
-        switchUuid = args[i + 1];
-        i++;
-        break;
       default:
         break;
     }
@@ -2157,7 +2152,7 @@ bool handleUriLink({List<String>? cmdArgs, Uri? uri, String? uriString}) {
       case UriLinkType.remoteDesktop:
         Future.delayed(Duration.zero, () {
           rustDeskWinManager.newRemoteDesktop(id!,
-              password: password, switchUuid: switchUuid);
+              password: password);
         });
         break;
       case UriLinkType.fileTransfer:
@@ -2210,8 +2205,6 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
     var param = queryParameters;
     String? password = param["password"];
     if (password != null) args.addAll(['--password', password]);
-    String? switch_uuid = param["switch_uuid"];
-    if (switch_uuid != null) args.addAll(['--switch_uuid', switch_uuid]);
     return args;
   }
 

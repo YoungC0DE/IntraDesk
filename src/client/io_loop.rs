@@ -121,13 +121,7 @@ impl<T: InvokeUiSession> Remote<T> {
             }
         };
 
-        let conn_type = if self.handler.is_file_transfer() {
-            ConnType::FILE_TRANSFER
-        } else {
-            ConnType::default()
-        };
-
-        match Client::start(&self.handler.get_id(), conn_type, self.handler.clone()).await {
+        match Client::start(&self.handler.get_id(), self.handler.clone()).await {
             Ok((mut peer, host_key)) => {
                 self.handler
                     .connection_round_state
@@ -1566,22 +1560,6 @@ impl<T: InvokeUiSession> Remote<T> {
                                 "Successful",
                                 "Elevate successfully",
                                 "",
-                            );
-                        }
-                    }
-                    Some(misc::Union::SwitchBack(_)) => {
-                        let allow_switch_back = self
-                            .handler
-                            .lc
-                            .write()
-                            .unwrap()
-                            .consume_switch_back_permission();
-                        if allow_switch_back {
-                            self.handler.switch_back(&self.handler.get_id());
-                        } else {
-                            log::warn!(
-                                "Ignored unsolicited SwitchBack from {}",
-                                self.handler.get_id()
                             );
                         }
                     }

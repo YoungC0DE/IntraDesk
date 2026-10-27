@@ -63,7 +63,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("still_click_uac_tip", "Still requires the remote user to click OK on the UAC window of running RustDesk."),
         ("Request Elevation", "Request elevation"),
         ("wait_accept_uac_tip", "Please wait for the remote user to accept the UAC dialog."),
-        ("Switch Sides", "Switch sides"),
         ("Default View Style", "Default view style"),
         ("Default Scroll Style", "Default scroll style"),
         ("Default Image Quality", "Default image quality"),

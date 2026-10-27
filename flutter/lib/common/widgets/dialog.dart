@@ -1093,27 +1093,6 @@ void showRestartRemoteDevice(PeerInfo pi, String id, SessionID sessionId,
   if (res == true) bind.sessionRestartRemoteDevice(sessionId: sessionId);
 }
 
-void showConfirmSwitchSidesDialog(
-    SessionID sessionId, String id, OverlayDialogManager dialogManager) async {
-  dialogManager.show((setState, close, context) {
-    submit() async {
-      await bind.sessionSwitchSides(sessionId: sessionId);
-      closeConnection(id: id);
-    }
-
-    return CustomAlertDialog(
-      content: msgboxContent('info', 'Switch Sides',
-          'Please confirm if you want to share your desktop?'),
-      actions: [
-        dialogButton('Cancel', onPressed: close, isOutline: true),
-        dialogButton('OK', onPressed: submit),
-      ],
-      onSubmit: submit,
-      onCancel: close,
-    );
-  });
-}
-
 customImageQualityDialog(SessionID sessionId, String id, FFI ffi) async {
   double initQuality = kDefaultQuality;
   double initFps = kDefaultFps;

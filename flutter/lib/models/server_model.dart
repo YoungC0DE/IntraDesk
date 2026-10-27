@@ -561,7 +561,6 @@ class Client {
   bool file = false;
   bool restart = false;
   bool disconnected = false;
-  bool fromSwitch = false;
 
   RxInt unreadFileTransferLogCount = 0.obs;
 
@@ -581,7 +580,6 @@ class Client {
     file = json['file'];
     restart = json['restart'];
     disconnected = json['disconnected'];
-    fromSwitch = json['from_switch'];
   }
 
   Map<String, dynamic> toJson() {
@@ -598,7 +596,6 @@ class Client {
     data['file'] = file;
     data['restart'] = restart;
     data['disconnected'] = disconnected;
-    data['from_switch'] = fromSwitch;
     return data;
   }
 

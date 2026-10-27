@@ -220,12 +220,6 @@ pub enum DataPortableService {
     CmShowElevation(bool),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-pub enum SwitchSidesUuidAction {
-    Check,
-    Consume,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "t", content = "c")]
 pub enum Data {
@@ -242,7 +236,6 @@ pub enum Data {
         file: bool,
         file_transfer_enabled: bool,
         restart: bool,
-        from_switch: bool,
     },
     SwitchPermission {
         name: String,
@@ -272,9 +265,6 @@ pub enum Data {
     Empty,
     Disconnected,
     DataPortableService(DataPortableService),
-    SwitchSidesRequest(String),
-    SwitchSidesUuid(String, String, SwitchSidesUuidAction, Option<bool>),
-    SwitchSidesBack,
     UrlLink(String),
     SyncWinCpuUsage(Option<f64>),
     FileTransferLog((String, String)),
@@ -628,33 +618,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     .send(&Data::SyncWinCpuUsage(
                         base::platform::windows::cpu_uage_one_minute()
                     ))
-                    .await
-            );
-        }
-        Data::SwitchSidesRequest(id) => {
-            let uuid = uuid::Uuid::new_v4();
-            crate::server::insert_switch_sides_uuid(id, uuid.clone());
-            allow_err!(
-                stream
-                    .send(&Data::SwitchSidesRequest(uuid.to_string()))
-                    .await
-            );
-        }
-        Data::SwitchSidesUuid(uuid, id, action, None) => {
-            let allowed = uuid
-                .parse::<uuid::Uuid>()
-                .map(|uuid| match action {
-                    SwitchSidesUuidAction::Check => {
-                        crate::server::has_pending_switch_sides_uuid(&id, &uuid)
-                    }
-                    SwitchSidesUuidAction::Consume => {
-                        crate::server::claim_pending_switch_sides_uuid(&id, &uuid)
-                    }
-                })
-                .unwrap_or(false);
-            allow_err!(
-                stream
-                    .send(&Data::SwitchSidesUuid(uuid, id, action, Some(allowed)))
                     .await
             );
         }

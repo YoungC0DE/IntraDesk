@@ -125,7 +125,6 @@ pub struct Client {
     pub audio: bool,
     pub file: bool,
     pub restart: bool,
-    pub from_switch: bool,
     #[serde(skip)]
     tx: UnboundedSender<Data>,
 }
@@ -197,7 +196,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
         audio: bool,
         file: bool,
         restart: bool,
-        from_switch: bool,
         #[cfg(not(any(target_os = "ios")))] tx: mpsc::UnboundedSender<Data>,
     ) {
         let client = Client {
@@ -213,7 +211,6 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
             audio,
             file,
             restart,
-            from_switch,
             tx,
         };
         CLIENTS
@@ -319,13 +316,6 @@ pub fn get_clients_length() -> usize {
 }
 
 
-#[inline]
-pub fn switch_back(id: i32) {
-    if let Some(client) = CLIENTS.read().unwrap().get(&id) {
-        allow_err!(client.tx.send(Data::SwitchSidesBack));
-    };
-}
-
 impl<T: InvokeUiCM> IpcTaskRunner<T> {
     async fn run(&mut self) {
         use hbb_common::config::LocalConfig;
@@ -389,9 +379,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                         }
                         Ok(Some(data)) => {
                             match data {
-                                Data::Login{id, is_file_transfer, peer_id, name, avatar, authorized, keyboard, clipboard, audio, file, file_transfer_enabled: _file_transfer_enabled, restart, from_switch} => {
+                                Data::Login{id, is_file_transfer, peer_id, name, avatar, authorized, keyboard, clipboard, audio, file, file_transfer_enabled: _file_transfer_enabled, restart} => {
                                     log::debug!("conn_id: {}", id);
-                                    self.cm.add_connection(id, is_file_transfer, peer_id, name, avatar, authorized, keyboard, clipboard, audio, file, restart, from_switch, self.tx.clone());
+                                    self.cm.add_connection(id, is_file_transfer, peer_id, name, avatar, authorized, keyboard, clipboard, audio, file, restart, self.tx.clone());
                                     self.conn_id = id;
                                     #[cfg(target_os = "windows")]
                                     {

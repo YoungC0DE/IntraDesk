@@ -245,8 +245,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Weak", "Fraco"),
         ("Medium", "Médio"),
         ("Strong", "Forte"),
-        ("Switch Sides", "Trocar de lado"),
-        ("Please confirm if you want to share your desktop?", "Por favor, confirme se você deseja compartilhar sua área de trabalho?"),
         ("Display", "Exibição"),
         ("Default View Style", "Estilo de Visualização Padrão"),
         ("Default Scroll Style", "Estilo de Rolagem Padrão"),

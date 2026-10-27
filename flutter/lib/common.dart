@@ -3279,19 +3279,7 @@ get defaultOptionLang => isCustomClient ? 'default' : '';
 get defaultOptionTheme => isCustomClient ? 'system' : '';
 get defaultOptionYes => isCustomClient ? 'Y' : '';
 get defaultOptionNo => isCustomClient ? 'N' : '';
-get defaultOptionWhitelist => isCustomClient ? ',' : '';
 get defaultOptionAccessMode => isCustomClient ? 'custom' : '';
-
-bool whitelistNotEmpty() {
-  // https://rustdesk.com/docs/en/self-host/client-configuration/advanced-settings/#whitelist
-  final v = bind.mainGetOptionSync(key: kOptionWhitelist);
-  return v != '' && v != ',';
-}
-
-bool idWhitelistNotEmpty() {
-  final v = bind.mainGetOptionSync(key: kOptionIdWhitelist);
-  return v != '' && v != ',';
-}
 
 // `setMovable()` is only supported on macOS.
 //

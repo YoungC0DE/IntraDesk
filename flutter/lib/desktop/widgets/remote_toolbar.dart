@@ -2800,59 +2800,6 @@ Widget _buildPointerTrackWidget(Widget child, FFI? ffi) {
   );
 }
 
-class EdgeThicknessControl extends StatelessWidget {
-  final double value;
-  final ValueChanged<double>? onChanged;
-  final ColorScheme? colorScheme;
-
-  const EdgeThicknessControl({
-    Key? key,
-    required this.value,
-    this.onChanged,
-    this.colorScheme,
-  }) : super(key: key);
-
-  static const double kMin = 20;
-  static const double kMax = 150;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = this.colorScheme ?? Theme.of(context).colorScheme;
-
-    final slider = SliderTheme(
-      data: SliderTheme.of(context).copyWith(
-        activeTrackColor: colorScheme.primary,
-        thumbColor: colorScheme.primary,
-        overlayColor: colorScheme.primary.withOpacity(0.1),
-        showValueIndicator: ShowValueIndicator.never,
-        thumbShape: _RectValueThumbShape(
-          min: EdgeThicknessControl.kMin,
-          max: EdgeThicknessControl.kMax,
-          width: 52,
-          height: 24,
-          radius: 4,
-          unit: 'px',
-        ),
-      ),
-      child: Semantics(
-        value: value.toInt().toString(),
-        child: Slider(
-          value: value,
-          min: EdgeThicknessControl.kMin,
-          max: EdgeThicknessControl.kMax,
-          divisions:
-              (EdgeThicknessControl.kMax - EdgeThicknessControl.kMin).round(),
-          semanticFormatterCallback: (double newValue) =>
-              "${newValue.round()}px",
-          onChanged: onChanged,
-        ),
-      ),
-    );
-
-    return slider;
-  }
-}
-
 class _MinimizedMonitorSwitchButton extends StatelessWidget {
   final String id;
   final FFI ffi;

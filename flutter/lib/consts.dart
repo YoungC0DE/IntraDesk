@@ -59,19 +59,9 @@ const String kWindowEventGetCachedSessionData = "get_cached_session_data";
 const String kWindowEventOpenMonitorSession = "open_monitor_session";
 
 const String kOptionViewStyle = "view_style";
-const String kOptionScrollStyle = "scroll_style";
-const String kOptionEdgeScrollEdgeThickness = "edge-scroll-edge-thickness";
 const String kOptionImageQuality = "image_quality";
-const String kOptionTextureRender = "use-texture-render";
-const String kOptionD3DRender = "allow-d3d-render";
-const String kOptionViewOnly = "view_only";
 const String kOptionEnableLanDiscovery = "enable-lan-discovery";
-const String kOptionWhitelist = "whitelist";
-const String kOptionIdWhitelist = "id-whitelist";
-const String kOptionEnableAbr = "enable-abr";
 const String kOptionDirectAccessPort = "direct-access-port";
-const String kOptionAllowAutoDisconnect = "allow-auto-disconnect";
-const String kOptionAutoDisconnectTimeout = "auto-disconnect-timeout";
 const String kOptionEnableHwcodec = "enable-hwcodec";
 const String kOptionAccessMode = "access-mode";
 const String kOptionEnableKeyboard = "enable-keyboard";
@@ -88,20 +78,12 @@ const String kOptionAllowNumericOneTimePassword =
     "allow-numeric-one-time-password";
 const String kOptionCollapseToolbar = "collapse_toolbar";
 const String kOptionHideToolbar = "hide-toolbar";
-const String kOptionShowRemoteCursor = "show_remote_cursor";
-const String kOptionFollowRemoteCursor = "follow_remote_cursor";
-const String kOptionFollowRemoteWindow = "follow_remote_window";
 const String kOptionZoomCursor = "zoom-cursor";
-const String kOptionShowQualityMonitor = "show_quality_monitor";
 const String kOptionDisableAudio = "disable_audio";
 const String kOptionEnableFileCopyPaste = "enable-file-copy-paste";
 // "Settings -> Display -> Other default options"
 const String kOptionDisableClipboard = "disable_clipboard";
-const String kOptionLockAfterSessionEnd = "lock_after_session_end";
 const String kOptionTouchMode = "touch-mode";
-const String kOptionI444 = "i444";
-const String kOptionSwapLeftRightMouse = "swap-left-right-mouse";
-const String kOptionCodecPreference = "codec-preference";
 const String kOptionRemoteMenubarDragLeft = "remote-menubar-drag-left";
 const String kOptionRemoteMenubarDragRight = "remote-menubar-drag-right";
 const String kOptionRemoteMenubarEdge = "remote-menubar-edge";
@@ -114,12 +96,8 @@ const String kOptionPeerTabIndex = "peer-tab-index";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
 const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
-const String kOptionAllowRemoveWallpaper = "allow-remove-wallpaper";
 const String kOptionStopService = "stop-service";
-const String kOptionDirectxCapture = "enable-directx-capture";
 const String kOptionAllowRemoteCmModification = "allow-remote-cm-modification";
-const String kOptionAllowSyncClipboardBetweenSessions =
-    "allow-sync-clipboard-between-sessions";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
 const String kOptionVirtualMouseScale = "virtual-mouse-scale";
 const String kOptionShowVirtualJoystick = "show-virtual-joystick";
@@ -146,7 +124,6 @@ const String kOptionDisableFloatingWindow = "disable-floating-window";
 
 const String kOptionKeepScreenOn = "keep-screen-on";
 
-const String kOptionKeepAwakeDuringIncomingSessions = "keep-awake-during-incoming-sessions";
 const String kOptionKeepAwakeDuringOutgoingSessions = "keep-awake-during-outgoing-sessions";
 
 const String kOptionShowMobileAction = "showMobileActions";
@@ -171,12 +148,7 @@ const String kMouseEventTypeUp = "up";
 
 const String kKeyFlutterKey = "flutter_key";
 
-const String kKeyShowDisplaysAsIndividualWindows =
-    'displays_as_individual_windows';
-const String kKeyUseAllMyDisplaysForTheRemoteSession =
-    'use_all_my_displays_for_the_remote_session';
 const String kKeyShowMonitorsToolbar = 'show_monitors_toolbar';
-const String kKeyReverseMouseWheel = "reverse_mouse_wheel";
 
 const String kMsgboxTextWaitingForImage = 'Connected, waiting for image...';
 
@@ -208,7 +180,6 @@ const double kMaxQuality = 100;
 const double kMaxMoreQuality = 2000;
 
 // trackpad speed
-const String kKeyTrackpadSpeed = 'trackpad-speed';
 const int kMinTrackpadSpeed = 10;
 const int kDefaultTrackpadSpeed = 100;
 const int kMaxTrackpadSpeed = 1000;
@@ -622,3 +593,4 @@ extension WindowsTargetExt on int {
   WindowsTarget get windowsVersion => getWindowsTarget(this);
 }
 
+const String kIntraDeskSourceUrl = 'https://github.com/YoungC0DE/IntraDesk';

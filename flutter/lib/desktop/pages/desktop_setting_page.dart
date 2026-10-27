@@ -11,7 +11,6 @@ import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/common/widgets/keyboard_shortcuts/page_body.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_keyboard_shortcuts_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
-import 'package:flutter_hbb/desktop/widgets/remote_toolbar.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/shortcut_model.dart';
@@ -47,7 +46,9 @@ class _TabInfo {
 enum SettingsTabKey {
   general,
   safety,
+  network,
   display,
+  audio,
   about,
 }
 
@@ -58,7 +59,9 @@ class DesktopSettingPage extends StatefulWidget {
       SettingsTabKey.general,
     if (!bind.isOutgoingOnly() && !bind.isDisableSettings() && bind.mainGetBuildinOption(key: kOptionHideSecuritySetting) != 'Y')
       SettingsTabKey.safety,
+    SettingsTabKey.network,
     if (!bind.isIncomingOnly()) SettingsTabKey.display,
+    if (!bind.isOutgoingOnly()) SettingsTabKey.audio,
     SettingsTabKey.about,
   ];
 
@@ -174,9 +177,17 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
           settingTabs.add(_TabInfo(tab, 'Security',
               Icons.enhanced_encryption_outlined, Icons.enhanced_encryption));
           break;
+        case SettingsTabKey.network:
+          settingTabs.add(
+              _TabInfo(tab, 'Network', Icons.lan_outlined, Icons.lan));
+          break;
         case SettingsTabKey.display:
           settingTabs.add(_TabInfo(tab, 'Display',
               Icons.desktop_windows_outlined, Icons.desktop_windows));
+          break;
+        case SettingsTabKey.audio:
+          settingTabs.add(_TabInfo(
+              tab, 'Audio', Icons.volume_up_outlined, Icons.volume_up));
           break;
         case SettingsTabKey.about:
           settingTabs
@@ -197,8 +208,14 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
         case SettingsTabKey.safety:
           children.add(const _Safety());
           break;
+        case SettingsTabKey.network:
+          children.add(const _Network());
+          break;
         case SettingsTabKey.display:
           children.add(const _Display());
+          break;
+        case SettingsTabKey.audio:
+          children.add(const _Audio());
           break;
         case SettingsTabKey.about:
           children.add(const _About());
@@ -344,24 +361,14 @@ class _General extends StatefulWidget {
 }
 
 class _GeneralState extends State<_General> {
-  final RxBool serviceStop =
-      Get.find<RxBool>(tag: 'stop-service');
-  RxBool serviceBtnEnabled = true.obs;
-  final GlobalKey _minToolbarOptionKey = GlobalKey();
-
   @override
   Widget build(BuildContext context) {
     final scrollController = ScrollController();
     return ListView(
       controller: scrollController,
       children: [
-        service(),
         theme(),
         _Card(title: 'Language', children: [language()]),
-        hwcodec(),
-        audio(context),
-        WaylandCard(),
-        other(),
         if (!bind.isIncomingOnly()) keyboardShortcuts(),
       ],
     ).marginOnly(bottom: _kListViewBottomMargin);
@@ -432,230 +439,6 @@ class _GeneralState extends State<_General> {
     ]);
   }
 
-  Widget service() {
-    if (bind.isOutgoingOnly()) {
-      return const Offstage();
-    }
-
-    final hideStopService =
-        bind.mainGetBuildinOption(key: kOptionHideStopService) == 'Y';
-
-    return Obx(() {
-      if (hideStopService && !serviceStop.value) {
-        return const Offstage();
-      }
-
-      return _Card(title: 'Service', children: [
-        _Button(serviceStop.value ? 'Start' : 'Stop', () {
-          () async {
-            serviceBtnEnabled.value = false;
-            await start_service(serviceStop.value);
-            // enable the button after 1 second
-            Future.delayed(const Duration(seconds: 1), () {
-              serviceBtnEnabled.value = true;
-            });
-          }();
-        }, enabled: serviceBtnEnabled.value)
-      ]);
-    });
-  }
-
-  Widget other() {
-    final incomingOnly = bind.isIncomingOnly();
-    final outgoingOnly = bind.isOutgoingOnly();
-    final children = <Widget>[
-      if (!incomingOnly)
-        _OptionCheckBox(context, 'Confirm before closing multiple tabs',
-            kOptionEnableConfirmClosingTabs,
-            isServer: false),
-      if (!incomingOnly)
-        _OptionCheckBox(
-          context,
-          'allow-remote-toolbar-docking-any-edge',
-          kOptionAllowMultiEdgeToolbarDock,
-          isServer: false,
-          update: (_) {
-            reloadAllWindows();
-          },
-        ),
-      if (!outgoingOnly)
-        _OptionCheckBox(context, 'Adaptive bitrate', kOptionEnableAbr),
-      wallpaper(),
-      if (!incomingOnly) ...[
-        // though this is related to GUI, but opengl problem affects all users, so put in config rather than local
-        Tooltip(
-            message: translate('texture_render_tip'),
-            child: _OptionCheckBox(
-              context,
-              "Use texture rendering",
-              kOptionTextureRender,
-              optGetter: bind.mainGetUseTextureRender,
-              optSetter: (k, v) async =>
-                  await bind.mainSetLocalOption(key: k, value: v ? 'Y' : 'N'),
-            ),
-          ),
-        Tooltip(
-            message: translate('d3d_render_tip'),
-            child: _OptionCheckBox(
-              context,
-              "Use D3D rendering",
-              kOptionD3DRender,
-              isServer: false,
-            ),
-          ),
-      ],
-      if (!outgoingOnly)
-        _OptionCheckBox(
-          context,
-          'Capture screen using DirectX',
-          kOptionDirectxCapture,
-        ),
-      if (!incomingOnly)
-        Tooltip(
-          message: translate('sync-clipboard-between-sessions-tip'),
-          child: _OptionCheckBox(
-            context,
-            'Sync clipboard between sessions',
-            kOptionAllowSyncClipboardBetweenSessions,
-            isServer: false,
-          ),
-        ),
-    ];
-
-    // Add client-side wakelock option for desktop platforms
-    if (!bind.isIncomingOnly()) {
-      children.add(_OptionCheckBox(
-        context,
-        'keep-awake-during-outgoing-sessions-label',
-        kOptionKeepAwakeDuringOutgoingSessions,
-        isServer: false,
-      ));
-    }
-
-    children.add(_OptionCheckBox(
-      context,
-      'Show monitor switch button on the main toolbar',
-      kOptionAllowMonitorSwitchMainToolbar,
-      isServer: false,
-      update: (enabled) async {
-        if (!enabled) {
-          await mainSetLocalBoolOption(
-              kOptionAllowMonitorSwitchMinToolbar, false);
-        }
-        if (mounted) setState(() {});
-        reloadAllWindows();
-        if (enabled) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final ctx = _minToolbarOptionKey.currentContext;
-            if (ctx != null) {
-              Scrollable.ensureVisible(
-                ctx,
-                alignment: 0.5,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
-              );
-            }
-          });
-        }
-      },
-    ));
-    if (mainGetLocalBoolOptionSync(kOptionAllowMonitorSwitchMainToolbar)) {
-      children.add(KeyedSubtree(
-        key: _minToolbarOptionKey,
-        child: _OptionCheckBox(
-          context,
-          'Show on the minimized toolbar',
-          kOptionAllowMonitorSwitchMinToolbar,
-          isServer: false,
-          update: (_) {
-            reloadAllWindows();
-          },
-        ).marginOnly(left: _kCheckBoxLeftMargin * 3),
-      ));
-    }
-    return _Card(title: 'Other', children: children);
-  }
-
-  Widget wallpaper() {
-    if (bind.isOutgoingOnly()) {
-      return const Offstage();
-    }
-
-    return futureBuilder(future: () async {
-      final support = await bind.mainSupportRemoveWallpaper();
-      return support;
-    }(), hasData: (data) {
-      if (data is bool && data == true) {
-        bool value = mainGetBoolOptionSync(kOptionAllowRemoveWallpaper);
-        return Row(
-          children: [
-            Flexible(
-              child: _OptionCheckBox(
-                context,
-                'Remove wallpaper during incoming sessions',
-                kOptionAllowRemoveWallpaper,
-                update: (bool v) {
-                  setState(() {});
-                },
-              ),
-            ),
-            if (value)
-              _CountDownButton(
-                text: 'Test',
-                second: 5,
-                onPressed: () {
-                  bind.mainTestWallpaper(second: 5);
-                },
-              )
-          ],
-        );
-      }
-
-      return Offstage();
-    });
-  }
-
-  Widget hwcodec() {
-    final hwcodec = bind.mainHasHwcodec();
-    final vram = bind.mainHasVram();
-    return Offstage(
-      offstage: !(hwcodec || vram),
-      child: _Card(title: 'Hardware Codec', children: [
-        _OptionCheckBox(
-          context,
-          'Enable hardware codec',
-          kOptionEnableHwcodec,
-          update: (bool v) {
-            if (v) {
-              bind.mainCheckHwcodec();
-            }
-          },
-        )
-      ]),
-    );
-  }
-
-  Widget audio(BuildContext context) {
-    if (bind.isOutgoingOnly()) {
-      return const Offstage();
-    }
-
-    builder(devices, currentDevice, setDevice) {
-      final child = ComboBox(
-        keys: devices,
-        values: devices,
-        initialKey: currentDevice,
-        onChanged: (key) async {
-          setDevice(key);
-          setState(() {});
-        },
-      ).marginOnly(left: _kContentHMargin);
-      return _Card(title: 'Audio Input Device', children: [child]);
-    }
-
-    return AudioInput(builder: builder);
-  }
-
   Widget language() {
     return futureBuilder(future: () async {
       String langs = await bind.mainGetLangs();
@@ -724,7 +507,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
               child: Column(children: [
                 permissions(context),
                 password(context),
-                more(context),
               ]),
             ),
           ],
@@ -885,19 +667,30 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
         })));
   }
 
-  Widget more(BuildContext context) {
-    bool enabled = !locked;
-    return _Card(title: 'Security', children: [
-      _OptionCheckBox(context, 'Deny LAN discovery', 'enable-lan-discovery',
-          reverse: true, enabled: enabled),
-      ...directIp(context),
-      whitelist(),
-      idWhitelist(),
-      ...autoDisconnect(context),
-      _OptionCheckBox(context, 'keep-awake-during-incoming-sessions-label',
-          kOptionKeepAwakeDuringIncomingSessions,
-          reverse: false, enabled: enabled),
-    ]);
+}
+
+class _Network extends StatefulWidget {
+  const _Network({Key? key}) : super(key: key);
+
+  @override
+  State<_Network> createState() => _NetworkState();
+}
+
+class _NetworkState extends State<_Network> {
+  @override
+  Widget build(BuildContext context) {
+    final scrollController = ScrollController();
+    return ListView(controller: scrollController, children: [
+      _Card(title: 'Network', children: [
+        _OptionCheckBox(
+            context, 'Deny LAN discovery', 'enable-lan-discovery',
+            reverse: true),
+        ...directIp(context),
+      ]),
+      _Card(title: 'Windows Firewall', children: [
+        _SubButton('Allow in firewall', () => bind.mainAllowInFirewall()),
+      ]),
+    ]).marginOnly(bottom: _kListViewBottomMargin);
   }
 
   List<Widget> directIp(BuildContext context) {
@@ -905,7 +698,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
     RxBool applyEnabled = false.obs;
     controller.text = bind.mainGetOptionSync(key: kOptionDirectAccessPort);
     final isOptFixed = isOptionFixed(kOptionDirectAccessPort);
-    final enabled = !locked && !isOptFixed;
+    final enabled = !isOptFixed;
     return [
       _SubLabeledWidget(
         context,
@@ -946,198 +739,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       ),
     ];
   }
-
-  Widget whitelist() {
-    bool enabled = !locked;
-    // Simple temp wrapper for PR check
-    tmpWrapper() {
-      RxBool hasWhitelist = whitelistNotEmpty().obs;
-      update() async {
-        hasWhitelist.value = whitelistNotEmpty();
-      }
-
-      onChanged(bool? checked) async {
-        changeWhiteList(callback: update);
-      }
-
-      final isOptFixed = isOptionFixed(kOptionWhitelist);
-      return GestureDetector(
-        child: Tooltip(
-          message: translate('whitelist_tip'),
-          child: Obx(() => Row(
-                children: [
-                  Checkbox(
-                          value: hasWhitelist.value,
-                          onChanged: enabled && !isOptFixed ? onChanged : null)
-                      .marginOnly(right: 5),
-                  Offstage(
-                    offstage: !hasWhitelist.value,
-                    child: MouseRegion(
-                      child: const Icon(Icons.warning_amber_rounded,
-                              color: Color.fromARGB(255, 255, 204, 0))
-                          .marginOnly(right: 5),
-                      cursor: SystemMouseCursors.click,
-                    ),
-                  ),
-                  Expanded(
-                      child: Text(
-                    translate('Use IP Whitelisting'),
-                    style:
-                        TextStyle(color: disabledTextColor(context, enabled)),
-                  ))
-                ],
-              )),
-        ),
-        onTap: enabled
-            ? () {
-                onChanged(!hasWhitelist.value);
-              }
-            : null,
-      ).marginOnly(left: _kCheckBoxLeftMargin);
-    }
-
-    return tmpWrapper();
-  }
-
-  Widget idWhitelist() {
-    bool enabled = !locked;
-    RxBool hasIdWhitelist = idWhitelistNotEmpty().obs;
-    update() async {
-      hasIdWhitelist.value = idWhitelistNotEmpty();
-    }
-
-    onChanged(bool? checked) async {
-      changeIdWhiteList(callback: update);
-    }
-
-    final isOptFixed = isOptionFixed(kOptionIdWhitelist);
-    return GestureDetector(
-      child: Tooltip(
-        message: translate('id_whitelist_tip'),
-        child: Obx(() => Row(
-              children: [
-                Checkbox(
-                        value: hasIdWhitelist.value,
-                        onChanged: enabled && !isOptFixed ? onChanged : null)
-                    .marginOnly(right: 5),
-                Offstage(
-                  offstage: !hasIdWhitelist.value,
-                  child: MouseRegion(
-                    child: const Icon(Icons.warning_amber_rounded,
-                            color: Color.fromARGB(255, 255, 204, 0))
-                        .marginOnly(right: 5),
-                    cursor: SystemMouseCursors.click,
-                  ),
-                ),
-                Expanded(
-                    child: Text(
-                  translate('Use ID whitelisting'),
-                  style: TextStyle(color: disabledTextColor(context, enabled)),
-                ))
-              ],
-            )),
-      ),
-      onTap: enabled
-          ? () {
-              onChanged(!hasIdWhitelist.value);
-            }
-          : null,
-    ).marginOnly(left: _kCheckBoxLeftMargin);
-  }
-
-  List<Widget> autoDisconnect(BuildContext context) {
-    TextEditingController controller = TextEditingController();
-    update(bool v) => setState(() {});
-    RxBool applyEnabled = false.obs;
-    return [
-      _OptionCheckBox(
-          context, 'auto_disconnect_option_tip', kOptionAllowAutoDisconnect,
-          update: update, enabled: !locked),
-      () {
-        bool enabled = option2bool(kOptionAllowAutoDisconnect,
-            bind.mainGetOptionSync(key: kOptionAllowAutoDisconnect));
-        if (!enabled) applyEnabled.value = false;
-        controller.text =
-            bind.mainGetOptionSync(key: kOptionAutoDisconnectTimeout);
-        final isOptFixed = isOptionFixed(kOptionAutoDisconnectTimeout);
-        return Offstage(
-          offstage: !enabled,
-          child: _SubLabeledWidget(
-            context,
-            'Timeout in minutes',
-            Row(children: [
-              SizedBox(
-                width: 95,
-                child: TextField(
-                  controller: controller,
-                  enabled: enabled && !locked && !isOptFixed,
-                  onChanged: (_) => applyEnabled.value = true,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(
-                        r'^([0-9]|[1-9]\d|[1-9]\d{2}|[1-9]\d{3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$')),
-                  ],
-                  decoration: const InputDecoration(
-                    hintText: '10',
-                    contentPadding:
-                        EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                  ),
-                ).workaroundFreezeLinuxMint().marginOnly(right: 15),
-              ),
-              Obx(() => ElevatedButton(
-                    onPressed:
-                        applyEnabled.value && enabled && !locked && !isOptFixed
-                            ? () async {
-                                applyEnabled.value = false;
-                                await bind.mainSetOption(
-                                    key: kOptionAutoDisconnectTimeout,
-                                    value: controller.text);
-                              }
-                            : null,
-                    child: Text(
-                      translate('Apply'),
-                    ),
-                  ))
-            ]),
-            enabled: enabled && !locked && !isOptFixed,
-          ),
-        );
-      }(),
-    ];
-  }
-
-  Widget unlockPin() {
-    bool enabled = !locked;
-    RxString unlockPin = bind.mainGetUnlockPin().obs;
-    update() async {
-      unlockPin.value = bind.mainGetUnlockPin();
-    }
-
-    onChanged(bool? checked) async {
-      changeUnlockPinDialog(unlockPin.value, update);
-    }
-
-    final isOptFixed = isOptionFixed(kOptionWhitelist);
-    return GestureDetector(
-      child: Obx(() => Row(
-            children: [
-              Checkbox(
-                      value: unlockPin.isNotEmpty,
-                      onChanged: enabled && !isOptFixed ? onChanged : null)
-                  .marginOnly(right: 5),
-              Expanded(
-                  child: Text(
-                translate('Unlock with PIN'),
-                style: TextStyle(color: disabledTextColor(context, enabled)),
-              ))
-            ],
-          )),
-      onTap: enabled
-          ? () {
-              onChanged(!unlockPin.isNotEmpty);
-            }
-          : null,
-    ).marginOnly(left: _kCheckBoxLeftMargin);
-  }
 }
 
 class _Display extends StatefulWidget {
@@ -1153,10 +754,8 @@ class _DisplayState extends State<_Display> {
     final scrollController = ScrollController();
     return ListView(controller: scrollController, children: [
       viewStyle(context),
-      scrollStyle(context),
       imageQuality(context),
-      codec(context),
-      trackpadSpeed(context),
+      hwcodec(),
       other(context),
     ]).marginOnly(bottom: _kListViewBottomMargin);
   }
@@ -1180,53 +779,6 @@ class _DisplayState extends State<_Display> {
           groupValue: groupValue,
           label: 'Scale adaptive',
           onChanged: isOptFixed ? null : onChanged),
-    ]);
-  }
-
-  Widget scrollStyle(BuildContext context) {
-    final isOptFixed = isOptionFixed(kOptionScrollStyle);
-    onChanged(String value) async {
-      await bind.mainSetUserDefaultOption(
-          key: kOptionScrollStyle, value: value);
-      setState(() {});
-    }
-
-    final groupValue = bind.mainGetUserDefaultOption(key: kOptionScrollStyle);
-
-    onEdgeScrollEdgeThicknessChanged(double value) async {
-      await bind.mainSetUserDefaultOption(
-          key: kOptionEdgeScrollEdgeThickness, value: value.round().toString());
-      setState(() {});
-    }
-
-    return _Card(title: 'Default Scroll Style', children: [
-      _Radio(context,
-          value: kRemoteScrollStyleAuto,
-          groupValue: groupValue,
-          label: 'ScrollAuto',
-          onChanged: isOptFixed ? null : onChanged),
-      _Radio(context,
-          value: kRemoteScrollStyleBar,
-          groupValue: groupValue,
-          label: 'Scrollbar',
-          onChanged: isOptFixed ? null : onChanged),
-      ...[
-        _Radio(context,
-            value: kRemoteScrollStyleEdge,
-            groupValue: groupValue,
-            label: 'ScrollEdge',
-            onChanged: isOptFixed ? null : onChanged),
-        Offstage(
-            offstage: groupValue != kRemoteScrollStyleEdge,
-            child: EdgeThicknessControl(
-              value: double.tryParse(bind.mainGetUserDefaultOption(
-                      key: kOptionEdgeScrollEdgeThickness)) ??
-                  100.0,
-              onChanged: isOptionFixed(kOptionEdgeScrollEdgeThickness)
-                  ? null
-                  : onEdgeScrollEdgeThicknessChanged,
-            )),
-      ],
     ]);
   }
 
@@ -1267,81 +819,24 @@ class _DisplayState extends State<_Display> {
     ]);
   }
 
-  Widget trackpadSpeed(BuildContext context) {
-    final initSpeed =
-        (int.tryParse(bind.mainGetUserDefaultOption(key: kKeyTrackpadSpeed)) ??
-            kDefaultTrackpadSpeed);
-    final curSpeed = SimpleWrapper(initSpeed);
-    void onDebouncer(int v) {
-      bind.mainSetUserDefaultOption(
-          key: kKeyTrackpadSpeed, value: v.toString());
-      // It's better to notify all sessions that the default speed is changed.
-      // But it may also be ok to take effect in the next connection.
-    }
-
-    return _Card(title: 'Default trackpad speed', children: [
-      TrackpadSpeedWidget(
-        value: curSpeed,
-        onDebouncer: onDebouncer,
-      ),
-    ]);
-  }
-
-  Widget codec(BuildContext context) {
-    onChanged(String value) async {
-      await bind.mainSetUserDefaultOption(
-          key: kOptionCodecPreference, value: value);
-      setState(() {});
-    }
-
-    final groupValue =
-        bind.mainGetUserDefaultOption(key: kOptionCodecPreference);
-    var hwRadios = [];
-    final isOptFixed = isOptionFixed(kOptionCodecPreference);
-    try {
-      final Map codecsJson = jsonDecode(bind.mainSupportedHwdecodings());
-      final h264 = codecsJson['h264'] ?? false;
-      final h265 = codecsJson['h265'] ?? false;
-      if (h264) {
-        hwRadios.add(_Radio(context,
-            value: 'h264',
-            groupValue: groupValue,
-            label: 'H264',
-            onChanged: isOptFixed ? null : onChanged));
-      }
-      if (h265) {
-        hwRadios.add(_Radio(context,
-            value: 'h265',
-            groupValue: groupValue,
-            label: 'H265',
-            onChanged: isOptFixed ? null : onChanged));
-      }
-    } catch (e) {
-      debugPrint("failed to parse supported hwdecodings, err=$e");
-    }
-    return _Card(title: 'Default Codec', children: [
-      _Radio(context,
-          value: 'auto',
-          groupValue: groupValue,
-          label: 'Auto',
-          onChanged: isOptFixed ? null : onChanged),
-      _Radio(context,
-          value: 'vp8',
-          groupValue: groupValue,
-          label: 'VP8',
-          onChanged: isOptFixed ? null : onChanged),
-      _Radio(context,
-          value: 'vp9',
-          groupValue: groupValue,
-          label: 'VP9',
-          onChanged: isOptFixed ? null : onChanged),
-      _Radio(context,
-          value: 'av1',
-          groupValue: groupValue,
-          label: 'AV1',
-          onChanged: isOptFixed ? null : onChanged),
-      ...hwRadios,
-    ]);
+  Widget hwcodec() {
+    final hwcodec = bind.mainHasHwcodec();
+    final vram = bind.mainHasVram();
+    return Offstage(
+      offstage: !(hwcodec || vram),
+      child: _Card(title: 'Hardware Codec', children: [
+        _OptionCheckBox(
+          context,
+          'Enable hardware codec',
+          kOptionEnableHwcodec,
+          update: (bool v) {
+            if (v) {
+              bind.mainCheckHwcodec();
+            }
+          },
+        )
+      ]),
+    );
   }
 
   Widget otherRow(String label, String key) {
@@ -1377,54 +872,37 @@ class _DisplayState extends State<_Display> {
   }
 }
 
-class _Checkbox extends StatefulWidget {
-  final String label;
-  final bool Function() getValue;
-  final Future<void> Function(bool) setValue;
-
-  const _Checkbox(
-      {Key? key,
-      required this.label,
-      required this.getValue,
-      required this.setValue})
-      : super(key: key);
+class _Audio extends StatefulWidget {
+  const _Audio({Key? key}) : super(key: key);
 
   @override
-  State<_Checkbox> createState() => _CheckboxState();
+  State<_Audio> createState() => _AudioState();
 }
 
-class _CheckboxState extends State<_Checkbox> {
-  var value = false;
-
-  @override
-  initState() {
-    super.initState();
-    value = widget.getValue();
-  }
-
+class _AudioState extends State<_Audio> {
   @override
   Widget build(BuildContext context) {
-    onChanged(bool b) async {
-      await widget.setValue(b);
-      setState(() {
-        value = widget.getValue();
-      });
+    final scrollController = ScrollController();
+    return ListView(controller: scrollController, children: [
+      audio(context),
+    ]).marginOnly(bottom: _kListViewBottomMargin);
+  }
+
+  Widget audio(BuildContext context) {
+    builder(devices, currentDevice, setDevice) {
+      final child = ComboBox(
+        keys: devices,
+        values: devices,
+        initialKey: currentDevice,
+        onChanged: (key) async {
+          setDevice(key);
+          setState(() {});
+        },
+      ).marginOnly(left: _kContentHMargin);
+      return _Card(title: 'Audio Input Device', children: [child]);
     }
 
-    return GestureDetector(
-      child: Row(
-        children: [
-          Checkbox(
-            value: value,
-            onChanged: (_) => onChanged(!value),
-          ).marginOnly(right: 5),
-          Expanded(
-            child: Text(translate(widget.label)),
-          )
-        ],
-      ).marginOnly(left: _kCheckBoxLeftMargin),
-      onTap: () => onChanged(!value),
-    );
+    return AudioInput(builder: builder);
   }
 }
 
@@ -1458,7 +936,7 @@ class _AboutState extends State<_About> {
       final scrollController = ScrollController();
       return SingleChildScrollView(
         controller: scrollController,
-        child: _Card(title: translate('About RustDesk'), children: [
+        child: _Card(title: '${translate('About')} IntraDesk', children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1477,20 +955,23 @@ class _AboutState extends State<_About> {
               SelectionArea(
                   child: Text('${translate('ID')}: $myId')
                       .marginSymmetric(vertical: 4.0)),
+              SelectionArea(
+                  child: Text(translate('intradesk-license-tip'))
+                      .marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com/privacy.html');
+                    launchUrlString(kIntraDeskSourceUrl);
                   },
                   child: Text(
-                    translate('Privacy Statement'),
+                    translate('Source code'),
                     style: linkStyle,
                   ).marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.com');
+                    launchUrlString('$kIntraDeskSourceUrl/blob/master/LICENCE');
                   },
                   child: Text(
-                    translate('Website'),
+                    translate('License'),
                     style: linkStyle,
                   ).marginSymmetric(vertical: 4.0)),
               Container(
@@ -1505,15 +986,15 @@ class _AboutState extends State<_About> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          Text(
-                            translate('Slogan_tip'),
+                            'IntraDesk',
                             style: TextStyle(
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white),
-                          )
+                                color: MyTheme.onAccent),
+                          ),
+                          Text(
+                            'RustDesk: Copyright © ${DateTime.now().toString().substring(0, 4)} Purslane Tech Pte. Ltd.',
+                            style: TextStyle(color: MyTheme.onAccent),
+                          ),
                         ],
                       ),
                     ),
@@ -1687,186 +1168,6 @@ Widget _Radio<T>(BuildContext context,
   );
 }
 
-class WaylandCard extends StatefulWidget {
-  const WaylandCard({Key? key}) : super(key: key);
-
-  @override
-  State<WaylandCard> createState() => _WaylandCardState();
-}
-
-class _WaylandCardState extends State<WaylandCard> {
-  final restoreTokenKey = 'wayland-restore-token';
-  static const _kClearShortcutsInhibitorEventKey =
-      'clear-gnome-shortcuts-inhibitor-permission-res';
-  final _clearShortcutsInhibitorFailedMsg = ''.obs;
-  // Don't show the shortcuts permission reset button for now.
-  // Users can change it manually:
-  //   "Settings" -> "Apps" -> "RustDesk" -> "Permissions" -> "Inhibit Shortcuts".
-  // For resetting(clearing) the permission from the portal permission store, you can
-  // use (replace <desktop-id> with the RustDesk desktop file ID):
-  //   busctl --user call org.freedesktop.impl.portal.PermissionStore \
-  //   /org/freedesktop/impl/portal/PermissionStore org.freedesktop.impl.portal.PermissionStore \
-  //   DeletePermission sss "gnome" "shortcuts-inhibitor" "<desktop-id>"
-  // On a native install this is typically "rustdesk.desktop"; on Flatpak it is usually
-  // the exported desktop ID derived from the Flatpak app-id (e.g. "com.rustdesk.RustDesk.desktop").
-  //
-  // We may add it back in the future if needed.
-  final showResetInhibitorPermission = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (showResetInhibitorPermission) {
-      platformFFI.registerEventHandler(
-          _kClearShortcutsInhibitorEventKey, _kClearShortcutsInhibitorEventKey,
-          (evt) async {
-        if (!mounted) return;
-        if (evt['success'] == true) {
-          setState(() {});
-        } else {
-          _clearShortcutsInhibitorFailedMsg.value =
-              evt['msg'] as String? ?? 'Unknown error';
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    if (showResetInhibitorPermission) {
-      platformFFI.unregisterEventHandler(
-          _kClearShortcutsInhibitorEventKey, _kClearShortcutsInhibitorEventKey);
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return futureBuilder(
-      future: bind.mainHandleWaylandScreencastRestoreToken(
-          key: restoreTokenKey, value: "get"),
-      hasData: (restoreToken) {
-        final hasShortcutsPermission = showResetInhibitorPermission &&
-            bind.mainGetCommonSync(
-                    key: "has-gnome-shortcuts-inhibitor-permission") ==
-                "true";
-
-        final children = [
-          if (restoreToken.isNotEmpty)
-            _buildClearScreenSelection(context, restoreToken),
-          if (hasShortcutsPermission)
-            _buildClearShortcutsInhibitorPermission(context),
-        ];
-        return Offstage(
-          offstage: children.isEmpty,
-          child: _Card(title: 'Wayland', children: children),
-        );
-      },
-    );
-  }
-
-  Widget _buildClearScreenSelection(BuildContext context, String restoreToken) {
-    onConfirm() async {
-      final msg = await bind.mainHandleWaylandScreencastRestoreToken(
-          key: restoreTokenKey, value: "clear");
-      gFFI.dialogManager.dismissAll();
-      if (msg.isNotEmpty) {
-        msgBox(gFFI.sessionId, 'custom-nocancel', 'Error', msg, '',
-            gFFI.dialogManager);
-      } else {
-        setState(() {});
-      }
-    }
-
-    showConfirmMsgBox() => msgBoxCommon(
-            gFFI.dialogManager,
-            'Confirmation',
-            Text(
-              translate('confirm_clear_Wayland_screen_selection_tip'),
-            ),
-            [
-              dialogButton('OK', onPressed: onConfirm),
-              dialogButton('Cancel',
-                  onPressed: () => gFFI.dialogManager.dismissAll())
-            ]);
-
-    return _Button(
-      'Clear Wayland screen selection',
-      showConfirmMsgBox,
-      tip: 'clear_Wayland_screen_selection_tip',
-      style: ButtonStyle(
-        backgroundColor: MaterialStateProperty.all<Color>(
-            Theme.of(context).colorScheme.error.withOpacity(0.75)),
-      ),
-    );
-  }
-
-  Widget _buildClearShortcutsInhibitorPermission(BuildContext context) {
-    onConfirm() {
-      _clearShortcutsInhibitorFailedMsg.value = '';
-      bind.mainSetCommon(
-          key: "clear-gnome-shortcuts-inhibitor-permission", value: "");
-      gFFI.dialogManager.dismissAll();
-    }
-
-    showConfirmMsgBox() => msgBoxCommon(
-            gFFI.dialogManager,
-            'Confirmation',
-            Text(
-              translate('confirm-clear-shortcuts-inhibitor-permission-tip'),
-            ),
-            [
-              dialogButton('OK', onPressed: onConfirm),
-              dialogButton('Cancel',
-                  onPressed: () => gFFI.dialogManager.dismissAll())
-            ]);
-
-    return Column(children: [
-      Obx(
-        () => _clearShortcutsInhibitorFailedMsg.value.isEmpty
-            ? Offstage()
-            : Align(
-                alignment: Alignment.topLeft,
-                child: Text(_clearShortcutsInhibitorFailedMsg.value,
-                        style: DefaultTextStyle.of(context)
-                            .style
-                            .copyWith(color: Colors.red))
-                    .marginOnly(bottom: 10.0)),
-      ),
-      _Button(
-        'Reset keyboard shortcuts permission',
-        showConfirmMsgBox,
-        tip: 'clear-shortcuts-inhibitor-permission-tip',
-        style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all<Color>(
-              Theme.of(context).colorScheme.error.withOpacity(0.75)),
-        ),
-      ),
-    ]);
-  }
-}
-
-// ignore: non_constant_identifier_names
-Widget _Button(String label, Function() onPressed,
-    {bool enabled = true, String? tip, ButtonStyle? style}) {
-  var button = ElevatedButton(
-    onPressed: enabled ? onPressed : null,
-    child: Text(
-      translate(label),
-    ).marginSymmetric(horizontal: 15),
-    style: style,
-  );
-  StatefulWidget child;
-  if (tip == null) {
-    child = button;
-  } else {
-    child = Tooltip(message: translate(tip), child: button);
-  }
-  return Row(children: [
-    child,
-  ]).marginOnly(left: _kContentHMargin);
-}
-
 // ignore: non_constant_identifier_names
 Widget _SubButton(String label, Function() onPressed, [bool enabled = true]) {
   return Row(
@@ -1942,115 +1243,6 @@ Widget _lock(
       ));
 }
 
-_LabeledTextField(
-    BuildContext context,
-    String label,
-    TextEditingController controller,
-    String errorText,
-    bool enabled,
-    bool secure) {
-  return Table(
-    columnWidths: const {
-      0: FixedColumnWidth(150),
-      1: FlexColumnWidth(),
-    },
-    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-    children: [
-      TableRow(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: Text(
-              '${translate(label)}:',
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 16,
-                color: disabledTextColor(context, enabled),
-              ),
-            ),
-          ),
-          TextField(
-            controller: controller,
-            enabled: enabled,
-            obscureText: secure,
-            autocorrect: false,
-            decoration: InputDecoration(
-              errorText: errorText.isNotEmpty ? errorText : null,
-            ),
-            style: TextStyle(
-              color: disabledTextColor(context, enabled),
-            ),
-          ).workaroundFreezeLinuxMint(),
-        ],
-      ),
-    ],
-  ).marginOnly(bottom: 8);
-}
-
-class _CountDownButton extends StatefulWidget {
-  _CountDownButton({
-    Key? key,
-    required this.text,
-    required this.second,
-    required this.onPressed,
-  }) : super(key: key);
-  final String text;
-  final VoidCallback? onPressed;
-  final int second;
-
-  @override
-  State<_CountDownButton> createState() => _CountDownButtonState();
-}
-
-class _CountDownButtonState extends State<_CountDownButton> {
-  bool _isButtonDisabled = false;
-
-  late int _countdownSeconds = widget.second;
-
-  Timer? _timer;
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _startCountdownTimer() {
-    _timer = Timer.periodic(Duration(seconds: 1), (timer) {
-      if (_countdownSeconds <= 0) {
-        setState(() {
-          _isButtonDisabled = false;
-        });
-        timer.cancel();
-      } else {
-        setState(() {
-          _countdownSeconds--;
-        });
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: _isButtonDisabled
-          ? null
-          : () {
-              widget.onPressed?.call();
-              setState(() {
-                _isButtonDisabled = true;
-                _countdownSeconds = widget.second;
-              });
-              _startCountdownTimer();
-            },
-      child: Text(
-        _isButtonDisabled ? '$_countdownSeconds s' : translate(widget.text),
-      ),
-    );
-  }
-}
-
-// Tappable row that pushes the shortcut configuration page.
 class _ShortcutsConfigureRow extends StatelessWidget {
   // ignore: unused_element
   const _ShortcutsConfigureRow({Key? key}) : super(key: key);

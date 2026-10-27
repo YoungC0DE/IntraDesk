@@ -4,7 +4,10 @@ use hbb_common::tokio;
 use hbb_common::{allow_err, log};
 use base::config::keys;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// How long the tray waits for the main process at startup before giving up on it.
+const MAIN_PROCESS_WAIT: Duration = Duration::from_secs(30);
 
 pub fn start_tray() {
     if crate::ui_interface::get_builtin_option(keys::OPTION_HIDE_TRAY) == "Y" {
@@ -22,7 +25,7 @@ fn make_tray() -> hbb_common::ResultType<()> {
     use hbb_common::anyhow::Context;
     use tao::event_loop::{ControlFlow, EventLoopBuilder};
     use tray_icon::{
-        menu::{Menu, MenuEvent, MenuItem},
+        menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
         TrayIcon, TrayIconBuilder, TrayIconEvent as TrayEvent,
     };
 
@@ -53,13 +56,22 @@ fn make_tray() -> hbb_common::ResultType<()> {
 
     let tray_menu = Menu::new();
     let open_i = MenuItem::new(translate("Open".to_owned()), true, None);
-    tray_menu.append_items(&[&open_i]).ok();
+    let copy_password_i = MenuItem::new(translate("Copy password".to_owned()), true, None);
+    let exit_i = MenuItem::new(translate("Exit".to_owned()), true, None);
+    tray_menu
+        .append_items(&[
+            &open_i,
+            &copy_password_i,
+            &PredefinedMenuItem::separator(),
+            &exit_i,
+        ])
+        .ok();
     let tooltip = |count: usize| {
         if count == 0 {
             format!(
-                "{} {}",
+                "{} - {}",
                 crate::get_app_name(),
-                translate("Service is running".to_owned()),
+                translate("Ready".to_owned()),
             )
         } else {
             format!(
@@ -128,6 +140,10 @@ fn make_tray() -> hbb_common::ResultType<()> {
         if let Ok(event) = menu_channel.try_recv() {
             if event.id == open_i.id() {
                 open_func();
+            } else if event.id == copy_password_i.id() {
+                copy_password();
+            } else if event.id == exit_i.id() {
+                quit_main_process();
             }
         }
 
@@ -161,44 +177,83 @@ fn make_tray() -> hbb_common::ResultType<()> {
                         .as_mut()
                         .map(|t| t.set_tooltip(Some(tooltip(count))));
                 }
+                // The main process is gone. Drop the icon first: exiting with it alive
+                // leaves a dead icon in the notification area until the mouse passes over.
+                Data::Close => {
+                    _tray_icon.lock().unwrap().take();
+                    *control_flow = ControlFlow::Exit;
+                }
                 _ => {}
             }
         }
     });
 }
 
+/// Polls the main process for the session count and sends `Data::Close` once the main
+/// process is gone, so the tray lives exactly as long as the app.
 #[tokio::main(flavor = "current_thread")]
 async fn start_query_session_count(sender: std::sync::mpsc::Sender<Data>) {
     let mut last_count = 0;
+    let started = Instant::now();
+    let mut connected_once = false;
     loop {
-        if let Ok(mut c) = crate::ipc::connect(1000, "").await {
-            let mut timer = crate::rustdesk_interval(tokio::time::interval(Duration::from_secs(1)));
-            loop {
-                tokio::select! {
-                    res = c.next() => {
-                        match res {
-                            Err(err) => {
-                                log::error!("ipc connection closed: {}", err);
-                                break;
-                            }
-
-                            Ok(Some(Data::ControlledSessionCount(count))) => {
-                                if count != last_count {
-                                    last_count = count;
-                                    sender.send(Data::ControlledSessionCount(count)).ok();
-                                }
-                            }
-                            _ => {}
+        let Ok(mut c) = crate::ipc::connect(1000, "").await else {
+            if connected_once || started.elapsed() > MAIN_PROCESS_WAIT {
+                log::info!("Main process is not running, closing the tray");
+                sender.send(Data::Close).ok();
+                return;
+            }
+            hbb_common::sleep(1.).await;
+            continue;
+        };
+        connected_once = true;
+        let mut timer = crate::rustdesk_interval(tokio::time::interval(Duration::from_secs(1)));
+        loop {
+            tokio::select! {
+                res = c.next() => {
+                    match res {
+                        Err(err) => {
+                            log::error!("ipc connection closed: {}", err);
+                            break;
                         }
-                    }
 
-                    _ = timer.tick() => {
-                        c.send(&Data::ControlledSessionCount(0)).await.ok();
+                        Ok(Some(Data::ControlledSessionCount(count))) => {
+                            if count != last_count {
+                                last_count = count;
+                                sender.send(Data::ControlledSessionCount(count)).ok();
+                            }
+                        }
+                        _ => {}
                     }
+                }
+
+                _ = timer.tick() => {
+                    c.send(&Data::ControlledSessionCount(0)).await.ok();
                 }
             }
         }
         hbb_common::sleep(1.).await;
+    }
+}
+
+fn copy_password() {
+    match crate::ipc::get_config("temporary-password") {
+        Ok(Some(password)) if !password.is_empty() => {
+            if let Err(err) = arboard::Clipboard::new().and_then(|mut c| c.set_text(password)) {
+                log::error!("Failed to copy the password: {}", err);
+            }
+        }
+        Ok(_) => log::warn!("No temporary password to copy"),
+        Err(err) => log::error!("Failed to get the temporary password: {}", err),
+    }
+}
+
+/// Asks the main process to exit. The tray follows once the IPC connection drops.
+#[tokio::main(flavor = "current_thread")]
+async fn quit_main_process() {
+    match crate::ipc::connect(1000, "").await {
+        Ok(mut c) => allow_err!(c.send(&Data::Close).await),
+        Err(err) => log::error!("Failed to reach the main process: {}", err),
     }
 }
 

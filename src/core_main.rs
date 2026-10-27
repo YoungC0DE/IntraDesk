@@ -132,6 +132,10 @@ pub fn core_main() -> Option<CoreMainAction> {
             hbb_common::config::PeerConfig::preload_peers();
         }
         std::thread::spawn(move || crate::start_server(false, no_server));
+        // A second tray exits on its own (single-instance lock), so no process scan here.
+        if args.is_empty() {
+            crate::run_me(vec!["--tray"]).ok();
+        }
     } else {
 
         if args[0] == "--portable-service" {

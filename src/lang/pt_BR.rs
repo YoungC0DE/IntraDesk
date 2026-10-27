@@ -5,7 +5,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Password", "Senha"),
         ("Ready", "Pronto"),
         ("Established", "Estabelecido"),
-        ("Service is running", "Serviço está em execução"),
         ("Transfer file", "Transferir arquivos"),
         ("Connect", "Conectar"),
         ("Recent sessions", "Sessões recentes"),
@@ -381,5 +380,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Source code", "Código-fonte"),
         ("License", "Licença"),
         ("intradesk-license-tip", "O IntraDesk é software livre, sob a licença GNU AGPL-3.0. É baseado no RustDesk."),
+        ("Copy password", "Copiar senha"),
     ].iter().cloned().collect();
 }

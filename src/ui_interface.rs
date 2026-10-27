@@ -1,7 +1,6 @@
 use base::config::keys;
 use hbb_common::{
     allow_err,
-    bytes::Bytes,
     config::{self, Config, LocalConfig, PeerConfig},
     log,
     tokio,
@@ -59,13 +58,6 @@ lazy_static::lazy_static! {
 #[inline]
 pub fn get_id() -> String {
     return ipc::get_id();
-}
-
-#[inline]
-pub fn refresh_options() {
-    {
-        *OPTIONS.lock().unwrap() = Config::get_options();
-    }
 }
 
 #[inline]
@@ -741,23 +733,6 @@ pub fn support_remove_wallpaper() -> bool {
     return crate::platform::WallPaperRemover::support();
 }
 
-pub fn has_valid_2fa() -> bool {
-    let raw = get_option("2fa");
-    crate::auth_2fa::get_2fa(Some(raw)).is_some()
-}
-
-pub fn generate2fa() -> String {
-    crate::auth_2fa::generate2fa()
-}
-
-pub fn verify2fa(code: String) -> bool {
-    let res = crate::auth_2fa::verify2fa(code);
-    if res {
-        refresh_options();
-    }
-    res
-}
-
 pub fn check_hwcodec() {
     #[cfg(feature = "hwcodec")]
     {
@@ -779,19 +754,6 @@ pub fn set_unlock_pin(pin: String) -> String {
         Ok(_) => String::default(),
         Err(err) => err.to_string(),
     }
-}
-
-pub fn get_trusted_devices() -> String {
-    return ipc::get_trusted_devices();
-}
-
-pub fn remove_trusted_devices(json: &str) {
-    let hwids = serde_json::from_str::<Vec<Bytes>>(json).unwrap_or_default();
-    ipc::remove_trusted_devices(hwids);
-}
-
-pub fn clear_trusted_devices() {
-    ipc::clear_trusted_devices();
 }
 
 pub fn max_encrypt_len() -> usize {

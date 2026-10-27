@@ -527,8 +527,6 @@ class FfiModel with ChangeNotifier {
 
     if (type == 're-input-password') {
       wrongPasswordDialog(sessionId, dialogManager, type, title, text);
-    } else if (type == 'input-2fa') {
-      enter2FaDialog(sessionId, dialogManager);
     } else if (type == 'input-password') {
       enterPasswordDialog(sessionId, dialogManager);
     } else if (type == 'restarting') {
@@ -3473,11 +3471,6 @@ class FFI {
   void login(SessionID sessionId, String password, bool remember) {
     bind.sessionLogin(
         sessionId: sessionId, password: password, remember: remember);
-  }
-
-  void send2FA(SessionID sessionId, String code, bool trustThisDevice) {
-    bind.sessionSend2Fa(
-        sessionId: sessionId, code: code, trustThisDevice: trustThisDevice);
   }
 
   /// Close the remote session.

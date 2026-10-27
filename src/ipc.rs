@@ -341,8 +341,6 @@ pub enum Data {
     // Although the key is not necessary, it is used to avoid hardcoding the key.
     WaylandScreencastRestoreToken((String, String)),
     HwCodecConfig(Option<String>),
-    RemoveTrustedDevices(Vec<Bytes>),
-    ClearTrustedDevices,
     ControlPermissionsRemoteModify(Option<bool>),
     FileTransferEnabledState(Option<bool>),
     // --- DRM/KMS capture (opt-in `drm` feature) over the `_drm` service-scoped channel ---
@@ -542,8 +540,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                     value = Some(crate::common::pk_to_fingerprint(Config::get_key_pair().1));
                 } else if name == "unlock-pin" {
                     value = Some(Config::get_unlock_pin());
-                } else if name == "trusted-devices" {
-                    value = Some(Config::get_trusted_devices_json());
                 } else {
                     value = None;
                 }
@@ -672,12 +668,6 @@ async fn handle(data: Data, stream: &mut Connection) {
                         .await
                 );
             }
-        }
-        Data::RemoveTrustedDevices(v) => {
-            Config::remove_trusted_devices(&v);
-        }
-        Data::ClearTrustedDevices => {
-            Config::clear_trusted_devices();
         }
         Data::ControlPermissionsRemoteModify(_) => {
             use hbb_common::rendezvous_proto::control_permissions::Permission;
@@ -1048,24 +1038,6 @@ pub fn get_unlock_pin() -> String {
     } else {
         Config::get_unlock_pin()
     }
-}
-
-pub fn get_trusted_devices() -> String {
-    if let Ok(Some(v)) = get_config("trusted-devices") {
-        v
-    } else {
-        Config::get_trusted_devices_json()
-    }
-}
-
-pub fn remove_trusted_devices(hwids: Vec<Bytes>) {
-    Config::remove_trusted_devices(&hwids);
-    allow_err!(set_data(&Data::RemoveTrustedDevices(hwids)));
-}
-
-pub fn clear_trusted_devices() {
-    Config::clear_trusted_devices();
-    allow_err!(set_data(&Data::ClearTrustedDevices));
 }
 
 pub fn get_id() -> String {

@@ -62,7 +62,6 @@ pub const OPTION_PRESET_NOTE: &str = "preset-note";
 pub const OPTION_ENABLE_DIRECTX_CAPTURE: &str = "enable-directx-capture";
 pub const OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE: &str =
     "enable-android-software-encoding-half-scale";
-pub const OPTION_ENABLE_TRUSTED_DEVICES: &str = "enable-trusted-devices";
 pub const OPTION_AV1_TEST: &str = "av1-test";
 /// Maximum number of files allowed during a single file transfer request.
 ///
@@ -235,7 +234,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_PRESET_NOTE,
     OPTION_ENABLE_DIRECTX_CAPTURE,
     OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE,
-    OPTION_ENABLE_TRUSTED_DEVICES,
     OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
 ];
 

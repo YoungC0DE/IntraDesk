@@ -1119,10 +1119,6 @@ impl<T: InvokeUiSession> Remote<T> {
                 }
                 Some(message::Union::LoginResponse(lr)) => match lr.union {
                     Some(login_response::Union::Error(err)) => {
-                        if err == client::REQUIRE_2FA {
-                            self.handler.lc.write().unwrap().enable_trusted_devices =
-                                lr.enable_trusted_devices;
-                        }
                         if !self.handler.handle_login_error(&err) {
                             return false;
                         }
@@ -1904,12 +1900,9 @@ mod tests {
         Data::Message(msg)
     }
 
-    fn auth_2fa() -> Data {
+    fn login_request() -> Data {
         let mut msg = Message::new();
-        msg.set_auth_2fa(Auth2FA {
-            code: "123456".to_owned(),
-            ..Default::default()
-        });
+        msg.set_login_request(LoginRequest::new());
         Data::Message(msg)
     }
 
@@ -1924,8 +1917,8 @@ mod tests {
             !arrives(&mut far).await,
             "a clipboard went out before the login"
         );
-        assert!(remote.handle_msg_from_ui(auth_2fa(), &mut peer).await);
-        assert!(arrives(&mut far).await, "the 2FA code was held back");
+        assert!(remote.handle_msg_from_ui(login_request(), &mut peer).await);
+        assert!(arrives(&mut far).await, "the login was held back");
 
         remote.is_connected = true;
         assert!(remote.handle_msg_from_ui(clipboard(), &mut peer).await);

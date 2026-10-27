@@ -9,7 +9,7 @@ use hbb_common::{
     config::{
         self, decode_permanent_password_h1_from_storage, decode_preset_password_h1_from_storage,
         local_permanent_password_storage_is_usable_for_auth,
-        preset_permanent_password_storage_is_usable_for_auth, Config, TrustedDevice,
+        preset_permanent_password_storage_is_usable_for_auth, Config,
     },
     get_time, get_version_number,
     password_security as password,
@@ -41,13 +41,13 @@ use system_shutdown;
 
 pub type Sender = mpsc::UnboundedSender<(Instant, Arc<Message>)>;
 
-const FAILURE_IDX_ID_WHITELIST: usize = 2;
+const FAILURE_IDX_ID_WHITELIST: usize = 1;
 // How long a rejection counts, so also how long a blocked address stays blocked. Longer
 // throttles enumeration harder; shorter limits collateral on whitelisted neighbours.
 const ID_WHITELIST_FAILURE_DECAY_MINUTES: i32 = 10;
 
 /// A connection not authorized within this long of starting is closed, however alive it
-/// keeps itself: a wrong password, a pending 2FA, an accept prompt or an admin-terminal
+/// keeps itself: a wrong password, an accept prompt or an admin-terminal
 /// credential prompt still unanswered. The controller reconnects on its own and the prompt
 /// comes back. A connection that says nothing at all goes at the 30 s idle timeout already.
 const LOGIN_GRACE: Duration = Duration::from_secs(180);
@@ -160,10 +160,10 @@ fn lockout_expired(failure: (i32, i32, i32), now_minute: i32) -> bool {
 lazy_static::lazy_static! {
     // Connections between accept and authorization, oldest first; see admit_unauthorized.
     static ref UNAUTHORIZED_CONNS: Mutex<Vec<(i32, IpAddr, Arc<UnauthorizedShared>)>> = Default::default();
-    // [0] password, [1] 2FA, [2] ID whitelist.
-    // Bucket 2 is separate so its rejections do not touch the password / 2FA budgets. It is
+    // [0] password, [1] ID whitelist.
+    // Bucket 1 is separate so its rejections do not touch the password budget. It is
     // decayed in `check_id_whitelist` and cleared on auth, never on a bare id match.
-    static ref LOGIN_FAILURES: [Arc::<Mutex<HashMap<String, (i32, i32, i32)>>>; 3] = Default::default();
+    static ref LOGIN_FAILURES: [Arc::<Mutex<HashMap<String, (i32, i32, i32)>>>; 2] = Default::default();
     static ref SESSIONS: Arc::<Mutex<HashMap<SessionKey, Session>>> = Default::default();
     static ref ALIVE_CONNS: Arc::<Mutex<Vec<i32>>> = Default::default();
     pub static ref AUTHED_CONNS: Arc::<Mutex<Vec<AuthedConn>>> = Default::default();
@@ -223,7 +223,6 @@ pub struct SessionKey {
 struct Session {
     last_recv_time: Arc<Mutex<Instant>>,
     random_password: String,
-    tfa: bool,
 }
 
 struct StartCmIpcPara {
@@ -259,8 +258,6 @@ pub struct Connection {
     authorized: bool,
     // The place among the unauthorized connections; given back at authorization.
     unauthorized_id: Option<UnauthorizedID>,
-    require_2fa: Option<totp_rs::TOTP>,
-    awaiting_2fa: bool,
     keyboard: bool,
     clipboard: bool,
     audio: bool,
@@ -397,8 +394,6 @@ impl Connection {
                 tx: Some(tx),
                 tx_video: Some(tx_video),
             },
-            require_2fa: crate::auth_2fa::get_2fa(None),
-            awaiting_2fa: false,
             // Defer display enumeration until login succeeds. Monitor login replaces this
             // with the primary index returned with the refreshed display snapshot.
             display_idx: 0,
@@ -982,18 +977,10 @@ impl Connection {
     }
 
     // Returns whether this connection should be kept alive.
-    // `true` does not necessarily mean authorization succeeded (e.g. REQUIRE_2FA case).
     async fn send_logon_response_and_keep_alive(&mut self) -> bool {
         if self.authorized {
             return true;
         }
-        if self.require_2fa.is_some() && !self.is_recent_session(true) {
-            self.awaiting_2fa = true;
-            self.send_login_error(crate::client::REQUIRE_2FA).await;
-            // Keep the connection alive so the client can continue with 2FA.
-            return true;
-        }
-        self.awaiting_2fa = false;
         self.stream.set_max_packet_length(usize::MAX);
         self.authorized = true;
         self.unauthorized_id = None;
@@ -1243,9 +1230,6 @@ impl Connection {
         let mut msg_out = Message::new();
         let mut res = LoginResponse::new();
         res.set_error(err.to_string());
-        if err.to_string() == crate::client::REQUIRE_2FA {
-            res.enable_trusted_devices = Self::enable_trusted_devices();
-        }
         msg_out.set_login_response(res);
         self.send(msg_out).await;
     }
@@ -1441,7 +1425,6 @@ impl Connection {
             raii::AuthedConnID::update_or_insert_session(
                 self.session_key(),
                 Some(password),
-                Some(false),
             );
             self.check_update_temporary_password(true);
             return true;
@@ -1459,7 +1442,7 @@ impl Connection {
         }
     }
 
-    fn is_recent_session(&mut self, tfa: bool) -> bool {
+    fn is_recent_session(&mut self) -> bool {
         SESSIONS
             .lock()
             .unwrap()
@@ -1472,12 +1455,8 @@ impl Connection {
         // last_recv_time is a mutex variable shared with connection, can be updated lively.
         if let Some(session) = session {
             if !self.lr.password.is_empty()
-                && (tfa && session.tfa
-                    || !tfa && self.validate_password_plain(&session.random_password))
+                && self.validate_password_plain(&session.random_password)
             {
-                if tfa {
-                } else {
-                }
                 log::info!("is recent session");
                 return true;
             }
@@ -1537,14 +1516,6 @@ impl Connection {
         } else {
             Encoder::update(NewOnlyVP9(self.inner.id()));
         }
-    }
-
-    #[inline]
-    fn enable_trusted_devices() -> bool {
-        config::option2bool(
-            keys::OPTION_ENABLE_TRUSTED_DEVICES,
-            &Config::get_option(keys::OPTION_ENABLE_TRUSTED_DEVICES),
-        )
     }
 
     fn reset_session_scope_for_login(&mut self) {
@@ -1616,19 +1587,6 @@ impl Connection {
         if let Some(o) = lr.option.as_ref() {
             self.options_in_login = Some(o.clone());
         }
-        if self.require_2fa.is_some() && !lr.hwid.is_empty() && Self::enable_trusted_devices() {
-            let devices = Config::get_trusted_devices();
-            if let Some(device) = devices.iter().find(|d| d.hwid == lr.hwid) {
-                if !device.outdate()
-                    && device.id == lr.my_id
-                    && device.name == lr.my_name
-                    && device.platform == lr.my_platform
-                {
-                    log::info!("2FA bypassed by trusted devices");
-                    self.require_2fa = None;
-                }
-            }
-        }
         self.video_ack_required = lr.video_ack_required;
     }
 
@@ -1677,7 +1635,6 @@ impl Connection {
             if !self.check_login_scope(&lr).await {
                 return false;
             }
-            self.awaiting_2fa = false;
             self.handle_login_request_without_validation(&lr).await;
             if self.authorized {
                 return true;
@@ -1727,7 +1684,7 @@ impl Connection {
 
             self.try_start_cm_ipc();
 
-            if self.is_recent_session(false) {
+            if self.is_recent_session() {
                 if !self.send_logon_response_and_keep_alive().await {
                     return false;
                 }
@@ -1751,46 +1708,6 @@ impl Connection {
                         return false;
                     }
                     self.try_start_cm(lr.my_id, lr.my_name, self.authorized);
-                }
-            }
-        } else if let Some(message::Union::Auth2fa(tfa)) = msg.union {
-            // A 2FA response may arrive after authorization has completed.
-            // Ignore it unless this connection is still waiting for the response.
-            if !self.awaiting_2fa {
-                return true;
-            }
-            let (failure, res) = self.check_failure(1).await;
-            if !res {
-                return true;
-            }
-            if let Some(totp) = self.require_2fa.as_ref() {
-                if let Ok(res) = totp.check_current(&tfa.code) {
-                    if res {
-                        self.update_failure(failure, true, 1);
-                        self.require_2fa.take();
-                        raii::AuthedConnID::set_session_2fa(self.session_key());
-                        if !self.send_logon_response_and_keep_alive().await {
-                            return false;
-                        }
-                        self.try_start_cm(
-                            self.lr.my_id.to_owned(),
-                            self.lr.my_name.to_owned(),
-                            self.authorized,
-                        );
-                        if !tfa.hwid.is_empty() && Self::enable_trusted_devices() {
-                            Config::add_trusted_device(TrustedDevice {
-                                hwid: tfa.hwid,
-                                time: hbb_common::get_time(),
-                                id: self.lr.my_id.clone(),
-                                name: self.lr.my_name.clone(),
-                                platform: self.lr.my_platform.clone(),
-                            });
-                        }
-                    } else {
-                        self.update_failure(failure, false, 1);
-                        self.send_login_error(crate::client::LOGIN_MSG_2FA_WRONG)
-                            .await;
-                    }
                 }
             }
         } else if let Some(message::Union::TestDelay(t)) = msg.union {
@@ -3949,7 +3866,6 @@ mod raii {
         pub fn update_or_insert_session(
             key: SessionKey,
             password: Option<String>,
-            tfa: Option<bool>,
         ) {
             let mut lock = SESSIONS.lock().unwrap();
             let session = lock.get_mut(&key);
@@ -3957,33 +3873,12 @@ mod raii {
                 if let Some(password) = password {
                     session.random_password = password;
                 }
-                if let Some(tfa) = tfa {
-                    session.tfa = tfa;
-                }
             } else {
                 lock.insert(
                     key,
                     Session {
                         random_password: password.unwrap_or_default(),
-                        tfa: tfa.unwrap_or_default(),
                         last_recv_time: Arc::new(Mutex::new(Instant::now())),
-                    },
-                );
-            }
-        }
-
-        pub fn set_session_2fa(key: SessionKey) {
-            let mut lock = SESSIONS.lock().unwrap();
-            let session = lock.get_mut(&key);
-            if let Some(session) = session {
-                session.tfa = true;
-            } else {
-                lock.insert(
-                    key,
-                    Session {
-                        last_recv_time: Arc::new(Mutex::new(Instant::now())),
-                        random_password: "".to_owned(),
-                        tfa: true,
                     },
                 );
             }

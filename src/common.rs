@@ -1089,15 +1089,6 @@ pub fn is_empty_uni_link(arg: &str) -> bool {
     arg[prefix.len()..].chars().all(|c| c == '/')
 }
 
-pub fn get_hwid() -> Bytes {
-    use hbb_common::sha2::{Digest, Sha256};
-
-    let uuid = hbb_common::get_uuid();
-    let mut hasher = Sha256::new();
-    hasher.update(&uuid);
-    Bytes::from(hasher.finalize().to_vec())
-}
-
 #[inline]
 pub fn get_builtin_option(key: &str) -> String {
     config::BUILTIN_SETTINGS

@@ -9,12 +9,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use bytes::Bytes;
 use rand::Rng;
 use regex::Regex;
 use serde as de;
 use serde_derive::{Deserialize, Serialize};
-use serde_json;
 use sodiumoxide::base64;
 use sodiumoxide::crypto::sign;
 
@@ -52,7 +50,6 @@ lazy_static::lazy_static! {
     static ref CONFIG2: RwLock<Config2> = RwLock::new(Config2::load());
     static ref LOCAL_CONFIG: RwLock<LocalConfig> = RwLock::new(LocalConfig::load());
     static ref STATUS: RwLock<Status> = RwLock::new(Status::load());
-    static ref TRUSTED_DEVICES: RwLock<(Vec<TrustedDevice>, bool)> = Default::default();
     pub static ref APP_NAME: RwLock<String> = RwLock::new("IntraDesk".to_owned());
     static ref KEY_PAIR: Mutex<Option<KeyPair>> = Default::default();
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
@@ -181,8 +178,6 @@ pub struct Config {
 pub struct Config2 {
     #[serde(default, deserialize_with = "deserialize_string")]
     unlock_pin: String,
-    #[serde(default, deserialize_with = "deserialize_string")]
-    trusted_devices: String,
 
     // the other scalar value must before this
     #[serde(default, deserialize_with = "deserialize_hashmap_string_string")]
@@ -951,7 +946,6 @@ impl Config {
         }
         config.password = stored;
         config.store();
-        Self::clear_trusted_devices();
         true
     }
 
@@ -987,7 +981,6 @@ impl Config {
         }
 
         config.store();
-        Self::clear_trusted_devices();
         Ok(true)
     }
 
@@ -1125,70 +1118,10 @@ impl Config {
         config.store();
     }
 
-    pub fn get_trusted_devices_json() -> String {
-        serde_json::to_string(&Self::get_trusted_devices()).unwrap_or_default()
-    }
-
-    pub fn get_trusted_devices() -> Vec<TrustedDevice> {
-        let (devices, synced) = TRUSTED_DEVICES.read().unwrap().clone();
-        if synced {
-            return devices;
-        }
-        let devices = CONFIG2.read().unwrap().trusted_devices.clone();
-        let (devices, succ, store) = decrypt_str_or_original(&devices, PASSWORD_ENC_VERSION);
-        if succ {
-            let mut devices: Vec<TrustedDevice> =
-                serde_json::from_str(&devices).unwrap_or_default();
-            let len = devices.len();
-            devices.retain(|d| !d.outdate());
-            if store || devices.len() != len {
-                Self::set_trusted_devices(devices.clone());
-            }
-            *TRUSTED_DEVICES.write().unwrap() = (devices.clone(), true);
-            devices
-        } else {
-            Default::default()
-        }
-    }
-
-    fn set_trusted_devices(mut trusted_devices: Vec<TrustedDevice>) {
-        trusted_devices.retain(|d| !d.outdate());
-        let devices = serde_json::to_string(&trusted_devices).unwrap_or_default();
-        let max_len = 1024 * 1024;
-        if devices.bytes().len() > max_len {
-            log::error!("Trusted devices too large: {}", devices.bytes().len());
-            return;
-        }
-        let devices = encrypt_str_or_original(&devices, PASSWORD_ENC_VERSION, max_len);
-        let mut config = CONFIG2.write().unwrap();
-        config.trusted_devices = devices;
-        config.store();
-        *TRUSTED_DEVICES.write().unwrap() = (trusted_devices, true);
-    }
-
-    pub fn add_trusted_device(device: TrustedDevice) {
-        let mut devices = Self::get_trusted_devices();
-        devices.retain(|d| d.hwid != device.hwid);
-        devices.push(device);
-        Self::set_trusted_devices(devices);
-    }
-
-    pub fn remove_trusted_devices(hwids: &Vec<Bytes>) {
-        let mut devices = Self::get_trusted_devices();
-        devices.retain(|d| !hwids.contains(&d.hwid));
-        Self::set_trusted_devices(devices);
-    }
-
-    pub fn clear_trusted_devices() {
-        Self::set_trusted_devices(Default::default());
-    }
-
     pub fn get() -> Config {
         return CONFIG.read().unwrap().clone();
     }
 
-    // TODO: `Config::set()` does not invalidate trusted devices when permanent password/salt changes.
-    // This matches historical behavior, but may need revisiting in a separate PR.
     pub fn set(cfg: Config) -> bool {
         let mut lock = CONFIG.write().unwrap();
         if *lock == cfg {
@@ -1944,22 +1877,6 @@ impl UserDefaultConfig {
             &DEFAULT_DISPLAY_SETTINGS,
             k,
         )
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct TrustedDevice {
-    pub hwid: Bytes,
-    pub time: i64,
-    pub id: String,
-    pub name: String,
-    pub platform: String,
-}
-
-impl TrustedDevice {
-    pub fn outdate(&self) -> bool {
-        const DAYS_90: i64 = 90 * 24 * 60 * 60 * 1000;
-        self.time + DAYS_90 < crate::get_time()
     }
 }
 

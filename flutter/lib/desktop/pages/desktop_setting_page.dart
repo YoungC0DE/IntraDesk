@@ -730,89 +730,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
               child: Column(children: [
                 permissions(context),
                 password(context),
-                _Card(title: '2FA', children: [tfa()]),
                 more(context),
               ]),
             ),
           ],
         )).marginOnly(bottom: _kListViewBottomMargin);
-  }
-
-  Widget tfa() {
-    bool enabled = !locked;
-    // Simple temp wrapper for PR check
-    tmpWrapper() {
-      RxBool has2fa = bind.mainHasValid2FaSync().obs;
-      update() async {
-        has2fa.value = bind.mainHasValid2FaSync();
-        setState(() {});
-      }
-
-      onChanged(bool? checked) async {
-        if (checked == false) {
-          CommonConfirmDialog(
-              gFFI.dialogManager, translate('cancel-2fa-confirm-tip'), () {
-            change2fa(callback: update);
-          });
-        } else {
-          change2fa(callback: update);
-        }
-      }
-
-      final tfa = GestureDetector(
-        child: InkWell(
-          child: Obx(() => Row(
-                children: [
-                  Checkbox(
-                          value: has2fa.value,
-                          onChanged: enabled ? onChanged : null)
-                      .marginOnly(right: 5),
-                  Expanded(
-                      child: Text(
-                    translate('enable-2fa-title'),
-                    style:
-                        TextStyle(color: disabledTextColor(context, enabled)),
-                  ))
-                ],
-              )),
-        ),
-        onTap: () {
-          onChanged(!has2fa.value);
-        },
-      ).marginOnly(left: _kCheckBoxLeftMargin);
-      if (!has2fa.value) {
-        return tfa;
-      }
-      final trust = Row(
-        children: [
-          Flexible(
-            child: Tooltip(
-              waitDuration: Duration(milliseconds: 300),
-              message: translate("enable-trusted-devices-tip"),
-              child: _OptionCheckBox(context, "Enable trusted devices",
-                  kOptionEnableTrustedDevices,
-                  enabled: !locked, update: (v) {
-                setState(() {});
-              }),
-            ),
-          ),
-          if (mainGetBoolOptionSync(kOptionEnableTrustedDevices))
-            ElevatedButton(
-                onPressed: locked
-                    ? null
-                    : () {
-                        manageTrustedDeviceDialog();
-                      },
-                child: Text(translate('Manage trusted devices')))
-        ],
-      ).marginOnly(left: 30);
-
-      return Column(
-        children: [tfa, trust],
-      );
-    }
-
-    return tmpWrapper();
   }
 
   Widget permissions(context) {

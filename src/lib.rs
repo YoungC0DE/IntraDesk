@@ -20,7 +20,6 @@ mod bridge_generated;
 pub mod flutter;
 pub mod flutter_ffi;
 use common::*;
-mod auth_2fa;
 mod clipboard;
 pub mod core_main;
 mod lang;

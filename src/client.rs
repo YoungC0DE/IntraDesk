@@ -1,6 +1,5 @@
 use crate::clipboard::clipboard_listener::{self, ClipboardEvent};
 use async_trait::async_trait;
-use bytes::Bytes;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, StreamConfig,
@@ -83,8 +82,6 @@ const MAX_DECODE_FAIL_COUNTER: usize = 3;
 
 pub const LOGIN_MSG_PASSWORD_EMPTY: &str = "Empty Password";
 pub const LOGIN_MSG_PASSWORD_WRONG: &str = "Wrong Password";
-pub const LOGIN_MSG_2FA_WRONG: &str = "Wrong 2FA Code";
-pub const REQUIRE_2FA: &'static str = "2FA Required";
 pub const LOGIN_MSG_OFFLINE: &str = "Offline";
 pub const LOGIN_MSG_NOT_FOUND: &str = "Computer not found on the network";
 pub const LOGIN_SCREEN_WAYLAND: &str = "Wayland login screen is not supported";
@@ -910,7 +907,6 @@ pub struct LoginConfigHandler {
     pub selected_windows_session_id: Option<u32>,
     pub peer_info: Option<PeerInfo>,
     password_source: PasswordSource, // where the sent password comes from
-    pub enable_trusted_devices: bool,
 }
 
 impl Deref for LoginConfigHandler {
@@ -1495,11 +1491,6 @@ impl LoginConfigHandler {
             .collect::<Vec<_>>()
             .join(" ");
         let my_platform = hbb_common::whoami::platform().to_string();
-        let hwid = if self.get_option("trust-this-device") == "Y" {
-            crate::get_hwid()
-        } else {
-            Bytes::new()
-        };
         let mut lr = LoginRequest {
             username: self.id.clone(),
             password: password.into(),
@@ -1509,7 +1500,6 @@ impl LoginConfigHandler {
             option: self.get_option_message(true).into(),
             session_id: self.session_id,
             version: crate::VERSION.to_string(),
-            hwid,
             avatar,
             ..Default::default()
         };
@@ -2085,15 +2075,6 @@ pub fn handle_login_error(
     } else if err == LOGIN_MSG_PASSWORD_WRONG {
         lc.write().unwrap().password = Default::default();
         interface.msgbox("re-input-password", err, "Do you want to enter again?", "");
-        true
-    } else if err == LOGIN_MSG_2FA_WRONG || err == REQUIRE_2FA {
-        let enabled = lc.read().unwrap().get_option("trust-this-device") == "Y";
-        if enabled {
-            lc.write()
-                .unwrap()
-                .set_option("trust-this-device".to_string(), "".to_string());
-        }
-        interface.msgbox("input-2fa", err, "", "");
         true
     } else if LOGIN_ERROR_MAP.contains_key(err) {
         if let Some(msgbox_info) = LOGIN_ERROR_MAP.get(err) {

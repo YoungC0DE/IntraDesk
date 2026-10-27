@@ -8,7 +8,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use base::message_proto::*;
-use bytes::Bytes;
 use hbb_common::{
     config::PeerConfig,
     get_version_number, log,
@@ -973,29 +972,6 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn login(&self, password: String, remember: bool) {
         self.send(Data::Login((password, remember)));
-    }
-
-    pub fn send2fa(&self, code: String, trust_this_device: bool) {
-        let mut msg_out = Message::new();
-        let hwid = if trust_this_device {
-            crate::get_hwid()
-        } else {
-            Bytes::new()
-        };
-        self.lc.write().unwrap().set_option(
-            "trust-this-device".to_string(),
-            if trust_this_device { "Y" } else { "" }.to_string(),
-        );
-        msg_out.set_auth_2fa(Auth2FA {
-            code,
-            hwid,
-            ..Default::default()
-        });
-        self.send(Data::Message(msg_out));
-    }
-
-    pub fn get_enable_trusted_devices(&self) -> bool {
-        self.lc.read().unwrap().enable_trusted_devices
     }
 
     pub fn close(&self) {

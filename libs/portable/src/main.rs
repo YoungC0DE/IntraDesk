@@ -14,13 +14,13 @@ const APP_METADATA: &[u8] = include_bytes!("../app_metadata.toml");
 const APP_METADATA_CONFIG: &str = "meta.toml";
 const META_LINE_PREFIX_TIMESTAMP: &str = "timestamp = ";
 const META_LINE_PREFIX_FILE: &str = "file = ";
-const APP_PREFIX: &str = "rustdesk";
+const APP_PREFIX: &str = "intradesk";
 const APPNAME_RUNTIME_ENV_KEY: &str = "RUSTDESK_APPNAME";
 const SET_FOREGROUND_WINDOW_ENV_KEY: &str = "SET_FOREGROUND_WINDOW";
 
-// The extraction directory follows whatever executable the payload asks for, so a
-// custom client gets its own directory instead of sharing RustDesk's. Falls back to
-// APP_PREFIX when no package is injected, which keeps stock builds unchanged.
+// The extraction directory (%LOCALAPPDATA%\<name>) follows the executable the payload asks
+// for, IntraDesk.exe -> intradesk, so it never shares RustDesk's. It is kept between runs
+// and replaced when the build timestamp changes (D15).
 fn app_dir_name(exe: &str) -> String {
     Path::new(&exe.replace('\\', "/"))
         .file_stem()

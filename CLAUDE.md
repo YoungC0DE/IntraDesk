@@ -89,7 +89,8 @@ Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
 - `libs/base/` — chaves de opção, proto de mensagens, código de plataforma do
   cliente. `libs/base/src/config/keys.rs` é o único caminho de import para opções
 - `libs/scrap/` captura de tela · `libs/enigo/` entrada · `libs/clipboard/` área de transferência
-- `build.py` — build; para o IntraDesk: `python build.py --portable`
+- `build.py` — compila Rust + Flutter; o empacotamento no .exe único fica no
+  `scripts/build.ps1` e no CI
 
 ## Regras para agentes
 

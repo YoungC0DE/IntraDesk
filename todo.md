@@ -327,8 +327,10 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
 
 ## Fase 7 — Testes
 
-- [ ] **T7.1** Testes unitários Rust: parse/serialização do pacote de descoberta (T2.5), filtro de IP privado (T3.5), TOFU de chaves (T3.1: chave nova aceita, chave igual aceita, chave diferente rejeitada).
-  dep: T2.5, T3.1, T3.5 · Área: módulos `#[cfg(test)]` ao lado do código · @dono:
+- [x] **T7.1** Testes unitários Rust: parse/serialização do pacote de descoberta (T2.5), filtro de IP privado (T3.5), TOFU de chaves (T3.1: chave nova aceita, chave igual aceita, chave diferente rejeitada).
+  dep: T2.5, T3.1, T3.5 · Área: módulos `#[cfg(test)]` ao lado do código · @dono: claude
+  Já existiam, criados junto com as tarefas: `lan::tests` (pacote de descoberta serializado/lido, pacote do RustDesk ignorado), `server::lan_addr_tests` (IPs privados/link-local/loopback aceitos, públicos e CGNAT recusados, IPv4 mapeado), `client::kx_tests` (chave nova, conhecida, alterada, ID errado, peer sem assinatura) e `server::handshake_tests`. Nada a acrescentar.
+  Checagem (27/10/2026, build com T5.6 prioridade e Fase 6): `cargo test --lib --features flutter,hwcodec,vram -- lan:: server::lan_addr_tests` 3 ok; `-- kx_tests handshake` 9 ok.
 - [x] **T7.2** Testes Flutter (`flutter/test/`): tela inicial lista os peers recebidos; barra da sessão mostra só os itens permitidos.
   dep: T4.1, T5.2 · Área: `flutter/test/` · @dono: claude
   Feito em parte. `lan_peers_list_test.dart` (2): o evento `load_lan_peers` que o Rust envia vira a lista da aba "Computadores na rede" (nome, usuário, IP) e uma nova rodada substitui a lista. Junto com `lan_peer_display_test.dart` (T5.2: card, busca, "Conectar a"), cobre a tela inicial sem a biblioteca nativa.

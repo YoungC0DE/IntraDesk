@@ -21,6 +21,7 @@ struct State {
     calls: usize,
     disabled: usize,
     inputs: Vec<Vec<u8>>,
+    hardware: bool,
 }
 
 struct ScriptedEncoder(Rc<RefCell<State>>);
@@ -66,7 +67,7 @@ impl EncoderApi for ScriptedEncoder {
         true
     }
     fn is_hardware(&self) -> bool {
-        true
+        self.0.borrow().hardware
     }
     fn disable(&self) {
         self.0.borrow_mut().disabled += 1;
@@ -79,6 +80,7 @@ fn encoder(outcomes: &[Outcome]) -> (Encoder, Rc<RefCell<State>>) {
         calls: 0,
         disabled: 0,
         inputs: Vec::new(),
+        hardware: false,
     }));
     (
         Encoder {
@@ -494,42 +496,18 @@ fn repeats_leave_normal_failure_tracking_and_switching_intact() {
         1,
         1,
     );
-    let normal_limit = if cfg!(target_os = "android") { 9 } else { 3 };
-    let mut outcomes = vec![Error, Error, Frame];
-    outcomes.extend(vec![Error; normal_limit - 1]);
-    let (mut encoder, state) = encoder(&outcomes);
+    let (mut encoder, state) = encoder(&[Error, Frame, Error]);
+    state.borrow_mut().hardware = true;
     refresh.on_frame(&EncodeInput::YUV(&[1]));
     refresh.on_encoded(true);
+    attempt(&mut refresh, &mut encoder);
+    attempt(&mut refresh, &mut encoder);
+    assert_eq!(state.borrow().calls, 2);
+    assert_eq!(state.borrow().disabled, 0);
+    // A hardware encoder is switched away on its first normal failure (T4.5).
     let mut normal_failures = 0;
     let mut first_frame = false;
     let mut encoder_warmed_up = false;
-    handle_one_frame(
-        0,
-        &sp,
-        EncodeInput::YUV(&[1]),
-        0,
-        &mut encoder,
-        &mut normal_failures,
-        &mut first_frame,
-        &mut encoder_warmed_up,
-    )
-    .unwrap();
-    attempt(&mut refresh, &mut encoder);
-    attempt(&mut refresh, &mut encoder);
-    assert_eq!(state.borrow().disabled, 0);
-    for _ in 2..normal_limit {
-        handle_one_frame(
-            0,
-            &sp,
-            EncodeInput::YUV(&[1]),
-            0,
-            &mut encoder,
-            &mut normal_failures,
-            &mut first_frame,
-            &mut encoder_warmed_up,
-        )
-        .unwrap();
-    }
     let result = handle_one_frame(
         0,
         &sp,

@@ -2286,15 +2286,7 @@ class WakelockManager {
   // See: https://github.com/fluttercommunity/wakelock_plus/blob/0c74e5bbc6aefac57b6c96bb7ef987705ed559ec/wakelock_plus/lib/src/wakelock_plus_linux_plugin.dart#L48
   static bool _enabled = false;
 
-  static void enable(UniqueKey key, {bool isServer = false}) {
-    // Check if we should keep awake during outgoing sessions
-    if (!isServer) {
-      final keepAwake =
-          mainGetLocalBoolOptionSync(kOptionKeepAwakeDuringOutgoingSessions);
-      if (!keepAwake) {
-        return; // Don't enable wakelock if user disabled keep awake
-      }
-    }
+  static void enable(UniqueKey key) {
     _enabledKeys.add(key);
     if (!_enabled) {
       _enabled = true;

@@ -191,7 +191,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("elevated_foreground_window_tip", ""),
         ("Disconnected", ""),
         ("Other", ""),
-        ("Confirm before closing multiple tabs", ""),
         ("Full Access", ""),
         ("Screen Share", ""),
         ("JumpLink", ""),

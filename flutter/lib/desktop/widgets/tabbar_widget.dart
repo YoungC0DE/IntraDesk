@@ -834,14 +834,8 @@ Future<bool> toggleMaximize(bool isMainWindow) async {
 }
 
 Future<bool> closeConfirmDialog() async {
-  var confirm = true;
   final res = await gFFI.dialogManager.show<bool>((setState, close, context) {
-    submit() {
-      String value = bool2option(kOptionEnableConfirmClosingTabs, confirm);
-      bind.mainSetLocalOption(
-          key: kOptionEnableConfirmClosingTabs, value: value);
-      close(true);
-    }
+    submit() => close(true);
 
     return CustomAlertDialog(
       title: Row(children: [
@@ -850,26 +844,7 @@ Future<bool> closeConfirmDialog() async {
         const SizedBox(width: 10),
         Text(translate("Warning")),
       ]),
-      content: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(translate("Disconnect all devices?")),
-            CheckboxListTile(
-              contentPadding: const EdgeInsets.all(0),
-              dense: true,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: Text(
-                translate("Confirm before closing multiple tabs"),
-              ),
-              value: confirm,
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => confirm = v);
-              },
-            )
-          ]),
-      // confirm checkbox
+      content: Text(translate("Disconnect all devices?")),
       actions: [
         dialogButton("Cancel", onPressed: close, isOutline: true),
         dialogButton("OK", onPressed: submit),

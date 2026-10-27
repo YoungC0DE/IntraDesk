@@ -159,7 +159,6 @@ lazy_static::lazy_static! {
     pub static ref AUTHED_CONNS: Arc::<Mutex<Vec<AuthedConn>>> = Default::default();
     pub static ref CONTROL_PERMISSIONS_ARRAY: Arc::<Mutex<Vec<(i32, ControlPermissions)>>> = Default::default();
     static ref WAKELOCK_SENDER: Arc::<Mutex<std::sync::mpsc::Sender<(usize, usize)>>> = Arc::new(Mutex::new(start_wakelock_thread()));
-    static ref WAKELOCK_KEEP_AWAKE_OPTION: Arc::<Mutex<Option<bool>>> = Default::default();
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -737,7 +736,6 @@ impl Connection {
                 _ = second_timer.tick() => {
                     #[cfg(windows)]
                     conn.portable_check();
-                    raii::AuthedConnID::check_wake_lock_on_setting_changed();
                     conn.file_remove_log_control.on_timer().drain(..).map(|x| conn.send_to_cm(x)).count();
                     #[cfg(feature = "hwcodec")]
                     conn.update_supported_encoding();
@@ -3457,7 +3455,6 @@ impl FileRemoveLogControl {
 }
 
 fn start_wakelock_thread() -> std::sync::mpsc::Sender<(usize, usize)> {
-    // Check if we should keep awake during incoming sessions
     use crate::platform::{get_wakelock, WakeLock};
     let (tx, rx) = std::sync::mpsc::channel::<(usize, usize)>();
     std::thread::spawn(move || {
@@ -3466,11 +3463,7 @@ fn start_wakelock_thread() -> std::sync::mpsc::Sender<(usize, usize)> {
         loop {
             match rx.recv() {
                 Ok((conn_count, remote_count)) => {
-                    let keep_awake = config::Config::get_bool_option(
-                        keys::OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
-                    );
-                    *WAKELOCK_KEEP_AWAKE_OPTION.lock().unwrap() = Some(keep_awake);
-                    if conn_count == 0 || !keep_awake {
+                    if conn_count == 0 {
                         if wakelock.is_some() {
                             wakelock = None;
                             log::info!("drop wakelock");
@@ -3642,15 +3635,6 @@ mod raii {
                 .lock()
                 .unwrap()
                 .send((conn_count, remote_count)));
-        }
-
-        pub fn check_wake_lock_on_setting_changed() {
-            let current =
-                config::Config::get_bool_option(keys::OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS);
-            let cached = *WAKELOCK_KEEP_AWAKE_OPTION.lock().unwrap();
-            if cached != Some(current) {
-                Self::check_wake_lock();
-            }
         }
 
         pub fn check_remove_session(conn_id: i32, key: SessionKey) {

@@ -94,7 +94,6 @@ const String kOptionRemoteMenubarState = "remoteMenubarState";
 const String kOptionPeerSorting = "peer-sorting";
 const String kOptionPeerTabIndex = "peer-tab-index";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
-const String kOptionEnableConfirmClosingTabs = "enable-confirm-closing-tabs";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
 const String kOptionAllowRemoteCmModification = "allow-remote-cm-modification";
 const String kOptionShowVirtualMouse = "show-virtual-mouse";
@@ -121,7 +120,6 @@ const String kOptionToggleViewOnly = "view-only";
 
 const String kOptionKeepScreenOn = "keep-screen-on";
 
-const String kOptionKeepAwakeDuringOutgoingSessions = "keep-awake-during-outgoing-sessions";
 
 const String kOptionShowMobileAction = "showMobileActions";
 

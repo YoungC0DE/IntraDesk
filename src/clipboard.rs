@@ -9,16 +9,6 @@ use std::{
 pub const CLIPBOARD_NAME: &'static str = "clipboard";
 pub const CLIPBOARD_INTERVAL: u64 = 333;
 
-pub const OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS: &str =
-    "allow-sync-clipboard-between-sessions";
-
-pub fn is_sync_clipboard_between_sessions_enabled() -> bool {
-    hbb_common::config::option2bool(
-        OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS,
-        &hbb_common::config::LocalConfig::get_option(OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS),
-    )
-}
-
 // This format is used to store the flag in the clipboard.
 const RUSTDESK_CLIPBOARD_OWNER_FORMAT: &'static str = "dyn.com.rustdesk.owner";
 

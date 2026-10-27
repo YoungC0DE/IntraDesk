@@ -20,7 +20,6 @@ pub const OPTION_THEME: &str = "theme";
 pub const OPTION_REMOTE_MENUBAR_DRAG_LEFT: &str = "remote-menubar-drag-left";
 pub const OPTION_REMOTE_MENUBAR_DRAG_RIGHT: &str = "remote-menubar-drag-right";
 pub const OPTION_HIDE_AB_TAGS_PANEL: &str = "hideAbTagsPanel";
-pub const OPTION_ENABLE_CONFIRM_CLOSING_TABS: &str = "enable-confirm-closing-tabs";
 pub const OPTION_SYNC_AB_WITH_RECENT_SESSIONS: &str = "sync-ab-with-recent-sessions";
 pub const OPTION_SYNC_AB_TAGS: &str = "sync-ab-tags";
 pub const OPTION_FILTER_AB_BY_INTERSECTION: &str = "filter-ab-by-intersection";
@@ -97,8 +96,6 @@ pub const OPTION_FLUTTER_PEER_TAB_VISIBLE: &str = "peer-tab-visible";
 pub const OPTION_FLUTTER_PEER_CARD_UI_TYLE: &str = "peer-card-ui-type";
 pub const OPTION_FLUTTER_CURRENT_AB_NAME: &str = "current-ab-name";
 pub const OPTION_ALLOW_REMOTE_CM_MODIFICATION: &str = "allow-remote-cm-modification";
-pub const OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS: &str =
-    "allow-sync-clipboard-between-sessions";
 
 // android floating window options
 pub const OPTION_DISABLE_FLOATING_WINDOW: &str = "disable-floating-window";
@@ -109,12 +106,6 @@ pub const OPTION_FLOATING_WINDOW_SVG: &str = "floating-window-svg";
 
 // android keep screen on
 pub const OPTION_KEEP_SCREEN_ON: &str = "keep-screen-on";
-
-// Server-side: keep host system awake during incoming sessions (Security setting)
-pub const OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS: &str = "keep-awake-during-incoming-sessions";
-
-// Client-side: keep client system awake during outgoing sessions (General setting)
-pub const OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS: &str = "keep-awake-during-outgoing-sessions";
 
 pub const OPTION_DISABLE_DISCOVERY_PANEL: &str = "disable-discovery-panel";
 pub const OPTION_PRE_ELEVATE_SERVICE: &str = "pre-elevate-service";
@@ -153,7 +144,6 @@ pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
 pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_THEME,
     OPTION_LANGUAGE,
-    OPTION_ENABLE_CONFIRM_CLOSING_TABS,
     OPTION_SYNC_AB_WITH_RECENT_SESSIONS,
     OPTION_SYNC_AB_TAGS,
     OPTION_FILTER_AB_BY_INTERSECTION,
@@ -173,12 +163,9 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_FLOATING_WINDOW_TRANSPARENCY,
     OPTION_FLOATING_WINDOW_SVG,
     OPTION_KEEP_SCREEN_ON,
-    // Client-side: keep client system awake during outgoing sessions (General setting)
-    OPTION_KEEP_AWAKE_DURING_OUTGOING_SESSIONS,
     OPTION_DISABLE_DISCOVERY_PANEL,
     OPTION_PRE_ELEVATE_SERVICE,
     OPTION_ALLOW_REMOTE_CM_MODIFICATION,
-    OPTION_ALLOW_SYNC_CLIPBOARD_BETWEEN_SESSIONS,
     OPTION_TOUCH_MODE,
     OPTION_SHOW_VIRTUAL_MOUSE,
     OPTION_SHOW_VIRTUAL_JOYSTICK,
@@ -210,7 +197,6 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_PRESET_DEVICE_NAME,
     OPTION_PRESET_NOTE,
     OPTION_ENABLE_ANDROID_SOFTWARE_ENCODING_HALF_SCALE,
-    OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
 ];
 
 // BUILDIN_SETTINGS

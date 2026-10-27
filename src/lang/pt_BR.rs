@@ -191,7 +191,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("elevated_foreground_window_tip", "A janela atual da área de trabalho remota requer privilégios mais altos para operar, portanto, não é possível usar o mouse e o teclado temporariamente. Você pode solicitar ao usuário remoto para minimizar a janela atual ou clicar no botão de elevação na janela de gerenciamento de conexão. Para evitar esse problema, é recomendável instalar o software no dispositivo remoto."),
         ("Disconnected", "Desconectado"),
         ("Other", "Outro"),
-        ("Confirm before closing multiple tabs", "Confirmar antes de fechar múltiplas abas"),
         ("Full Access", "Acesso completo"),
         ("Screen Share", "Compartilhamento de tela"),
         ("JumpLink", "JumpLink"),

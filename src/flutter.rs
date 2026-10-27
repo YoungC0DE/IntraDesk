@@ -914,23 +914,9 @@ pub fn update_text_clipboard_required() {
 
 
 pub fn send_clipboard_msg(msg: Message, _is_file: bool) {
-    send_clipboard_msg_impl(msg, _is_file, None);
-}
-
-// `except_session_id` is the session the content came from, to avoid sending it back.
-pub fn send_clipboard_msg_to_other_sessions(msg: Message, except_session_id: u64) {
-    send_clipboard_msg_impl(msg, false, Some(except_session_id));
-}
-
-fn send_clipboard_msg_impl(msg: Message, _is_file: bool, except_session_id: Option<u64>) {
     for s in sessions::get_sessions() {
         if !s.is_default() {
             continue;
-        }
-        if let Some(except_session_id) = except_session_id {
-            if s.lc.read().unwrap().session_id == except_session_id {
-                continue;
-            }
         }
         if s.is_text_clipboard_required() {
             // Check if the client supports multi clipboards

@@ -316,13 +316,7 @@ class ConnectionManagerState extends State<ConnectionManager>
       windowManager.close();
       return true;
     } else {
-      final bool res;
-      if (!option2bool(kOptionEnableConfirmClosingTabs,
-          bind.mainGetLocalOption(key: kOptionEnableConfirmClosingTabs))) {
-        res = true;
-      } else {
-        res = await closeConfirmDialog();
-      }
+      final res = await closeConfirmDialog();
       if (res) {
         // After the dialog, never before it: an external close while it is open must not
         // inherit an intent the user had not expressed yet.

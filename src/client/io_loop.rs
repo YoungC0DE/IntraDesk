@@ -1191,18 +1191,8 @@ impl<T: InvokeUiSession> Remote<T> {
                         !lc.disable_clipboard.v && !lc.view_only.v
                     };
                     if clipboard_allowed {
-                        if self.handler.is_text_clipboard_required()
-                            && crate::clipboard::is_sync_clipboard_between_sessions_enabled()
-                        {
-                            let mut msg = Message::new();
-                            msg.set_clipboard(cb.clone());
-                            let session_id = self.handler.lc.read().unwrap().session_id;
-                            crate::flutter::send_clipboard_msg_to_other_sessions(msg, session_id);
-                        }
-                        {
-                            self.initial_clipboard_pending = false;
-                            update_clipboard(vec![cb], ClipboardSide::Client);
-                        }
+                        self.initial_clipboard_pending = false;
+                        update_clipboard(vec![cb], ClipboardSide::Client);
                     }
                 }
                 Some(message::Union::MultiClipboards(_mcb)) => {
@@ -1211,18 +1201,8 @@ impl<T: InvokeUiSession> Remote<T> {
                         !lc.disable_clipboard.v && !lc.view_only.v
                     };
                     if clipboard_allowed {
-                        if self.handler.is_text_clipboard_required()
-                            && crate::clipboard::is_sync_clipboard_between_sessions_enabled()
-                        {
-                            let mut msg = Message::new();
-                            msg.set_multi_clipboards(_mcb.clone());
-                            let session_id = self.handler.lc.read().unwrap().session_id;
-                            crate::flutter::send_clipboard_msg_to_other_sessions(msg, session_id);
-                        }
-                        {
-                            self.initial_clipboard_pending = false;
-                            update_clipboard(_mcb.clipboards, ClipboardSide::Client);
-                        }
+                        self.initial_clipboard_pending = false;
+                        update_clipboard(_mcb.clipboards, ClipboardSide::Client);
                     }
                 }
                 Some(message::Union::Cliprdr(clip)) => {

@@ -357,13 +357,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
       tabController.clear();
       return true;
     } else {
-      final bool res;
-      if (!option2bool(kOptionEnableConfirmClosingTabs,
-          bind.mainGetLocalOption(key: kOptionEnableConfirmClosingTabs))) {
-        res = true;
-      } else {
-        res = await closeConfirmDialog();
-      }
+      final res = await closeConfirmDialog();
       if (res) {
         tabController.clear();
       }

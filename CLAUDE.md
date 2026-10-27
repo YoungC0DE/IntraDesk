@@ -62,7 +62,9 @@ Nenhuma cor hardcoded em widgets.
 | texto sobre `accent` | `#FFFFFF` | `#FFFFFF` |
 
 Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
-`logo.svg` etc.) e `flutter/windows/runner/resources/`.
+`logo.svg`, `icon.png`), `flutter/assets/icon.svg` e
+`flutter/windows/runner/resources/app_icon.ico`, todos gerados por
+`python res/gen_icons.py` (edite a geometria lá, não os arquivos gerados).
 
 ## Estrutura relevante
 

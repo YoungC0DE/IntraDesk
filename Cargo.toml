@@ -4,7 +4,7 @@ version = "1.5.1"
 authors = ["rustdesk <info@rustdesk.com>"]
 edition = "2021"
 build= "build.rs"
-description = "RustDesk Remote Desktop"
+description = "IntraDesk - LAN remote desktop"
 rust-version = "1.75"
 
 [lib]

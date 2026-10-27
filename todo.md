@@ -301,8 +301,12 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T0.4 · Área: `res/`, `flutter/windows/runner`, `flutter/assets` · @dono: claude
   Feito. Ícone novo (monitor branco com seta dupla sobre quadrado laranja em degradê `#EA580C`→`#C2410C`) gerado por `res/gen_icons.py` (Python puro, sem dependências; substitui o `gen_icon.sh` do ImageMagick): `res/logo.svg`, `flutter/assets/icon.svg`, `res/icon.png` (512), `res/icon.ico` e `flutter/windows/runner/resources/app_icon.ico` (16–256), `res/tray-icon.ico` (16–64). `Runner.rc`: empresa/produto/nome original IntraDesk; o copyright do RustDesk fica no `LegalCopyright`. Nome IntraDesk também no título da barra de abas (era "RustDesk" fixo), no nome reserva do runner (`main.cpp`) e na caixa de saída de console; `Cargo.toml` `description`. Bandeja, janela e "Sobre" já usavam o nome do app. Saíram arquivos sem uso do RustDesk: `res/design.svg`, `res/scalable.svg`, `res/logo-header.svg`, `res/{32x32,64x64,128x128,128x128@2x}.png`. Não existe `[package.metadata.winres]` no `Cargo.toml` (o ícone do empacotador vem de `libs/portable/build.rs`, que usa `res/icon.ico`).
   Checagem: `cargo check` ok; `flutter analyze` sem erros/avisos (250 infos). Falta ver o ícone num build completo (entra na T7.3, item 1.4).
-- [ ] **T5.5** Textos da UI revisados em pt-BR (sem menção a ID, servidor ou relay).
-  dep: T5.2, T5.3, T1.13 · Área: `src/lang/pt_BR.rs`, `src/lang/en.rs` · @dono:
+- [x] **T5.5** Textos da UI revisados em pt-BR (sem menção a ID, servidor ou relay).
+  dep: T5.2, T5.3, T1.13 · Área: `src/lang/pt_BR.rs`, `src/lang/en.rs` · @dono: claude
+  Feito. 68 textos pt-BR revisados: caixa de frase, "pasta" em vez de "diretório", "computador remoto" em vez de "parceiro"/"dispositivo", "Aviso" no lugar de "Prompt de comando" (prefixo de erro na troca de senha), textos de lista vazia que dizem o que fazer, nada de "instale o software" (elevação: "execute o IntraDesk como administrador"). Em inglês, as mesmas correções onde o texto não servia ao IntraDesk. Saíram 17 chaves sem uso e 2 links de documentação Linux/macOS (só no `en.rs`). O "ID" continua só na linha pequena do painel e no card (decisão da T5.2). **Bug corrigido:** a troca automática de "RustDesk" pelo nome do app (`lang.rs`) fazia o "Sobre" dizer "É baseado no IntraDesk"; o `intradesk-license-tip` agora fica de fora, com teste (`test_license_tip_keeps_the_rustdesk_credit`, falha sem a correção).
+  Checagem: `cargo check` ok; `cargo test --lib lang::` 3 ok; `template.rs` e `pt_BR.rs` com as mesmas 360 chaves.
+
+**Fim das Fases 5 e 6 (27/10/2026, com T5.6 completa e T5.5):** `cargo test --lib --features flutter,hwcodec,vram` 143 ok, 0 falhas, 1 ignorado; `cargo test --package hbb_common --lib` 91 ok; `flutter test` 91 ok. Falta o teste manual em 2 PCs (`docs/teste-manual.md`).
 
 ## Fase 6 — Executável portátil
 

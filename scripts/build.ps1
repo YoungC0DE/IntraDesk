@@ -122,22 +122,13 @@ try {
         Select-Object -First 1
     if ($runnerRes) { Copy-Item $runnerRes.FullName 'libs\portable\Runner.res' -Force }
 
-    # The packer embeds res\manifest.xml; drop dpiAware like the CI does, then restore it.
-    $manifest = 'res\manifest.xml'
-    $original = [IO.File]::ReadAllText((Resolve-Path $manifest))
+    Push-Location 'libs\portable'
     try {
-        $patched = ($original -split "`r?`n" | Where-Object { $_ -notmatch 'dpiAware' }) -join "`n"
-        [IO.File]::WriteAllText((Resolve-Path $manifest), $patched)
-        Push-Location 'libs\portable'
-        try {
-            Invoke-Native 'python' @('-m', 'pip', 'install', '-q', '-r', 'requirements.txt')
-            Invoke-Native 'python' @('.\generate.py', '-f', "..\..\$releaseDir\", '-o', '.',
-                '-e', "..\..\$releaseDir\IntraDesk.exe")
-        } finally {
-            Pop-Location
-        }
+        Invoke-Native 'python' @('-m', 'pip', 'install', '-q', '-r', 'requirements.txt')
+        Invoke-Native 'python' @('.\generate.py', '-f', "..\..\$releaseDir\", '-o', '.',
+            '-e', "..\..\$releaseDir\IntraDesk.exe")
     } finally {
-        [IO.File]::WriteAllText((Resolve-Path $manifest), $original)
+        Pop-Location
     }
 
     New-Item -ItemType Directory -Force -Path 'dist' | Out-Null

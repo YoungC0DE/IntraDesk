@@ -117,7 +117,6 @@ jobs:
       - name: Build self-extracted executable
         shell: bash
         run: |
-          sed -i '/dpiAware/d' res/manifest.xml
           runner_res=$(find . -name "Runner.res" | head -n 1)
           if [ -n "$runner_res" ]; then cp "$runner_res" ./libs/portable/Runner.res; fi
           pushd ./libs/portable

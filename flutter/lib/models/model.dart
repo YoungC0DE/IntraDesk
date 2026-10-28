@@ -1168,91 +1168,6 @@ class ImageModel with ChangeNotifier {
 
   addCallbackOnFirstImage(Function(String) cb) => callbacksOnFirstImage.add(cb);
 
-  bool _webDecodingRgba = false;
-  final List<Uint8List> _webRgbaList = List.empty(growable: true);
-  webOnRgba(int display, Uint8List rgba) async {
-    // deep copy needed, otherwise "instantiateCodec failed: TypeError: Cannot perform Construct on a detached ArrayBuffer"
-    _webRgbaList.add(Uint8List.fromList(rgba));
-    if (_webDecodingRgba) {
-      return;
-    }
-    _webDecodingRgba = true;
-    try {
-      while (_webRgbaList.isNotEmpty) {
-        final rgba2 = _webRgbaList.last;
-        _webRgbaList.clear();
-        await decodeAndUpdate(display, rgba2);
-      }
-    } catch (e) {
-      debugPrint('onRgba error: $e');
-    }
-    _webDecodingRgba = false;
-  }
-
-  // web only: image already created from a decoded WebCodecs frame
-  Future<void> onImage(
-      int display, ui.Image image, bool Function() isCurrentSession) async {
-    await update(image, isCurrentSession: isCurrentSession);
-  }
-
-  decodeAndUpdate(int display, Uint8List rgba) async {
-    final pid = parent.target?.id;
-    final rect = parent.target?.ffiModel.pi.getDisplayRect(display);
-    final image = await img.decodeImageFromPixels(
-      rgba,
-      rect?.width.toInt() ?? 0,
-      rect?.height.toInt() ?? 0,
-      false | true | false
-          ? ui.PixelFormat.rgba8888
-          : ui.PixelFormat.bgra8888,
-    );
-    if (parent.target?.id != pid) {
-      image?.dispose();
-      return;
-    }
-    await update(image);
-  }
-
-  Future<void> update(ui.Image? image,
-      {bool Function()? isCurrentSession}) async {
-    if (_disposeIfStale(image, isCurrentSession)) return;
-    if (_image == null && image != null) {
-      await parent.target?.canvasModel.updateViewStyle();
-      if (parent.target != null) {
-        await initializeCursorAndCanvas(parent.target!);
-      }
-    }
-    if (_disposeIfStale(image, isCurrentSession)) return;
-    _image?.dispose();
-    _image = image;
-    if (image != null) notifyListeners();
-  }
-
-  bool _disposeIfStale(ui.Image? image, bool Function()? isCurrentSession) {
-    if (image == null || isCurrentSession == null) return false;
-    if (isCurrentSession()) return false;
-    image.dispose();
-    return true;
-  }
-
-  // mobile only
-  double get maxScale {
-    if (_image == null) return 1.5;
-    final size = parent.target!.canvasModel.getSize();
-    final xscale = size.width / _image!.width;
-    final yscale = size.height / _image!.height;
-    return max(1.5, max(xscale, yscale));
-  }
-
-  // mobile only
-  double get minScale {
-    if (_image == null) return 1.5;
-    final size = parent.target!.canvasModel.getSize();
-    final xscale = size.width / _image!.width;
-    final yscale = size.height / _image!.height;
-    return min(xscale, yscale) / 1.5;
-  }
-
   void disposeImage() {
     _image?.dispose();
     _image = null;
@@ -1553,25 +1468,6 @@ class CanvasModel with ChangeNotifier {
 
   panY(double dy) {
     _y += dy;
-    notifyListeners();
-  }
-
-  // mobile only
-  updateScale(double v, Offset focalPoint) {
-    if (parent.target?.imageModel.image == null) return;
-    final s = _scale;
-    _scale *= v;
-    final maxs = parent.target?.imageModel.maxScale ?? 1;
-    final mins = parent.target?.imageModel.minScale ?? 1;
-    if (_scale > maxs) _scale = maxs;
-    if (_scale < mins) _scale = mins;
-    // (focalPoint.dx - _x_1) / s1 + displayOriginX = (focalPoint.dx - _x_2) / s2 + displayOriginX
-    // _x_2 = focalPoint.dx - (focalPoint.dx - _x_1) / s1 * s2
-    _x = focalPoint.dx - (focalPoint.dx - _x) / s * _scale;
-    final adjust = getAdjustY();
-    // (focalPoint.dy - _y_1 - adjust) / s1 + displayOriginY = (focalPoint.dy - _y_2 - adjust) / s2 + displayOriginY
-    // _y_2 = focalPoint.dy - adjust - (focalPoint.dy - _y_1 - adjust) / s1 * s2
-    _y = focalPoint.dy - adjust - (focalPoint.dy - _y - adjust) / s * _scale;
     notifyListeners();
   }
 
@@ -2892,19 +2788,9 @@ class FFI {
   /// Close the remote session.
   Future<void> close({bool closeSession = true}) async {
     closed = true;
-    if (imageModel.image != null) {
-      await setCanvasConfig(
-          sessionId,
-          cursorModel.x,
-          cursorModel.y,
-          canvasModel.x,
-          canvasModel.y,
-          canvasModel.scale,
-          ffiModel.pi.currentDisplay);
-    }
     imageModel.callbacksOnFirstImage.clear();
     shortcutModel.clear();
-    await imageModel.update(null);
+    imageModel.disposeImage();
     cursorModel.clear();
     ffiModel.clear();
     canvasModel.clear();
@@ -3066,52 +2952,6 @@ class PeerInfo with ChangeNotifier {
     if (d == null) return null;
     return Rect.fromLTWH(d.x, d.y, d.width.toDouble(), d.height.toDouble());
   }
-}
-
-const canvasKey = 'canvas';
-
-Future<void> setCanvasConfig(
-    SessionID sessionId,
-    double xCursor,
-    double yCursor,
-    double xCanvas,
-    double yCanvas,
-    double scale,
-    int currentDisplay) async {
-  final p = <String, dynamic>{};
-  p['xCursor'] = xCursor;
-  p['yCursor'] = yCursor;
-  p['xCanvas'] = xCanvas;
-  p['yCanvas'] = yCanvas;
-  p['scale'] = scale;
-  p['currentDisplay'] = currentDisplay;
-  await bind.sessionSetFlutterOption(
-      sessionId: sessionId, k: canvasKey, v: jsonEncode(p));
-}
-
-Future<Map<String, dynamic>?> getCanvasConfig(SessionID sessionId) async {
-  return null;
-}
-
-Future<void> initializeCursorAndCanvas(FFI ffi) async {
-  var p = await getCanvasConfig(ffi.sessionId);
-  int currentDisplay = 0;
-  if (p != null) {
-    currentDisplay = p['currentDisplay'];
-  }
-  if (p == null || currentDisplay != ffi.ffiModel.pi.currentDisplay) {
-    ffi.cursorModel.updateDisplayOrigin(
-        ffi.ffiModel.rect?.left ?? 0, ffi.ffiModel.rect?.top ?? 0);
-    return;
-  }
-  double xCursor = p['xCursor'];
-  double yCursor = p['yCursor'];
-  double xCanvas = p['xCanvas'];
-  double yCanvas = p['yCanvas'];
-  double scale = p['scale'];
-  ffi.cursorModel.updateDisplayOriginWithCursor(ffi.ffiModel.rect?.left ?? 0,
-      ffi.ffiModel.rect?.top ?? 0, xCursor, yCursor);
-  ffi.canvasModel.update(xCanvas, yCanvas, scale);
 }
 
 clearWaitingForImage(OverlayDialogManager? dialogManager, SessionID sessionId) {

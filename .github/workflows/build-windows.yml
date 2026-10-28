@@ -148,7 +148,8 @@ jobs:
           # The build's own features, so the tests see the code that ships.
           FEATURES=$(python3 ./build.py $BUILD_ARGS --print-features)
           cargo test --locked --release --lib --features "$FEATURES"
-          cargo test --locked --release -p clipboard
+          cargo test --locked --release -p hbb_common -p base -p clipboard -p rustdesk-portable-packer
+          cargo test --locked --release -p scrap --features hwcodec,vram
 
       - name: Run the Dart tests
         if: ${{ !cancelled() }}

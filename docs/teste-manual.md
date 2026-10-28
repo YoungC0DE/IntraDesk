@@ -74,6 +74,7 @@ falhas, anexe o log: `%APPDATA%\IntraDesk\log\` (pasta do processo principal e
 | 4.12 | Duas sessões (PC B conecta em A e num terceiro PC, ou em A duas vezes) | Abrem como **abas** na mesma janela | |
 | 4.13 | "Atualizar" na barra | Imagem é redesenhada | |
 | 4.14 | Desconectar pela barra | Sessão fecha; aviso some no PC A | |
+| 4.15 | Arrastar a barra pela alça (⋮⋮), recolher e expandir; fechar e reconectar | Desliza só na horizontal, no topo; volta na mesma posição ao reconectar | |
 
 ## 5. Rede e recuperação
 

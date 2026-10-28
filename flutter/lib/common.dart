@@ -2698,51 +2698,13 @@ openMonitorInTheSameTab(int i, FFI ffi, PeerInfo pi,
 }
 
 setNewConnectWindowFrame(int windowId, String peerId, int preSessionCount,
-    WindowType windowType, int? display, Rect? screenRect) async {
-  if (screenRect == null) {
-    // Do not restore window position to new connection if there's a pre-session.
-    // https://github.com/rustdesk/rustdesk/discussions/8825
-    if (preSessionCount == 0) {
-      await restoreWindowPosition(windowType,
-          windowId: windowId, display: display, peerId: peerId);
-    }
-  } else {
-    await tryMoveToScreenAndSetFullscreen(screenRect);
+    WindowType windowType, int? display) async {
+  // Do not restore window position to new connection if there's a pre-session.
+  // https://github.com/rustdesk/rustdesk/discussions/8825
+  if (preSessionCount == 0) {
+    await restoreWindowPosition(windowType,
+        windowId: windowId, display: display, peerId: peerId);
   }
-}
-
-tryMoveToScreenAndSetFullscreen(Rect? screenRect) async {
-  if (screenRect == null) {
-    return;
-  }
-  final wc = WindowController.fromWindowId(stateGlobal.windowId);
-  final curFrame = await wc.getFrame();
-  final frame =
-      Rect.fromLTWH(screenRect.left + 30, screenRect.top + 30, 600, 400);
-  if (stateGlobal.fullscreen.isTrue &&
-      curFrame.left <= frame.left &&
-      curFrame.top <= frame.top &&
-      curFrame.width >= frame.width &&
-      curFrame.height >= frame.height) {
-    return;
-  }
-  await wc.setFrame(frame);
-  // An duration is needed to avoid the window being restored after fullscreen.
-  Future.delayed(Duration(milliseconds: 300), () async {
-    stateGlobal.setFullscreen(true);
-  });
-}
-
-parseParamScreenRect(Map<String, dynamic> params) {
-  Rect? screenRect;
-  if (params['screen_rect'] != null) {
-    double l = params['screen_rect']['l'];
-    double t = params['screen_rect']['t'];
-    double r = params['screen_rect']['r'];
-    double b = params['screen_rect']['b'];
-    screenRect = Rect.fromLTRB(l, t, r, b);
-  }
-  return screenRect;
 }
 
 get isInputSourceFlutter => stateGlobal.getInputSource() == "Input source 2";

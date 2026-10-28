@@ -48,7 +48,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
   static const IconData unselectedIcon = Icons.desktop_windows_outlined;
 
   String? peerId;
-  bool _isScreenRectSet = false;
   int? _display;
 
   var connectionMap = RxList<Widget>.empty(growable: true);
@@ -60,10 +59,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
     final tabWindowId = params['tab_window_id'];
     final display = params['display'];
     final displays = params['displays'];
-    final screenRect = parseParamScreenRect(params);
-    _isScreenRectSet = screenRect != null;
     _display = display as int?;
-    tryMoveToScreenAndSetFullscreen(screenRect);
     if (peerId != null) {
       ConnectionTypeState.init(peerId!);
       tabController.onSelected = (id) {
@@ -105,18 +101,16 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
   void initState() {
     super.initState();
 
-    if (!_isScreenRectSet) {
-      Future.delayed(Duration.zero, () {
-        restoreWindowPosition(
-          WindowType.RemoteDesktop,
-          windowId: windowId(),
-          peerId: tabController.state.value.tabs.isEmpty
-              ? null
-              : tabController.state.value.tabs[0].key,
-          display: _display,
-        );
-      });
-    }
+    Future.delayed(Duration.zero, () {
+      restoreWindowPosition(
+        WindowType.RemoteDesktop,
+        windowId: windowId(),
+        peerId: tabController.state.value.tabs.isEmpty
+            ? null
+            : tabController.state.value.tabs[0].key,
+        display: _display,
+      );
+    });
   }
 
   @override
@@ -381,7 +375,6 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
       final tabWindowId = args['tab_window_id'];
       final display = args['display'];
       final displays = args['displays'];
-      final screenRect = parseParamScreenRect(args);
       final prePeerCount = tabController.length;
       Future.delayed(Duration.zero, () async {
         if (stateGlobal.fullscreen.isTrue) {
@@ -389,7 +382,7 @@ class _ConnectionTabPageState extends State<ConnectionTabPage> {
           stateGlobal.setFullscreen(false, procWnd: false);
         }
         await setNewConnectWindowFrame(windowId(), id!, prePeerCount,
-            WindowType.RemoteDesktop, display, screenRect);
+            WindowType.RemoteDesktop, display);
         Future.delayed(Duration(milliseconds: 100), () async {
           await windowOnTop(windowId());
         });

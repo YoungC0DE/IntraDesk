@@ -2466,34 +2466,6 @@ Future<void> updateSystemWindowTheme() async {
   }
 }
 
-/// macOS only
-///
-/// Note: not found a general solution for rust based AVFoundation bingding.
-/// [AVFoundation] crate has compile error.
-const kMacOSPermChannel = MethodChannel("org.rustdesk.rustdesk/host");
-
-enum PermissionAuthorizeType {
-  undetermined,
-  authorized,
-  denied, // and restricted
-}
-
-Future<PermissionAuthorizeType> osxCanRecordAudio() async {
-  int res = await kMacOSPermChannel.invokeMethod("canRecordAudio");
-  print(res);
-  if (res > 0) {
-    return PermissionAuthorizeType.authorized;
-  } else if (res == 0) {
-    return PermissionAuthorizeType.undetermined;
-  } else {
-    return PermissionAuthorizeType.denied;
-  }
-}
-
-Future<bool> osxRequestAudio() async {
-  return await kMacOSPermChannel.invokeMethod("requestRecordAudio");
-}
-
 Widget futureBuilder(
     {required Future? future, required Widget Function(dynamic data) hasData}) {
   return FutureBuilder(

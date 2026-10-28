@@ -19,9 +19,8 @@ pub use hwcodec::common::Driver;
 use hwcodec::{
     common::{DataFormat, MAX_GOP},
     vram::{
-        decode,
         encode::{self, EncodeFrame, Encoder},
-        Available, DecodeContext, DynamicContext, EncodeContext, FeatureContext,
+        Available, DynamicContext, EncodeContext, FeatureContext,
     },
 };
 
@@ -311,7 +310,7 @@ impl VRamEncoder {
     }
 }
 
-pub(crate) fn check_available_vram() -> (Vec<FeatureContext>, Vec<DecodeContext>, String) {
+pub(crate) fn check_available_vram() -> (Vec<FeatureContext>, String) {
     let d = DynamicContext {
         device: None,
         width: 1280,
@@ -321,14 +320,11 @@ pub(crate) fn check_available_vram() -> (Vec<FeatureContext>, Vec<DecodeContext>
         gop: MAX_GOP as _,
     };
     let encoders = encode::available(d);
-    let decoders = decode::available();
+    // The client always decodes in RAM, so only the encoders are probed.
     let available = Available {
         e: encoders.clone(),
-        d: decoders.clone(),
+        d: vec![],
     };
-    (
-        encoders,
-        decoders,
-        available.serialize().unwrap_or_default(),
-    )
+    let available = available.serialize().unwrap_or_default();
+    (encoders, available)
 }

@@ -8,7 +8,7 @@ use base::config::keys::OPTION_ENABLE_HWCODEC;
 use hbb_common::config::OVERWRITE_SETTINGS;
 use hwcodec::{
     common::{DataFormat, Driver},
-    vram::{DecodeContext, FeatureContext},
+    vram::FeatureContext,
 };
 use std::{collections::HashMap, mem};
 
@@ -34,13 +34,6 @@ fn add_backend(config: &mut HwCodecConfig, driver: Driver, vendor: Driver, forma
         _ => unreachable!(),
     };
     config.vram_encode.push(FeatureContext {
-        driver: driver.clone(),
-        vendor: vendor.clone(),
-        luid,
-        data_format: format,
-    });
-    config.vram_decode.push(DecodeContext {
-        device: None,
         driver,
         vendor,
         luid,

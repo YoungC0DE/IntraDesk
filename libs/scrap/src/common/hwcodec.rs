@@ -466,9 +466,6 @@ pub struct HwCodecConfig {
     #[cfg(feature = "vram")]
     #[serde(default)]
     pub vram_encode: Vec<hwcodec::vram::FeatureContext>,
-    #[cfg(feature = "vram")]
-    #[serde(default)]
-    pub vram_decode: Vec<hwcodec::vram::DecodeContext>,
 }
 
 // HwCodecConfig2 is used to store the config in json format,
@@ -548,8 +545,6 @@ impl HwCodecConfig {
                     #[cfg(feature = "vram")]
                     if encode {
                         c.vram_encode = vec![];
-                    } else {
-                        c.vram_decode = vec![];
                     }
                 } else {
                     if encode {
@@ -583,7 +578,7 @@ pub fn check_available_hwcodec() -> String {
     #[cfg(feature = "vram")]
     let vram = crate::vram::check_available_vram();
     #[cfg(feature = "vram")]
-    let vram_string = vram.2;
+    let vram_string = vram.1;
     #[cfg(not(feature = "vram"))]
     let vram_string = "".to_owned();
     let c = HwCodecConfig {
@@ -591,8 +586,6 @@ pub fn check_available_hwcodec() -> String {
         ram_decode: Decoder::available_decoders(),
         #[cfg(feature = "vram")]
         vram_encode: vram.0,
-        #[cfg(feature = "vram")]
-        vram_decode: vram.1,
         signature: hwcodec::common::get_gpu_signature(),
     };
     log::debug!("{c:?}");

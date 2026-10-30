@@ -1399,10 +1399,10 @@ class TabbarTheme extends ThemeExtension<TabbarTheme> {
       unSelectedTextColor: Color.fromARGB(255, 192, 192, 192),
       selectedIconColor: Color.fromARGB(255, 192, 192, 192),
       unSelectedIconColor: Color.fromARGB(255, 255, 255, 255),
-      dividerColor: Color.fromARGB(255, 64, 64, 64),
-      hoverColor: Colors.black26,
+      dividerColor: MyTheme.darkBorder,
+      hoverColor: MyTheme.darkHover,
       closeHoverColor: Colors.black,
-      selectedTabBackgroundColor: Colors.black26);
+      selectedTabBackgroundColor: MyTheme.darkSurface2);
 
   @override
   ThemeExtension<TabbarTheme> copyWith({

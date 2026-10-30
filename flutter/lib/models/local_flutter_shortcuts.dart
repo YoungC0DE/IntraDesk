@@ -122,21 +122,12 @@ class LocalFlutterShortcutDispatcher {
       }
       return true;
     }
-    // Safari can omit the previous Cmd-held keyup. A fresh browser keydown
-    // starts a new press; KeyRepeatEvent must still belong to the old chord.
-    if (kIsWeb && defaultTargetPlatform == TargetPlatform.macOS && down) {
-      _firedKeys.remove(key);
-    }
     if (_firedKeys.contains(key)) return true;
     if (!down) return false;
     final action = match?.call();
     if (action == null) return false;
     _firedKeys.add(key);
-    // macOS browsers can omit letter keyups while Cmd is held. Like the JS
-    // input source, dispatch on keydown there; remote cleanup still runs first.
-    final runOnKeyUp =
-        !(kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) &&
-            kShortcutActionsRunOnKeyUp.contains(action);
+    final runOnKeyUp = kShortcutActionsRunOnKeyUp.contains(action);
     if (runOnKeyUp) {
       _keyUpActions[key] = (this, action);
     } else {

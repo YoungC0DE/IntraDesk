@@ -240,7 +240,7 @@ class ShortcutConfig {
 }
 
 /// Register the default-bound shortcut actions that aren't already wired by
-/// `toolbarControls(...)` (which handles things like Ctrl+Alt+Shift+Del). Called once per session from the desktop / mobile
+/// `toolbarControls(...)` (which handles things like Ctrl+Alt+Shift+Del). Called once per session from the
 /// remote page, after the toolbar registrations have run.
 ///
 /// We register unconditionally — even when shortcuts are master-disabled —
@@ -250,8 +250,7 @@ class ShortcutConfig {
 /// sessions) and lets the user toggle shortcuts mid-session without
 /// reconnecting.
 ///
-/// [tabController] is the desktop window's tab controller; `null` on mobile /
-/// web (where tab-switch shortcuts don't apply).
+/// [tabController] is the desktop window's tab controller.
 ///
 /// Each callback below is a no-op when the underlying state required to
 /// service the action isn't available (e.g. only one display, only one tab).
@@ -273,11 +272,7 @@ void registerSessionShortcutActions(
   // (`_callbacks` lookup returning null after disposal) is the actual
   // liveness gate.
 
-  // Toggle Fullscreen — available wherever the desktop layout renders
-  // (native desktop + every Web browser, since Web uses the desktop
-  // RemotePage). `stateGlobal.setFullscreen` handles native window vs.
-  // browser fullscreen. Native mobile is permanently full-screen, so the
-  // action is intentionally not registered there.
+  // Toggle Fullscreen.
   ffi.shortcutModel.register(kShortcutActionToggleFullscreen, () {
     stateGlobal.setFullscreen(!stateGlobal.fullscreen.value);
   });

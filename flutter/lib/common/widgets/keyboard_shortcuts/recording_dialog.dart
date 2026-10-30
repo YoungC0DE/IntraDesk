@@ -128,9 +128,7 @@ class _RecordingDialogState extends State<_RecordingDialog> {
     super.dispose();
   }
 
-  bool get _isMac =>
-      defaultTargetPlatform == TargetPlatform.macOS ||
-      defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _isMac => defaultTargetPlatform == TargetPlatform.macOS;
 
   /// True when the captured combo includes at least one modifier. Lower bound
   /// for any sensible binding — pure single-key bindings would swallow normal

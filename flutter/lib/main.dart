@@ -88,8 +88,6 @@ Future<void> initEnv(String appType) async {
   await initGlobalFFI();
   // await Firebase.initializeApp();
   _registerEventHandler();
-  // Update the system theme.
-  updateSystemWindowTheme();
 }
 
 void runMainApp(bool startService) async {
@@ -317,8 +315,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         to = ThemeMode.light;
       }
       Get.changeThemeMode(to);
-      // Synchronize the window theme of the system.
-      updateSystemWindowTheme();
       if (desktopType == DesktopType.main) {
         bind.mainChangeTheme(dark: to.toShortString());
       }
@@ -352,7 +348,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           // global configuration
           // use session related FFI when in remote control or file transfer page
           ChangeNotifierProvider.value(value: gFFI.ffiModel),
-          ChangeNotifierProvider.value(value: gFFI.imageModel),
           ChangeNotifierProvider.value(value: gFFI.cursorModel),
           ChangeNotifierProvider.value(value: gFFI.canvasModel),
           ChangeNotifierProvider.value(value: gFFI.peerTabModel),

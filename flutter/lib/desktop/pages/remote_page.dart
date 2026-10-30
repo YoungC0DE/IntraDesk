@@ -482,7 +482,6 @@ class _RemotePageState extends State<RemotePage>
       _ffi.inputModel.enterOrLeave(false);
     }
     DesktopMultiWindow.removeListener(this);
-    _ffi.imageModel.disposeImage();
     _ffi.cursorModel.disposeImages();
     _rawKeyFocusNode.dispose();
     await _ffi.close(closeSession: closeSession);
@@ -610,7 +609,6 @@ class _RemotePageState extends State<RemotePage>
         },
         child: MultiProvider(providers: [
           ChangeNotifierProvider.value(value: _ffi.ffiModel),
-          ChangeNotifierProvider.value(value: _ffi.imageModel),
           ChangeNotifierProvider.value(value: _ffi.cursorModel),
           ChangeNotifierProvider.value(value: _ffi.canvasModel),
         ], child: buildBody(context)));

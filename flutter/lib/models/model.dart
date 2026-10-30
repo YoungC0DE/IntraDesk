@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 
 import 'package:bot_toast/bot_toast.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
@@ -1149,29 +1148,10 @@ class VirtualMouseMode with ChangeNotifier {
   }
 }
 
-class ImageModel with ChangeNotifier {
-  ui.Image? _image;
-
-  ui.Image? get image => _image;
-
-  String id = '';
-
-  late final SessionID sessionId;
-
-  WeakReference<FFI> parent;
-
+class ImageModel {
   final List<Function(String)> callbacksOnFirstImage = [];
 
-  ImageModel(this.parent) {
-    sessionId = parent.target!.sessionId;
-  }
-
   addCallbackOnFirstImage(Function(String) cb) => callbacksOnFirstImage.add(cb);
-
-  void disposeImage() {
-    _image?.dispose();
-    _image = null;
-  }
 }
 
 class ViewStyle {
@@ -1456,18 +1436,8 @@ class CanvasModel with ChangeNotifier {
     }
   }
 
-  panX(double dx) {
-    _x += dx;
-    notifyListeners();
-  }
-
   resetOffset() {
     _resetCanvasOffset(getDisplayWidth(), getDisplayHeight());
-    notifyListeners();
-  }
-
-  panY(double dy) {
-    _y += dy;
     notifyListeners();
   }
 
@@ -2030,108 +2000,13 @@ class CursorModel with ChangeNotifier {
     notifyListeners();
   }
 
-  updatePan(Offset delta, Offset localPosition, bool touchMode) async {
-    if (touchMode) {
-      await _handleTouchMode(delta, localPosition);
-      return;
-    }
-    double dx = delta.dx;
-    double dy = delta.dy;
-    if (parent.target?.imageModel.image == null) return;
-    final scale = parent.target?.canvasModel.scale ?? 1.0;
-    dx /= scale;
-    dy /= scale;
-    final r = getVisibleRect();
-    var cx = r.center.dx;
-    var cy = r.center.dy;
-    var tryMoveCanvasX = false;
-    final displayRect = parent.target?.ffiModel.rect;
-    if (dx > 0) {
-      final maxCanvasCanMove = _displayOriginX +
-          (displayRect?.width ?? 1280) -
-          r.right.roundToDouble();
-      tryMoveCanvasX = _x + dx > cx && maxCanvasCanMove > 0;
-      if (tryMoveCanvasX) {
-        dx = min(dx, maxCanvasCanMove);
-      } else {
-        final maxCursorCanMove = r.right - _x;
-        dx = min(dx, maxCursorCanMove);
-      }
-    } else if (dx < 0) {
-      final maxCanvasCanMove = _displayOriginX - r.left.roundToDouble();
-      tryMoveCanvasX = _x + dx < cx && maxCanvasCanMove < 0;
-      if (tryMoveCanvasX) {
-        dx = max(dx, maxCanvasCanMove);
-      } else {
-        final maxCursorCanMove = r.left - _x;
-        dx = max(dx, maxCursorCanMove);
-      }
-    }
-    var tryMoveCanvasY = false;
-    if (dy > 0) {
-      final mayCanvasCanMove = _displayOriginY +
-          (displayRect?.height ?? 720) -
-          r.bottom.roundToDouble();
-      tryMoveCanvasY = _y + dy > cy && mayCanvasCanMove > 0;
-      if (tryMoveCanvasY) {
-        dy = min(dy, mayCanvasCanMove);
-      } else {
-        final mayCursorCanMove = r.bottom - _y;
-        dy = min(dy, mayCursorCanMove);
-      }
-    } else if (dy < 0) {
-      final mayCanvasCanMove = _displayOriginY - r.top.roundToDouble();
-      tryMoveCanvasY = _y + dy < cy && mayCanvasCanMove < 0;
-      if (tryMoveCanvasY) {
-        dy = max(dy, mayCanvasCanMove);
-      } else {
-        final mayCursorCanMove = r.top - _y;
-        dy = max(dy, mayCursorCanMove);
-      }
-    }
-
-    if (dx == 0 && dy == 0) return;
-
-    Point<double>? newPos;
-    final rect = parent.target?.ffiModel.rect;
-    if (rect == null) {
-      // unreachable
-      return;
-    }
-    newPos = InputModel.getPointInRemoteRect(
-        false,
-        parent.target?.ffiModel.pi.platform,
-        kPointerEventKindMouse,
-        kMouseEventTypeDefault,
-        _x + dx,
-        _y + dy,
-        rect,
-        buttons: kPrimaryButton);
-    if (newPos == null) {
-      return;
-    }
-    dx = newPos.x - _x;
-    dy = newPos.y - _y;
-    _x = newPos.x;
-    _y = newPos.y;
-    if (tryMoveCanvasX && dx != 0) {
-      parent.target?.canvasModel.panX(-dx * scale);
-    }
-    if (tryMoveCanvasY && dy != 0) {
-      parent.target?.canvasModel.panY(-dy * scale);
-    }
-
-    parent.target?.inputModel.moveMouse(_x, _y);
-    notifyListeners();
-  }
-
   bool _isInCurrentWindow(double x, double y) {
     final w = _windowRect!.width / devicePixelRatio;
     final h = _windowRect!.width / devicePixelRatio;
     return x >= 0 && y >= 0 && x <= w && y <= h;
   }
 
-  _handleTouchMode(Offset delta, Offset localPosition) async {
+  updatePan(Offset delta, Offset localPosition) async {
     bool isMoved = false;
     if (_remoteWindowCoords.isNotEmpty &&
         _windowRect != null &&
@@ -2583,7 +2458,7 @@ class FFI {
 
   FFI(SessionID? sId) {
     sessionId = sId ?? (Uuid().v4obj());
-    imageModel = ImageModel(WeakReference(this));
+    imageModel = ImageModel();
     ffiModel = FfiModel(WeakReference(this));
     cursorModel = CursorModel(WeakReference(this));
     canvasModel = CanvasModel(WeakReference(this));
@@ -2633,7 +2508,6 @@ class FFI {
     } else {
       connType = ConnType.defaultConn;
       canvasModel.id = id;
-      imageModel.id = id;
       cursorModel.peerId = id;
     }
 
@@ -2790,7 +2664,6 @@ class FFI {
     closed = true;
     imageModel.callbacksOnFirstImage.clear();
     shortcutModel.clear();
-    imageModel.disposeImage();
     cursorModel.clear();
     ffiModel.clear();
     canvasModel.clear();

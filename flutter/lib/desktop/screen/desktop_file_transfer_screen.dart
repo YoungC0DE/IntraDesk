@@ -15,7 +15,6 @@ class DesktopFileTransferScreen extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: gFFI.ffiModel),
-        ChangeNotifierProvider.value(value: gFFI.imageModel),
         ChangeNotifierProvider.value(value: gFFI.cursorModel),
         ChangeNotifierProvider.value(value: gFFI.canvasModel),
       ],

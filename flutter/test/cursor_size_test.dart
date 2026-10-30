@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -37,13 +36,6 @@ class _Canvas extends ChangeNotifier implements CanvasModel {
   double get y => 0;
   @override
   late WeakReference<FFI> parent;
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _Image extends ChangeNotifier implements ImageModel {
-  @override
-  ui.Image? get image => null;
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -307,7 +299,6 @@ Future<void> _checkView(WidgetTester tester, String style,
       data: MediaQueryData(devicePixelRatio: dpr),
       child: MultiProvider(
         providers: [
-          ChangeNotifierProvider<ImageModel>(create: (_) => _Image()),
           ChangeNotifierProvider<CanvasModel>.value(value: canvas),
           ChangeNotifierProvider<CursorModel>.value(value: cursor),
         ],

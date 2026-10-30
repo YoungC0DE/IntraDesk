@@ -593,8 +593,6 @@ class MyTheme {
             key: kCommConfKeyTheme, value: mode.toShortString());
       }
       await bind.mainChangeTheme(dark: mode.toShortString());
-      // Synchronize the window theme of the system.
-      updateSystemWindowTheme();
     }
   }
 
@@ -2457,13 +2455,6 @@ String getWindowName({WindowType? overrideType}) {
 
 String getWindowNameWithId(String id, {WindowType? overrideType}) {
   return "${DesktopTab.tablabelGetter(id).value} - ${getWindowName(overrideType: overrideType)}";
-}
-
-Future<void> updateSystemWindowTheme() async {
-  // Set system window theme for macOS.
-  final userPreference = MyTheme.getThemeModePreference();
-  if (userPreference != ThemeMode.system) {
-  }
 }
 
 Widget futureBuilder(

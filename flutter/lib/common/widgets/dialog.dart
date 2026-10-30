@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/widgets/setting_widgets.dart';
 import 'package:flutter_hbb/consts.dart';
-import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 
 import '../../common.dart';
@@ -133,8 +132,6 @@ class _PasswordWidgetState extends State<PasswordWidget> {
       _timer =
           Timer(Duration(milliseconds: 50), () => _focusNode.requestFocus());
     }
-    // software secure keyboard will take the focus since flutter 3.13
-    // request focus again when android account password obtain focus
   }
 
   @override
@@ -470,7 +467,7 @@ void showRequestElevationDialog(
                 errorText: errPwd.isEmpty ? null : errPwd.value,
               ),
             ],
-          ).marginOnly(left: stateGlobal.isPortrait.isFalse ? 35 : 0),
+          ).marginOnly(left: 35),
         ).marginOnly(top: 10),
       ],
     ),

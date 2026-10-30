@@ -6,7 +6,6 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_hbb/common/widgets/overlay.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/pages/server_page.dart';
 import 'package:flutter_hbb/desktop/screen/desktop_file_transfer_screen.dart';
@@ -75,7 +74,7 @@ Future<void> main(List<String> args) async {
     desktopType = DesktopType.main;
     await windowManager.ensureInitialized();
     windowManager.setPreventClose(true);
-    runMainApp(true);
+    runMainApp();
   }
 }
 
@@ -83,21 +82,18 @@ Future<void> initEnv(String appType) async {
   // global shared preference
   await platformFFI.init(appType);
   // global FFI, use this **ONLY** for global configuration
-  // for convenience, use global FFI on mobile platform
-  // focus on multi-ffi on desktop first
   await initGlobalFFI();
   // await Firebase.initializeApp();
   _registerEventHandler();
 }
 
-void runMainApp(bool startService) async {
+void runMainApp() async {
   // register uni links
   await initEnv(kAppTypeMain);
   // trigger connection status updater
   await bind.mainCheckConnectStatus();
-  if (startService) {
-    gFFI.serverModel.startService();
-  }
+  gFFI.ffiModel.updateEventListener(gFFI.sessionId, "");
+  gFFI.serverModel.updateClientState();
   runApp(App());
 
   bool? alwaysOnTop;
@@ -139,7 +135,6 @@ void runMultiWindow(
   late Widget widget;
   switch (appType) {
     case kAppTypeDesktopRemote:
-      draggablePositions.load();
       widget = DesktopRemoteScreen(
         params: argument,
       );
@@ -409,7 +404,6 @@ _registerEventHandler() {
 
 Widget keyListenerBuilder(BuildContext context, Widget? child) {
   return RawKeyboardListener(
-    // `skipTraversal: isWeb` is to fix "Bad state: RenderBox was not laid out: minified:aeL#c19e4"
     focusNode: FocusNode(skipTraversal: false),
     child: child ?? Container(),
     onKey: (RawKeyEvent event) {

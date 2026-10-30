@@ -22,11 +22,9 @@ const String kPlatformAdditionsHasFileClipboard = "has_file_clipboard";
 const String kPeerPlatformWindows = "Windows";
 const String kPeerPlatformLinux = "Linux";
 const String kPeerPlatformMacOS = "Mac OS";
-const String kPeerPlatformAndroid = "Android";
-const String kPeerPlatformWebDesktop = "WebDesktop";
 
 
-/// [kAppTypeMain] used by 'Desktop Main Page' , 'Mobile (Client and Server)', "Install Page"
+/// [kAppTypeMain] used by 'Desktop Main Page'
 const String kAppTypeMain = "main";
 
 /// [kAppTypeConnectionManager] only for 'Desktop CM Page'
@@ -77,7 +75,6 @@ const String kOptionDisableAudio = "disable_audio";
 const String kOptionEnableFileCopyPaste = "enable-file-copy-paste";
 // "Settings -> Display -> Other default options"
 const String kOptionDisableClipboard = "disable_clipboard";
-const String kOptionTouchMode = "touch-mode";
 const String kOptionRemoteMenubarDragLeft = "remote-menubar-drag-left";
 const String kOptionRemoteMenubarDragRight = "remote-menubar-drag-right";
 const String kOptionRemoteMenubarState = "remoteMenubarState";
@@ -86,9 +83,6 @@ const String kOptionPeerTabIndex = "peer-tab-index";
 const String kOptionPeerCardUiType = "peer-card-ui-type";
 const String kOptionAllowAlwaysSoftwareRender = "allow-always-software-render";
 const String kOptionAllowRemoteCmModification = "allow-remote-cm-modification";
-const String kOptionShowVirtualMouse = "show-virtual-mouse";
-const String kOptionVirtualMouseScale = "virtual-mouse-scale";
-const String kOptionShowVirtualJoystick = "show-virtual-joystick";
 
 // network options
 
@@ -108,7 +102,6 @@ const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 const String kOptionKeepScreenOn = "keep-screen-on";
 
 
-const String kOptionShowMobileAction = "showMobileActions";
 
 const String kUrlActionClose = "close";
 
@@ -122,9 +115,6 @@ const String kPointerEventKindTouch = "touch";
 const String kPointerEventKindMouse = "mouse";
 
 const String kMouseEventTypeDefault = "";
-const String kMouseEventTypePanStart = "pan_start";
-const String kMouseEventTypePanUpdate = "pan_update";
-const String kMouseEventTypePanEnd = "pan_end";
 const String kMouseEventTypeDown = "down";
 const String kMouseEventTypeUp = "up";
 
@@ -139,13 +129,10 @@ const String kEnvPortableExecutable = "RUSTDESK_APPNAME";
 const Color kColorWarn = Color.fromARGB(255, 245, 133, 59);
 const Color kColorCanvas = Colors.black;
 
-const int kMobileDefaultDisplayWidth = 720;
-const int kMobileDefaultDisplayHeight = 1280;
 
 const int kDesktopDefaultDisplayWidth = 1080;
 const int kDesktopDefaultDisplayHeight = 720;
 
-const int kMobileMaxDisplaySize = 1280;
 const int kDesktopMaxDisplaySize = 3840;
 
 const double kDesktopFileTransferRowHeight = 30.0;
@@ -230,7 +217,6 @@ const kInvalidValueStr = 'InvalidValueStr';
 const kCommConfKeyTheme = 'theme';
 const kCommConfKeyLang = 'lang';
 
-const kMobilePageConstraints = BoxConstraints(maxWidth: 600);
 
 /// [kMouseControlDistance] indicates the distance that self-side move to get control of mouse.
 const kMouseControlDistance = 12;
@@ -283,35 +269,6 @@ const double kScaleCustomPivotPos = 1.0 / 3.0; // first 1/3 → up to 100%
 const double kScaleCustomDetentEpsilon =
     0.006; // snap range around pivot (~0.6%)
 const Duration kDebounceCustomScaleDuration = Duration(milliseconds: 300);
-
-// ================================ mobile ================================
-
-// Magic numbers, maybe need to avoid it or use a better way to get them.
-const kMobileDelaySoftKeyboard = Duration(milliseconds: 30);
-const kMobileDelaySoftKeyboardFocus = Duration(milliseconds: 30);
-
-/// Android constants
-const kActionApplicationDetailsSettings =
-    "android.settings.APPLICATION_DETAILS_SETTINGS";
-const kActionAccessibilitySettings = "android.settings.ACCESSIBILITY_SETTINGS";
-
-const kRecordAudio = "android.permission.RECORD_AUDIO";
-const kRequestIgnoreBatteryOptimizations =
-    "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS";
-
-/// Android channel invoke type key
-class AndroidChannel {
-  static final kStartAction = "start_action";
-  static final kGetStartOnBootOpt = "get_start_on_boot_opt";
-  static final kSetStartOnBootOpt = "set_start_on_boot_opt";
-  static final kSyncAppDirConfigPath = "sync_app_dir";
-  static final kPickImportFiles = "pick_import_files";
-  static final kImportFile = "import_file";
-  static final kExportFile = "export_file";
-  static final kPickImportDirectory = "pick_import_directory";
-  static final kImportDirectory = "import_directory";
-  static final kExportFiles = "export_files";
-}
 
 /// flutter/packages/flutter/lib/src/services/keyboard_key.dart -> _keyLabels
 /// see [LogicalKeyboardKey.keyLabel]

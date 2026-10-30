@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:back_button_interceptor/back_button_interceptor.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -18,7 +17,6 @@ import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:get/get_rx/src/rx_workers/utils/debouncer.dart';
-import 'package:provider/provider.dart';
 import 'package:uni_links/uni_links.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -27,7 +25,6 @@ import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 
 import '../consts.dart';
-import 'common/widgets/overlay.dart';
 import 'models/model.dart';
 import 'models/platform_model.dart';
 
@@ -39,7 +36,6 @@ final navigationBarKey = GlobalKey();
 // IntraDesk targets Windows only; kept for code that still asks.
 const isWindows = true;
 var version = '';
-int androidVersion = 0;
 
 // Only used on Linux.
 // `windowManager.setResizable(false)` will reset the window size to the default size on Linux.
@@ -69,7 +65,6 @@ bool isSingleViewApp() {
 bool isTest = false;
 
 typedef F = String Function(String);
-typedef FMethod = String Function(String, dynamic);
 
 typedef StreamEventHandler = Future<void> Function(Map<String, dynamic>);
 typedef SessionID = UuidValue;
@@ -718,23 +713,6 @@ class OverlayDialogManager {
   var _overlayKeyState = OverlayKeyState();
   int _tagCount = 0;
 
-  OverlayEntry? _mobileActionsOverlayEntry;
-  RxBool mobileActionsOverlayVisible = true.obs;
-
-  setMobileActionsOverlayVisible(bool v, {store = true}) {
-    if (store) {
-      bind.setLocalFlutterOption(k: kOptionShowMobileAction, v: v ? 'Y' : 'N');
-    }
-    // No need to read the value from local storage after setting it.
-    // It better to toggle the value directly.
-    mobileActionsOverlayVisible.value = v;
-  }
-
-  loadMobileActionsOverlayVisible() {
-    mobileActionsOverlayVisible.value =
-        bind.getLocalFlutterOption(k: kOptionShowMobileAction) != 'N';
-  }
-
   void setOverlayState(OverlayKeyState overlayKeyState) {
     _overlayKeyState = overlayKeyState;
   }
@@ -742,7 +720,6 @@ class OverlayDialogManager {
   void dismissAll() {
     _dialogs.forEach((key, value) {
       value.complete(null);
-      BackButtonInterceptor.removeByName(key);
     });
     _dialogs.clear();
   }
@@ -750,12 +727,10 @@ class OverlayDialogManager {
   void dismissByTag(String tag) {
     _dialogs[tag]?.complete(null);
     _dialogs.remove(tag);
-    BackButtonInterceptor.removeByName(tag);
   }
 
   Future<T?> show<T>(DialogBuilder builder,
       {bool clickMaskDismiss = false,
-      bool backDismiss = false,
       String? tag,
       bool useAnimation = true,
       bool forceGlobal = false}) {
@@ -785,7 +760,6 @@ class OverlayDialogManager {
       } catch (e) {
         debugPrint("Dialog complete catch error: $e");
       }
-      BackButtonInterceptor.removeByName(dialogTag);
     }
 
     dialog.entry = OverlayEntry(builder: (context) {
@@ -809,12 +783,6 @@ class OverlayDialogManager {
               })));
     });
     overlayState.insert(dialog.entry!);
-    BackButtonInterceptor.add((stopDefaultButtonEvent, routeInfo) {
-      if (backDismiss) {
-        close();
-      }
-      return true;
-    }, name: dialogTag);
     return dialog.completer.future;
   }
 
@@ -860,83 +828,9 @@ class OverlayDialogManager {
     return tag;
   }
 
-  void resetMobileActionsOverlay({FFI? ffi}) {
-    if (_mobileActionsOverlayEntry == null) return;
-    hideMobileActionsOverlay();
-    showMobileActionsOverlay(ffi: ffi);
-  }
-
-  void showMobileActionsOverlay({FFI? ffi}) {
-    if (_mobileActionsOverlayEntry != null) return;
-    final overlayState = _overlayKeyState.state;
-    if (overlayState == null) return;
-
-    final overlay = makeMobileActionsOverlayEntry(
-      () => hideMobileActionsOverlay(),
-      ffi: ffi,
-    );
-    overlayState.insert(overlay);
-    _mobileActionsOverlayEntry = overlay;
-    setMobileActionsOverlayVisible(true);
-  }
-
-  void hideMobileActionsOverlay({store = true}) {
-    if (_mobileActionsOverlayEntry != null) {
-      _mobileActionsOverlayEntry!.remove();
-      _mobileActionsOverlayEntry = null;
-      setMobileActionsOverlayVisible(false, store: store);
-      return;
-    }
-  }
-
-  void toggleMobileActionsOverlay({FFI? ffi}) {
-    if (_mobileActionsOverlayEntry == null) {
-      showMobileActionsOverlay(ffi: ffi);
-    } else {
-      hideMobileActionsOverlay();
-    }
-  }
-
   bool existing(String tag) {
     return _dialogs.keys.contains(tag);
   }
-}
-
-makeMobileActionsOverlayEntry(VoidCallback? onHide, {FFI? ffi}) {
-  makeMobileActions(BuildContext context, double s) {
-    final scale = s < 0.85 ? 0.85 : s;
-    final session = ffi ?? gFFI;
-    const double overlayW = 200;
-    const double overlayH = 45;
-    computeOverlayPosition() {
-      final screenW = MediaQuery.of(context).size.width;
-      final screenH = MediaQuery.of(context).size.height;
-      final left = (screenW - overlayW * scale) / 2;
-      final top = screenH - (overlayH + 80) * scale;
-      return Offset(left, top);
-    }
-
-    if (draggablePositions.mobileActions.isInvalid()) {
-      draggablePositions.mobileActions.update(computeOverlayPosition());
-    } else {
-      draggablePositions.mobileActions.tryAdjust(overlayW, overlayH, scale);
-    }
-    return DraggableMobileActions(
-      scale: scale,
-      position: draggablePositions.mobileActions,
-      width: overlayW,
-      height: overlayH,
-      onBackPressed: session.inputModel.onMobileBack,
-      onHomePressed: session.inputModel.onMobileHome,
-      onRecentPressed: session.inputModel.onMobileApps,
-      onHidePressed: onHide,
-    );
-  }
-
-  return OverlayEntry(builder: (context) {
-    final c = Provider.of<CanvasModel>(context);
-    return makeMobileActions(context, c.scale * 2.0);
-  });
 }
 
 void showToast(String text,
@@ -1385,82 +1279,6 @@ String readableFileSize(double size) {
   }
 }
 
-/// Flutter can't not catch PointerMoveEvent when size is 1
-/// This will happen in Android AccessibilityService Input
-/// android can't init dispatching size yet ,see: https://stackoverflow.com/questions/59960451/android-accessibility-dispatchgesture-is-it-possible-to-specify-pressure-for-a
-/// use this temporary solution until flutter or android fixes the bug
-class AccessibilityListener extends StatelessWidget {
-  final Widget? child;
-  static final offset = 100;
-
-  AccessibilityListener({this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-        onPointerDown: (evt) {
-          if (evt.size == 1) {
-            GestureBinding.instance.handlePointerEvent(PointerAddedEvent(
-                pointer: evt.pointer + offset, position: evt.position));
-            GestureBinding.instance.handlePointerEvent(PointerDownEvent(
-                pointer: evt.pointer + offset,
-                size: 0.1,
-                position: evt.position));
-          }
-        },
-        onPointerUp: (evt) {
-          if (evt.size == 1) {
-            GestureBinding.instance.handlePointerEvent(PointerUpEvent(
-                pointer: evt.pointer + offset,
-                size: 0.1,
-                position: evt.position));
-            GestureBinding.instance.handlePointerEvent(PointerRemovedEvent(
-                pointer: evt.pointer + offset, position: evt.position));
-          }
-        },
-        onPointerMove: (evt) {
-          if (evt.size == 1) {
-            GestureBinding.instance.handlePointerEvent(PointerMoveEvent(
-                pointer: evt.pointer + offset,
-                size: 0.1,
-                delta: evt.delta,
-                position: evt.position));
-          }
-        },
-        child: child);
-  }
-}
-
-class AndroidPermissionManager {
-  static Completer<bool>? _completer;
-  static Timer? _timer;
-  static var _current = "";
-
-  static Future<bool> check(String type) {
-    return Future.value(true);
-  }
-
-  // startActivity goto Android Setting's page to request permission manually by user
-  static void startAction(String action) {
-    gFFI.invokeMethod(AndroidChannel.kStartAction, action);
-  }
-
-  /// We use XXPermissions to request permissions,
-  /// for supported types, see https://github.com/getActivity/XXPermissions/blob/e46caea32a64ad7819df62d448fb1c825481cd28/library/src/main/java/com/hjq/permissions/Permission.java
-  static Future<bool> request(String type) {
-    return Future.value(true);
-  }
-
-  static complete(String type, bool res) {
-    if (type != _current) {
-      res = false;
-    }
-    _timer?.cancel();
-    _completer?.complete(res);
-    _current = "";
-  }
-}
-
 RadioListTile<T> getRadio<T>(
     Widget title, T toValue, T curValue, ValueChanged<T?>? onChange,
     {bool? dense}) {
@@ -1587,8 +1405,7 @@ Widget getPlatformImage(String platform, {double size = 50}) {
   }
   if (platform == kPeerPlatformMacOS) {
     platform = 'mac';
-  } else if (platform != kPeerPlatformLinux &&
-      platform != kPeerPlatformAndroid) {
+  } else if (platform != kPeerPlatformLinux) {
     platform = 'win';
   } else {
     platform = platform.toLowerCase();
@@ -2992,14 +2809,6 @@ Widget _buildPresetPasswordWarning() {
       ],
     ).paddingAll(8),
   ); // Show a warning message if the Future completed with true
-}
-
-Widget buildPresetPasswordWarningMobile() {
-  if (bind.isPresetPasswordMobileOnly()) {
-    return _buildPresetPasswordWarning();
-  } else {
-    return SizedBox.shrink();
-  }
 }
 
 Widget buildPresetPasswordWarning() {

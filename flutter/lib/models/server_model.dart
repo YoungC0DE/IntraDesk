@@ -17,12 +17,6 @@ import 'model.dart';
 const kLoginDialogTag = "LOGIN";
 
 class ServerModel with ChangeNotifier {
-  bool _isStart = false; // Android MainService status
-  bool _mediaOk = false;
-  bool _inputOk = false;
-  bool _audioOk = false;
-  bool _fileOk = false;
-  bool _clipboardOk = false;
   bool _showElevation = false;
   String _temporaryPasswordLength = "";
   bool _allowNumericOneTimePassword = false;
@@ -36,18 +30,6 @@ class ServerModel with ChangeNotifier {
   final tabController = DesktopTabController(tabType: DesktopTabType.cm);
 
   final List<Client> _clients = [];
-
-  bool get isStart => _isStart;
-
-  bool get mediaOk => _mediaOk;
-
-  bool get inputOk => _inputOk;
-
-  bool get audioOk => _audioOk;
-
-  bool get fileOk => _fileOk;
-
-  bool get clipboardOk => _clipboardOk;
 
   bool get showElevation => _showElevation;
 
@@ -116,35 +98,6 @@ class ServerModel with ChangeNotifier {
         await timerCallback();
       });
     }
-
-    // Initial keyboard status is off on mobile
-  }
-
-  /// 1. check android permission
-  /// 2. check config
-  /// audio true by default (if permission on) (false default < Android 10)
-  /// file true by default (if permission on)
-  checkAndroidPermission() async {
-    // audio
-    if (androidVersion < 30 ||
-        !await AndroidPermissionManager.check(kRecordAudio)) {
-      _audioOk = false;
-      bind.mainSetOption(key: kOptionEnableAudio, value: "N");
-    } else {
-      final audioOption = await bind.mainGetOption(key: kOptionEnableAudio);
-      _audioOk = audioOption != 'N';
-    }
-
-    // Android file transfer is confined to app-specific storage. Files enter
-    // and leave the workspace through Android's system document picker.
-    final fileOption = await bind.mainGetOption(key: kOptionEnableFileTransfer);
-    _fileOk = fileOption != 'N';
-
-    // clipboard
-    final clipOption = await bind.mainGetOption(key: kOptionEnableClipboard);
-    _clipboardOk = clipOption != 'N';
-
-    notifyListeners();
   }
 
   updatePasswordModel() async {
@@ -178,97 +131,12 @@ class ServerModel with ChangeNotifier {
     }
   }
 
-  toggleAudio() async {
-    if (clients.any((c) => !c.disconnected)) {
-      await showClientsMayNotBeChangedAlert(parent.target);
-    }
-    if (!_audioOk && !await AndroidPermissionManager.check(kRecordAudio)) {
-      final res = await AndroidPermissionManager.request(kRecordAudio);
-      if (!res) {
-        showToast(translate('Failed'));
-        return;
-      }
-    }
-
-    _audioOk = !_audioOk;
-    bind.mainSetOption(
-        key: kOptionEnableAudio, value: _audioOk ? defaultOptionYes : 'N');
-    notifyListeners();
-  }
-
-  toggleFile() async {
-    if (clients.any((c) => !c.disconnected)) {
-      await showClientsMayNotBeChangedAlert(parent.target);
-    }
-    _fileOk = !_fileOk;
-    bind.mainSetOption(
-        key: kOptionEnableFileTransfer,
-        value: _fileOk ? defaultOptionYes : 'N');
-    notifyListeners();
-  }
-
-  toggleClipboard() async {
-    _clipboardOk = !clipboardOk;
-    bind.mainSetOption(
-        key: kOptionEnableClipboard,
-        value: clipboardOk ? defaultOptionYes : 'N');
-    notifyListeners();
-  }
-
-  toggleInput() async {
-    if (clients.any((c) => !c.disconnected)) {
-      await showClientsMayNotBeChangedAlert(parent.target);
-    }
-    if (_inputOk) {
-      parent.target?.invokeMethod("stop_input");
-      bind.mainSetOption(key: kOptionEnableKeyboard, value: 'N');
-    } else {
-      if (parent.target != null) {
-        /// the result of toggle-on depends on user actions in the settings page.
-        /// handle result, see [ServerModel.changeStatue]
-        showInputWarnAlert(parent.target!);
-      }
-    }
-  }
-
-  /// Start the screen sharing service.
-  Future<void> startService() async {
-    _isStart = true;
-    notifyListeners();
-    parent.target?.ffiModel.updateEventListener(parent.target!.sessionId, "");
-    await parent.target?.invokeMethod("init_service");
-    updateClientState();
-  }
-
   fetchID() async {
     final id = await bind.mainGetMyId();
     if (id != _serverId.id) {
       _serverId.id = id;
       notifyListeners();
     }
-  }
-
-  changeStatue(String name, bool value) {
-    debugPrint("changeStatue value $value");
-    switch (name) {
-      case "media":
-        _mediaOk = value;
-        if (value && !_isStart) {
-          startService();
-        }
-        break;
-      case "input":
-        if (_inputOk != value) {
-          bind.mainSetOption(
-              key: kOptionEnableKeyboard,
-              value: value ? defaultOptionYes : 'N');
-        }
-        _inputOk = value;
-        break;
-      default:
-        return;
-    }
-    notifyListeners();
   }
 
   // force
@@ -380,7 +248,6 @@ class ServerModel with ChangeNotifier {
           }
         }
         parent.target?.dialogManager.dismissByTag(getLoginDialogTag(id));
-        parent.target?.invokeMethod("cancel_notification", id);
       }
       if (desktopType == DesktopType.cm && _clients.isEmpty) {
         hideCmWindow();
@@ -511,50 +378,4 @@ class Client {
 
 String getLoginDialogTag(int id) {
   return kLoginDialogTag + id.toString();
-}
-
-showInputWarnAlert(FFI ffi) {
-  ffi.dialogManager.show((setState, close, context) {
-    submit() {
-      AndroidPermissionManager.startAction(kActionAccessibilitySettings);
-      close();
-    }
-
-    return CustomAlertDialog(
-      title: Text(translate("How to get Android input permission?")),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(translate("android_input_permission_tip1")),
-          const SizedBox(height: 10),
-          Text(translate("android_input_permission_tip2")),
-        ],
-      ),
-      actions: [
-        dialogButton("Cancel", onPressed: close, isOutline: true),
-        dialogButton("Open System Setting", onPressed: submit),
-      ],
-      onSubmit: submit,
-      onCancel: close,
-    );
-  });
-}
-
-Future<void> showClientsMayNotBeChangedAlert(FFI? ffi) async {
-  await ffi?.dialogManager.show((setState, close, context) {
-    return CustomAlertDialog(
-      title: Text(translate("Permissions")),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(translate("android_permission_may_not_change_tip")),
-        ],
-      ),
-      actions: [
-        dialogButton("OK", onPressed: close),
-      ],
-      onSubmit: close,
-      onCancel: close,
-    );
-  });
 }

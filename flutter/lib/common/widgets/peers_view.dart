@@ -81,7 +81,7 @@ class _PeersView extends StatefulWidget {
 
 /// State for the peer widget.
 class _PeersViewState extends State<_PeersView>
-    with WindowListener, WidgetsBindingObserver {
+    with WindowListener {
   final HashMap<String, String> _emptyMessages = HashMap.from({
     LoadEvent.recent: 'empty_recent_tip',
     LoadEvent.favorite: 'empty_favorite_tip',
@@ -105,14 +105,12 @@ class _PeersViewState extends State<_PeersView>
   @override
   void initState() {
     windowManager.addListener(this);
-    WidgetsBinding.instance.addObserver(this);
     super.initState();
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
-    WidgetsBinding.instance.removeObserver(this);
     _exit = true;
     super.dispose();
   }
@@ -147,14 +145,6 @@ class _PeersViewState extends State<_PeersView>
   @override
   void onWindowMinimize() {
     // Window minimize also triggers `onWindowBlur()`.
-  }
-
-  // This function is required for mobile.
-  // `onWindowFocus` works fine for desktop.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    return;
   }
 
   @override

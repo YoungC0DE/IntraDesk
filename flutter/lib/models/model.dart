@@ -33,8 +33,7 @@ import 'input_model.dart';
 import 'platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
 
-import 'package:flutter_hbb/generated_bridge.dart'
-    if (dart.library.html) 'package:flutter_hbb/web/bridge.dart';
+import 'package:flutter_hbb/generated_bridge.dart';
 import 'package:flutter_hbb/native/custom_cursor.dart';
 
 typedef HandleMsgBox = Function(Map<String, dynamic> evt, String id);
@@ -91,8 +90,6 @@ class FfiModel with ChangeNotifier {
   Rect? _rect;
 
   final _permissions = <String, bool>{};
-  bool _touchMode = false;
-  late VirtualMouseMode virtualMouseMode;
   Timer? _timer;
   Timer? _restartReconnectDelayTimer;
   var _reconnects = 1;
@@ -119,11 +116,6 @@ class FfiModel with ChangeNotifier {
 
   PeerInfo get pi => _pi;
 
-  bool get touchMode => _touchMode;
-
-  bool get isPeerAndroid => _pi.platform == kPeerPlatformAndroid;
-  bool get isPeerMobile => isPeerAndroid;
-
   bool get isPeerLinux => _pi.platform == kPeerPlatformLinux;
   bool get isPeerWindows => _pi.platform == kPeerPlatformWindows;
 
@@ -132,7 +124,6 @@ class FfiModel with ChangeNotifier {
     clear();
     sessionId = parent.target!.sessionId;
     cachedPeerData.permissions = _permissions;
-    virtualMouseMode = VirtualMouseMode(this);
   }
 
   Rect? globalDisplaysRect() => _getDisplaysRect(_pi.displays, true);
@@ -163,13 +154,6 @@ class FfiModel with ChangeNotifier {
       b = max(b, display.y + scale(display.height, display.scale));
     }
     return Rect.fromLTRB(l, t, r, b);
-  }
-
-  toggleTouchMode() {
-    if (!isPeerAndroid) {
-      _touchMode = !_touchMode;
-      notifyListeners();
-    }
   }
 
   updatePermission(Map<String, dynamic> evt, String id) {
@@ -554,14 +538,6 @@ class FfiModel with ChangeNotifier {
     _restartReconnectDelayTimer = null;
   }
 
-  void beginAndroidDocumentPicker() {
-    return;
-  }
-
-  void endAndroidDocumentPicker() {
-    return;
-  }
-
   /// Auto-retry check for "Remote desktop is offline" error.
   /// returns true to auto-retry, false otherwise.
   bool shouldAutoRetryOnOffline(
@@ -738,11 +714,9 @@ class FfiModel with ChangeNotifier {
     // Note: Relative mouse mode is NOT auto-enabled on connect.
     // Users must manually enable it via toolbar or keyboard shortcut (Ctrl+Alt+Shift+M).
     //
-    // For desktop/webDesktop, keyboard mode initialization is handled later by
+    // Keyboard mode initialization is handled later by
     // checkDesktopKeyboardMode() which may change the mode if not supported,
     // followed by updateKeyboardMode() to sync InputModel.keyboardMode.
-    // For mobile, updateKeyboardMode() is currently a no-op (only executes on desktop/web),
-    // but we call it here for consistency and future-proofing.
     _pi.isSupportMultiUiSession =
         bind.isSupportMultiUiSession(version: _pi.version);
     _pi.username = evt['username'];
@@ -767,24 +741,6 @@ class FfiModel with ChangeNotifier {
     }
 
     final connType = parent.target?.connType;
-    if (isPeerAndroid) {
-      _touchMode = true;
-    } else {
-      // `kOptionTouchMode` is originally peer option, but it is moved to local option later.
-      // We check local option first, if not set, then check peer option.
-      // Because if local option is not empty:
-      // 1. User has set the touch mode explicitly.
-      // 2. The advanced option (custom client) is set.
-      //    Then we choose to use the local option.
-      final optLocal = bind.mainGetLocalOption(key: kOptionTouchMode);
-      if (optLocal != '') {
-        _touchMode = optLocal == 'Y';
-      } else {
-        final optSession = await bind.sessionGetOption(
-            sessionId: sessionId, arg: kOptionTouchMode);
-        _touchMode = optSession != '';
-      }
-    }
     if (connType == ConnType.fileTransfer) {
       parent.target?.fileModel.onReady();
     } else if (connType == ConnType.defaultConn) {
@@ -843,7 +799,6 @@ class FfiModel with ChangeNotifier {
 
     // checkDesktopKeyboardMode may change the keyboard mode if the current
     // mode is not supported. Re-sync InputModel.keyboardMode afterwards.
-    // Note: updateKeyboardMode() is a no-op on mobile (early-returns).
     await checkDesktopKeyboardMode();
     await parent.target?.inputModel.updateKeyboardMode();
 
@@ -881,33 +836,9 @@ class FfiModel with ChangeNotifier {
     }
   }
 
-  tryShowAndroidActionsOverlay({int delayMSecs = 10}) {
-    if (isPeerAndroid) {
-      if (parent.target?.connType == ConnType.defaultConn &&
-          parent.target != null &&
-          parent.target!.ffiModel.permissions['keyboard'] != false) {
-        Timer(Duration(milliseconds: delayMSecs), () {
-          if (parent.target!.dialogManager.mobileActionsOverlayVisible.isTrue) {
-            parent.target!.dialogManager
-                .showMobileActionsOverlay(ffi: parent.target!);
-          }
-        });
-      }
-    }
-  }
-
   handleResolutions(String id, dynamic resolutions) {
     try {
-      final resolutionsObj = json.decode(resolutions as String);
-      late List<dynamic> dynamicArray;
-      if (resolutionsObj is Map) {
-        // The web version
-        dynamicArray = (resolutionsObj as Map<String, dynamic>)['resolutions']
-            as List<dynamic>;
-      } else {
-        // The rust version
-        dynamicArray = resolutionsObj as List<dynamic>;
-      }
+      final dynamicArray = json.decode(resolutions as String) as List<dynamic>;
       List<Resolution> arr = List.empty(growable: true);
       for (int i = 0; i < dynamicArray.length; i++) {
         var width = dynamicArray[i]["width"];
@@ -1082,72 +1013,6 @@ class FfiModel with ChangeNotifier {
 
 }
 
-class VirtualMouseMode with ChangeNotifier {
-  bool _showVirtualMouse = false;
-  double _virtualMouseScale = 1.0;
-  bool _showVirtualJoystick = false;
-
-  bool get showVirtualMouse => _showVirtualMouse;
-  double get virtualMouseScale => _virtualMouseScale;
-  bool get showVirtualJoystick => _showVirtualJoystick;
-
-  FfiModel ffiModel;
-
-  VirtualMouseMode(this.ffiModel);
-
-  bool _shouldShow() => !ffiModel.isPeerAndroid;
-
-  setShowVirtualMouse(bool b) {
-    if (b == _showVirtualMouse) return;
-    if (_shouldShow()) {
-      _showVirtualMouse = b;
-      notifyListeners();
-    }
-  }
-
-  setVirtualMouseScale(double s) {
-    if (s <= 0) return;
-    if (s == _virtualMouseScale) return;
-    _virtualMouseScale = s;
-    bind.mainSetLocalOption(key: kOptionVirtualMouseScale, value: s.toString());
-    notifyListeners();
-  }
-
-  setShowVirtualJoystick(bool b) {
-    if (b == _showVirtualJoystick) return;
-    if (_shouldShow()) {
-      _showVirtualJoystick = b;
-      notifyListeners();
-    }
-  }
-
-  void loadOptions() {
-    _showVirtualMouse =
-        bind.mainGetLocalOption(key: kOptionShowVirtualMouse) == 'Y';
-    _virtualMouseScale = double.tryParse(
-            bind.mainGetLocalOption(key: kOptionVirtualMouseScale)) ??
-        1.0;
-    _showVirtualJoystick =
-        bind.mainGetLocalOption(key: kOptionShowVirtualJoystick) == 'Y';
-    notifyListeners();
-  }
-
-  Future<void> toggleVirtualMouse() async {
-    await bind.mainSetLocalOption(
-        key: kOptionShowVirtualMouse, value: showVirtualMouse ? 'N' : 'Y');
-    setShowVirtualMouse(
-        bind.mainGetLocalOption(key: kOptionShowVirtualMouse) == 'Y');
-  }
-
-  Future<void> toggleVirtualJoystick() async {
-    await bind.mainSetLocalOption(
-        key: kOptionShowVirtualJoystick,
-        value: showVirtualJoystick ? 'N' : 'Y');
-    setShowVirtualJoystick(
-        bind.mainGetLocalOption(key: kOptionShowVirtualJoystick) == 'Y');
-  }
-}
-
 class ImageModel {
   final List<Function(String)> callbacksOnFirstImage = [];
 
@@ -1244,15 +1109,6 @@ class CanvasModel with ChangeNotifier {
   late final SessionID sessionId;
   ViewStyle _lastViewStyle = ViewStyle.defaultViewStyle();
 
-  Timer? _timerMobileFocusCanvasCursor;
-  Timer? _timerMobileRestoreCanvasOffset;
-  Offset? _offsetBeforeMobileSoftKeyboard;
-  double? _scaleBeforeMobileSoftKeyboard;
-
-  // `isMobileCanvasChanged` is used to avoid canvas reset when changing the input method
-  // after showing the soft keyboard.
-  bool isMobileCanvasChanged = false;
-
   WeakReference<FFI> parent;
 
   CanvasModel(this.parent) {
@@ -1288,13 +1144,6 @@ class CanvasModel with ChangeNotifier {
     double w = size.width - leftToEdge - rightToEdge;
     double h = size.height - topToEdge - bottomToEdge;
     return Size(w < 0 ? 0 : w, h < 0 ? 0 : h);
-  }
-
-  // mobile only
-  double getAdjustY() {
-    final bottom =
-        parent.target?.cursorModel.keyHelpToolsRectToAdjustCanvas?.bottom ?? 0;
-    return max(bottom - MediaQueryData.fromView(ui.window).padding.top, 0);
   }
 
   updateSize() => _size = getSize();
@@ -1410,7 +1259,7 @@ class CanvasModel with ChangeNotifier {
       return;
     }
 
-    // On mobile platforms, move the canvas with the cursor.
+    // Move the canvas with the cursor when the image is larger than the window.
     final dw = getDisplayWidth() * _scale;
     final dh = getDisplayHeight() * _scale;
     var dxOffset = 0;
@@ -1459,72 +1308,6 @@ class CanvasModel with ChangeNotifier {
     _scale = 1.0;
     _locked = false;
     _lastViewStyle = ViewStyle.defaultViewStyle();
-    _timerMobileFocusCanvasCursor?.cancel();
-    _timerMobileRestoreCanvasOffset?.cancel();
-    _offsetBeforeMobileSoftKeyboard = null;
-    _scaleBeforeMobileSoftKeyboard = null;
-  }
-
-  void mobileFocusCanvasCursor() {
-    _timerMobileFocusCanvasCursor?.cancel();
-    _timerMobileFocusCanvasCursor =
-        Timer(Duration(milliseconds: 100), () async {
-      updateSize();
-      _resetCanvasOffset(getDisplayWidth(), getDisplayHeight());
-      notifyListeners();
-    });
-  }
-
-  void saveMobileOffsetBeforeSoftKeyboard() {
-    _timerMobileRestoreCanvasOffset?.cancel();
-    _offsetBeforeMobileSoftKeyboard = Offset(_x, _y);
-    _scaleBeforeMobileSoftKeyboard = _scale;
-  }
-
-  void restoreMobileOffsetAfterSoftKeyboard() {
-    _timerMobileRestoreCanvasOffset?.cancel();
-    _timerMobileFocusCanvasCursor?.cancel();
-    final targetOffset = _offsetBeforeMobileSoftKeyboard;
-    final targetScale = _scaleBeforeMobileSoftKeyboard;
-    if (targetOffset == null || targetScale == null) {
-      return;
-    }
-    _timerMobileRestoreCanvasOffset = Timer(Duration(milliseconds: 100), () {
-      updateSize();
-      _x = targetOffset.dx;
-      _y = targetOffset.dy;
-      _scale = targetScale;
-      _offsetBeforeMobileSoftKeyboard = null;
-      _scaleBeforeMobileSoftKeyboard = null;
-      notifyListeners();
-    });
-  }
-
-  // mobile only
-  // Move the canvas to make the cursor visible(center) on the screen.
-  void _moveToCenterCursor() {
-    Rect? imageRect = parent.target?.ffiModel.rect;
-    if (imageRect == null) {
-      // unreachable
-      return;
-    }
-    final maxX = 0.0;
-    final minX = _size.width + (imageRect.left - imageRect.right) * _scale;
-    final maxY = 0.0;
-    final minY = _size.height + (imageRect.top - imageRect.bottom) * _scale;
-    Offset offsetToCenter =
-        parent.target?.cursorModel.getCanvasOffsetToCenterCursor() ??
-            Offset.zero;
-    if (minX < 0) {
-      _x = min(max(offsetToCenter.dx, minX), maxX);
-    } else {
-      // _size.width > (imageRect.right, imageRect.left) * _scale, we should not change _x
-    }
-    if (minY < 0) {
-      _y = min(max(offsetToCenter.dy, minY), maxY);
-    } else {
-      // _size.height > (imageRect.bottom - imageRect.top) * _scale, , we should not change _y
-    }
   }
 }
 
@@ -1771,61 +1554,6 @@ class CursorModel with ChangeNotifier {
   String peerId = '';
   WeakReference<FFI> parent;
 
-  // Only for mobile, touch mode
-  // To block touch event above the KeyHelpTools
-  //
-  // A better way is to not listen events from the KeyHelpTools.
-  // But we're now using a Container(child: Stack(...)) to wrap the KeyHelpTools,
-  // and the listener is on the Container.
-  Rect? _keyHelpToolsRect;
-  // `lastIsBlocked` is only used in common/widgets/remote_input.dart -> _RawTouchGestureDetectorRegionState -> onDoubleTap()
-  // Because onDoubleTap() doesn't have the `event` parameter, we can't get the touch event's position.
-  bool _lastIsBlocked = false;
-  bool _lastKeyboardIsVisible = false;
-
-  bool get lastKeyboardIsVisible => _lastKeyboardIsVisible;
-
-  Rect? get keyHelpToolsRectToAdjustCanvas =>
-      _lastKeyboardIsVisible ? _keyHelpToolsRect : null;
-  // The blocked rect is used to block the pointer/touch events in the remote page.
-  final List<Rect> _blockedRects = [];
-  // Used in shouldBlock().
-  // _blockEvents is a flag to block pointer/touch events on the remote image.
-  // It is set to true to prevent accidental touch events in the following scenarios:
-  //   1. In floating mouse mode, when the scroll circle is shown.
-  //   2. In floating mouse widgets mode, when the left/right buttons are moving.
-  //   3. In floating mouse widgets mode, when using the virtual joystick.
-  // When _blockEvents is true, all pointer/touch events are blocked regardless of the contents of _blockedRects.
-  // _blockedRects contains specific rectangular regions where events are blocked; these are checked when _blockEvents is false.
-  // In summary: _blockEvents acts as a global block, while _blockedRects provides fine-grained blocking.
-  bool _blockEvents = false;
-  List<Rect> get blockedRects => List.unmodifiable(_blockedRects);
-
-  set blockEvents(bool v) => _blockEvents = v;
-
-  keyHelpToolsVisibilityChanged(Rect? rect, bool keyboardIsVisible) {
-    _keyHelpToolsRect = rect;
-    if (rect == null) {
-      _lastIsBlocked = false;
-    } else {
-      // Block the touch event is safe here.
-      // `lastIsBlocked` is only used in onDoubleTap() to block the touch event from the KeyHelpTools.
-      // `lastIsBlocked` will be set when the cursor is moving or touch somewhere else.
-      _lastIsBlocked = true;
-    }
-    _lastKeyboardIsVisible = keyboardIsVisible;
-  }
-
-  addBlockedRect(Rect rect) {
-    _blockedRects.add(rect);
-  }
-
-  removeBlockedRect(Rect rect) {
-    _blockedRects.remove(rect);
-  }
-
-  get lastIsBlocked => _lastIsBlocked;
-
   /// The image of the shape in use, or the one shown before until it is back: a switch falls
   /// back to the default cursor only for a shape the core cannot give. Asks the core for the
   /// shape in use when it was let go.
@@ -1877,7 +1605,7 @@ class CursorModel with ChangeNotifier {
   addKey(String key) => _cacheKeys.add(key);
 
   // remote physical display coordinate
-  // For update pan (mobile), onOneFingerPanStart, onOneFingerPanUpdate, onHoldDragUpdate
+  // For updatePan, onOneFingerPanStart, onOneFingerPanUpdate
   Rect getVisibleRect() {
     final size = parent.target?.canvasModel.getSize() ??
         MediaQueryData.fromView(ui.window).size;
@@ -1889,52 +1617,10 @@ class CursorModel with ChangeNotifier {
     return Rect.fromLTWH(x0, y0, size.width / scale, size.height / scale);
   }
 
-  Offset getCanvasOffsetToCenterCursor() {
-    // Cursor should be at the center of the visible rect.
-    // _x = rect.left + rect.width / 2
-    // _y = rect.right + rect.height / 2
-    // See `getVisibleRect()`
-    // _x = _displayOriginX - xoffset / scale + size.width / scale * 0.5;
-    // _y = _displayOriginY - yoffset / scale + size.height / scale * 0.5;
-    final size = parent.target?.canvasModel.getSize() ??
-        MediaQueryData.fromView(ui.window).size;
-    final xoffset = (_displayOriginX - _x) * scale + size.width * 0.5;
-    final yoffset = (_displayOriginY - _y) * scale + size.height * 0.5;
-    return Offset(xoffset, yoffset);
-  }
-
   get scale => parent.target?.canvasModel.scale ?? 1.0;
 
-  // mobile Soft keyboard, block touch event from the KeyHelpTools
-  shouldBlock(double x, double y) {
-    if (_blockEvents) {
-      return true;
-    }
-    final offset = Offset(x, y);
-    for (final rect in _blockedRects) {
-      if (isPointInRect(offset, rect)) {
-        return true;
-      }
-    }
-
-    // For help tools rectangle, only block touch event when in touch mode.
-    if (!(parent.target?.ffiModel.touchMode ?? false)) {
-      return false;
-    }
-    if (_keyHelpToolsRect != null &&
-        isPointInRect(offset, _keyHelpToolsRect!)) {
-      return true;
-    }
-    return false;
-  }
-
-  // For touch mode
+  // For touch screens
   Future<bool> move(double x, double y) async {
-    if (shouldBlock(x, y)) {
-      _lastIsBlocked = true;
-      return false;
-    }
-    _lastIsBlocked = false;
     if (!_moveLocalIfInRemoteRect(x, y)) {
       return false;
     }
@@ -1951,8 +1637,7 @@ class CursorModel with ChangeNotifier {
   }
 
   Offset? getRemotePosInRect(Offset offset) {
-    final adjust = parent.target?.canvasModel.getAdjustY() ?? 0;
-    final newPos = _getNewPos(offset.dx, offset.dy, adjust);
+    final newPos = _getNewPos(offset.dx, offset.dy);
     final visibleRect = getVisibleRect();
     if (!isPointInRect(newPos, visibleRect)) {
       return null;
@@ -1966,11 +1651,11 @@ class CursorModel with ChangeNotifier {
     return newPos;
   }
 
-  Offset _getNewPos(double x, double y, double adjust) {
+  Offset _getNewPos(double x, double y) {
     final xoffset = parent.target?.canvasModel.x ?? 0;
     final yoffset = parent.target?.canvasModel.y ?? 0;
     final newX = (x - xoffset) / scale + _displayOriginX;
-    final newY = (y - yoffset - adjust) / scale + _displayOriginY;
+    final newY = (y - yoffset) / scale + _displayOriginY;
     return Offset(newX, newY);
   }
 
@@ -1985,8 +1670,8 @@ class CursorModel with ChangeNotifier {
     return true;
   }
 
-  moveLocal(double x, double y, {double adjust = 0}) {
-    final newPos = _getNewPos(x, y, adjust);
+  moveLocal(double x, double y) {
+    final newPos = _getNewPos(x, y);
     _x = newPos.dx;
     _y = newPos.dy;
     notifyListeners();
@@ -2201,7 +1886,6 @@ class CursorModel with ChangeNotifier {
 
   void _switchedAway(CursorData cache) {
     _awaitingNative.remove(cache.id);
-    // Mobile only paints the cursor, from its image.
     if (_nativeIds.contains(cache.id)) {
       cache.releasePixels();
       return;
@@ -2482,16 +2166,6 @@ class FFI {
         name: PeersModelName.lan, loadEvent: LoadEvent.lan, getInitPeers: null);
   }
 
-  /// Mobile reuse FFI
-  void mobileReset() {
-    ffiModel.resetRestartReconnectState();
-    ffiModel.waitForFirstImage.value = true;
-    ffiModel.isRefreshing = false;
-    ffiModel.waitForImageDialogShow.value = true;
-    ffiModel.waitForImageTimer?.cancel();
-    ffiModel.waitForImageTimer = null;
-  }
-
   /// Start with the given [id]. Only transfer file if [isFileTransfer].
   void start(
     String id, {
@@ -2676,19 +2350,6 @@ class FFI {
     }
     debugPrint('model $id closed');
     id = '';
-  }
-
-  void setMethodCallHandler(FMethod callback) {
-    platformFFI.setMethodCallHandler(callback);
-  }
-
-  Future<bool> invokeMethod(String method, [dynamic arguments]) async {
-    return await platformFFI.invokeMethod(method, arguments);
-  }
-
-  Future<T?> invokeMethodWithResult<T>(String method,
-      [dynamic arguments]) async {
-    return await platformFFI.invokeMethodWithResult<T>(method, arguments);
   }
 }
 

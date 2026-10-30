@@ -75,6 +75,7 @@ falhas, anexe o log: `%APPDATA%\IntraDesk\log\` (pasta do processo principal e
 | 4.13 | "Atualizar" na barra | Imagem é redesenhada | |
 | 4.14 | Desconectar pela barra | Sessão fecha; aviso some no PC A | |
 | 4.15 | Arrastar a barra pela alça (⋮⋮), recolher e expandir; fechar e reconectar | Desliza só na horizontal, no topo; volta na mesma posição ao reconectar | |
+| 4.16 | PC B com tela touch: tocar, tocar duas vezes, arrastar um dedo (selecionar texto), segurar (botão direito), tocar com dois dedos, rolar com três dedos | Clique, duplo clique, arrastar, botão direito e rolagem no lugar do dedo | |
 
 ## 5. Rede e recuperação
 

@@ -32,7 +32,6 @@ lazy_static::lazy_static! {
 }
 
 fn initialize(app_dir: &str, custom_client_config: &str) {
-    // `APP_DIR` is set in `main_get_data_dir_ios()` on iOS.
     {
         *config::APP_DIR.write().unwrap() = app_dir.to_owned();
     }
@@ -214,8 +213,6 @@ pub fn will_session_close_close_session(session_id: SessionID) -> SyncReturn<boo
 pub fn session_close(session_id: SessionID) {
     if let Some(session) = sessions::remove_session_by_session_id(&session_id) {
         crate::keyboard::shortcuts::clear_session_state(&session_id);
-        // `release_remote_keys` is not required for mobile platforms in common cases.
-        // But we still call it to make the code more stable.
         session.close_event_stream(session_id);
         session.close();
     }
@@ -447,7 +444,6 @@ pub fn session_input_key(
     command: bool,
 ) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        // #[cfg(any(target_os = "android", target_os = "ios"))]
         session.input_key(&name, down, press, alt, ctrl, shift, command);
     }
 }
@@ -835,7 +831,6 @@ pub fn main_get_input_source() -> SyncReturn<String> {
 ///
 /// # Platform behavior
 /// - Windows/macOS/Linux: attempts to move the cursor to (x, y)
-/// - Android/iOS: no-op, always returns `false`
 pub fn main_set_cursor_position(x: i32, y: i32) -> SyncReturn<bool> {
     {
         SyncReturn(crate::set_cursor_pos(x, y))
@@ -857,7 +852,6 @@ pub fn main_set_cursor_position(x: i32, y: i32) -> SyncReturn<bool> {
 /// - macOS: uses CGAssociateMouseAndMouseCursorPosition for pointer lock effect;
 ///   the rect coordinates are ignored (only Some/None matters)
 /// - Linux: no-op, always returns `true`; use pointer warping for similar effect
-/// - Android/iOS: no-op, always returns `false`
 pub fn main_clip_cursor(
     left: i32,
     top: i32,
@@ -1362,21 +1356,6 @@ pub fn session_on_waiting_for_image_dialog_show(session_id: SessionID) {
     super::flutter::session_on_waiting_for_image_dialog_show(session_id);
 }
 
-pub fn main_set_home_dir(_home: String) {
-}
-
-// This is a temporary method to get data dir for ios
-pub fn main_get_data_dir_ios(app_dir: String) -> SyncReturn<String> {
-    *config::APP_DIR.write().unwrap() = app_dir;
-    let data_dir = config::Config::path("data");
-    if !data_dir.exists() {
-        if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            log::warn!("Failed to create data dir {}", e);
-        }
-    }
-    SyncReturn(data_dir.to_string_lossy().to_string())
-}
-
 pub fn main_update_temporary_password() {
     update_temporary_password();
 }
@@ -1597,16 +1576,8 @@ pub fn is_disable_settings() -> SyncReturn<bool> {
 }
 
 pub fn is_preset_password() -> bool {
-    // On desktop, service owns the authoritative config; query it via IPC and return only a boolean.
-    return crate::ipc::is_permanent_password_preset();
-
-    // On mobile, we have no service IPC; verify against local storage.
-}
-
-// Don't call this function for desktop version.
-// We need this function because we want a sync return for mobile version.
-pub fn is_preset_password_mobile_only() -> SyncReturn<bool> {
-    SyncReturn(is_preset_password())
+    // The service owns the authoritative config; query it via IPC and return only a boolean.
+    crate::ipc::is_permanent_password_preset()
 }
 
 /// Send a url scheme through the ipc.

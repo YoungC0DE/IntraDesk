@@ -292,8 +292,7 @@ class AutocompletePeerTileState extends State<AutocompletePeerTile> {
                   children: [
                     Container(
                         decoration: BoxDecoration(
-                          color: str2color(
-                              '${widget.peer.id}${widget.peer.platform}', 0x7f),
+                          color: MyTheme.color(context).accent,
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(tileRadius),
                             bottomLeft: Radius.circular(tileRadius),

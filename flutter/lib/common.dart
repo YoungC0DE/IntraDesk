@@ -159,10 +159,10 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   );
 
   static final dark = ColorThemeExtension(
-    border: Color(0xFF555555),
+    border: MyTheme.darkBorder,
     border2: Color(0xFFE5E5E5),
     border3: Colors.white24,
-    highlight: Color(0xFF3F3F3F),
+    highlight: MyTheme.darkSurface2,
     drag_indicator: Colors.grey,
     shadow: Colors.grey,
     errorBannerBg: Color(0xFF470F2D),
@@ -249,12 +249,20 @@ class MyTheme {
   // through `MyTheme.color(context).accent` (see ColorThemeExtension) or
   // through `Theme.of(context).colorScheme.primary`.
   static const Color accentLight = Color(0xFFC2410C);
-  static const Color accentDark = Color(0xFFEA580C);
+  static const Color accentDark = Color(0xFFF97316);
   static const Color accentHoverLight = Color(0xFF9A3412);
-  static const Color accentHoverDark = Color(0xFFF97316);
+  static const Color accentHoverDark = Color(0xFFFB923C);
   static const Color accentSoftLight = Color(0xFFFFEDD5);
-  static const Color accentSoftDark = Color(0xFF431407);
+  static const Color accentSoftDark = Color(0xFF2A1508);
   static const Color onAccent = Color(0xFFFFFFFF);
+  // Dark theme: pure black canvas, panels and cards a step above it with
+  // a subtle border, orange only on highlights.
+  static const Color darkBg = Color(0xFF000000);
+  static const Color darkSurface = Color(0xFF0E0E10);
+  static const Color darkSurface2 = Color(0xFF17171A);
+  static const Color darkBorder = Color(0xFF26262B);
+  static const Color darkHover = Color(0xFF1C1C20);
+  static const String fontFamily = 'Montserrat';
   static const Color canvasColor = Color(0xFF212121);
   static const Color border = Color(0xFFCCCCCC);
   static const Color darkGray = Color.fromARGB(255, 148, 148, 148);
@@ -368,6 +376,7 @@ class MyTheme {
     // https://stackoverflow.com/questions/77537315/after-upgrading-to-flutter-3-16-the-app-bar-background-color-button-size-and
     useMaterial3: false,
     brightness: Brightness.light,
+    fontFamily: fontFamily,
     hoverColor: Color.fromARGB(255, 224, 224, 224),
     scaffoldBackgroundColor: Colors.white,
     dialogBackgroundColor: Colors.white,
@@ -470,9 +479,12 @@ class MyTheme {
   static ThemeData darkTheme = ThemeData(
     useMaterial3: false,
     brightness: Brightness.dark,
-    hoverColor: Color.fromARGB(255, 45, 46, 53),
-    scaffoldBackgroundColor: Color(0xFF18191E),
-    dialogBackgroundColor: Color(0xFF18191E),
+    fontFamily: fontFamily,
+    hoverColor: darkHover,
+    scaffoldBackgroundColor: darkBg,
+    canvasColor: darkSurface,
+    dialogBackgroundColor: darkSurface,
+    dividerColor: darkBorder,
     appBarTheme: AppBarTheme(
       shadowColor: Colors.transparent,
     ),
@@ -482,17 +494,25 @@ class MyTheme {
         borderRadius: BorderRadius.circular(18.0),
         side: BorderSide(
           width: 1,
-          color: Color(0xFF24252B),
+          color: darkBorder,
         ),
       ),
     ),
     scrollbarTheme: scrollbarThemeDark,
     inputDecorationTheme: InputDecorationTheme(
-            fillColor: Color(0xFF24252B),
+            fillColor: darkSurface2,
             filled: true,
             isDense: true,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: darkBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: accentDark),
             ),
           ),
     textTheme: const TextTheme(
@@ -506,7 +526,7 @@ class MyTheme {
         color: accentDark,
       ),
     ),
-    cardColor: Color(0xFF24252B),
+    cardColor: darkSurface,
     visualDensity: VisualDensity.adaptivePlatformDensity,
     tabBarTheme: const TabBarTheme(
       labelColor: Colors.white70,
@@ -538,8 +558,8 @@ class MyTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        backgroundColor: Color(0xFF24252B),
-        side: BorderSide(color: Colors.white12, width: 0.5),
+        backgroundColor: darkSurface2,
+        side: BorderSide(color: darkBorder),
         disabledForegroundColor: Colors.white70,
         foregroundColor: Colors.white70,
         shape: RoundedRectangleBorder(
@@ -553,13 +573,14 @@ class MyTheme {
     listTileTheme: listTileTheme,
     menuBarTheme: MenuBarThemeData(
         style: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(Color(0xFF121212)))),
+            backgroundColor: MaterialStatePropertyAll(darkSurface))),
     colorScheme: ColorScheme.dark(
       primary: accentDark,
       onPrimary: onAccent,
       secondary: accentDark,
       onSecondary: onAccent,
-      background: Color(0xFF24252B),
+      background: darkSurface,
+      surface: darkSurface,
     ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: accentDark,
@@ -567,8 +588,9 @@ class MyTheme {
       selectionHandleColor: accentDark,
     ),
     popupMenuTheme: PopupMenuThemeData(
+        color: darkSurface2,
         shape: RoundedRectangleBorder(
-      side: BorderSide(color: Colors.white24),
+      side: BorderSide(color: darkBorder),
       borderRadius: BorderRadius.all(Radius.circular(8.0)),
     )),
   ).copyWith(
@@ -1319,54 +1341,6 @@ void msgBoxCommon(OverlayDialogManager dialogManager, String title,
         actions: buttons,
         onCancel: hasCancel ? close : null,
       ));
-}
-
-Color str2color(String str, [alpha = 0xFF]) {
-  var hash = 160 << 16 + 114 << 8 + 91;
-  for (var i = 0; i < str.length; i += 1) {
-    hash = str.codeUnitAt(i) + ((hash << 5) - hash);
-  }
-  hash = hash % 16777216;
-  return Color((hash & 0xFF7FFF) | (alpha << 24));
-}
-
-Color str2color2(String str, {List<int> existing = const []}) {
-  Map<String, Color> colorMap = {
-    "red": Colors.red,
-    "green": Colors.green,
-    "blue": Colors.blue,
-    "orange": Colors.orange,
-    "purple": Colors.purple,
-    "grey": Colors.grey,
-    "cyan": Colors.cyan,
-    "lime": Colors.lime,
-    "teal": Colors.teal,
-    "pink": Colors.pink[200]!,
-    "indigo": Colors.indigo,
-    "brown": Colors.brown,
-  };
-  final color = colorMap[str.toLowerCase()];
-  if (color != null) {
-    return color.withAlpha(0xFF);
-  }
-  if (str.toLowerCase() == 'yellow') {
-    return Colors.yellow.withAlpha(0xFF);
-  }
-  var hash = 0;
-  for (var i = 0; i < str.length; i++) {
-    hash += str.codeUnitAt(i);
-  }
-  List<Color> colorList = colorMap.values.toList();
-  hash = hash % colorList.length;
-  var result = colorList[hash].withAlpha(0xFF);
-  if (existing.contains(result.value)) {
-    Color? notUsed =
-        colorList.firstWhereOrNull((e) => !existing.contains(e.value));
-    if (notUsed != null) {
-      result = notUsed;
-    }
-  }
-  return result;
 }
 
 const K = 1024;

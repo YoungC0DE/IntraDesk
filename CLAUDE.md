@@ -51,15 +51,22 @@ de descoberta fica em `src/lan.rs`; o acesso direto é a opção
 
 Visual inspirado no AnyDesk: painel "Este computador" (nome, IP, senha) à
 esquerda/topo, campo "Conectar a" e grade de computadores descobertos. Cores
-em laranja escuro, definidas **só** em `MyTheme` (`flutter/lib/common.dart`).
-Nenhuma cor hardcoded em widgets.
+em laranja, definidas **só** em `MyTheme` (`flutter/lib/common.dart`).
+Nenhuma cor hardcoded em widgets. O tema escuro é preto puro com laranja vivo
+nos destaques (cartões e painéis um degrau acima do preto, com borda sutil).
+Fonte: **Montserrat** (embutida em `flutter/assets/fonts`, licença OFL),
+aplicada pelo `fontFamily` dos temas.
 
 | Token | Claro | Escuro |
 |---|---|---|
-| `accent` (primária) | `#C2410C` | `#EA580C` |
-| `accentHover` | `#9A3412` | `#F97316` |
-| `accentSoft` (fundos/seleção) | `#FFEDD5` | `#431407` |
+| `accent` (primária) | `#C2410C` | `#F97316` |
+| `accentHover` | `#9A3412` | `#FB923C` |
+| `accentSoft` (fundos/seleção) | `#FFEDD5` | `#2A1508` |
 | texto sobre `accent` | `#FFFFFF` | `#FFFFFF` |
+| fundo (`darkBg`) | — | `#000000` |
+| painéis e cartões (`darkSurface`) | — | `#0E0E10` |
+| campos e botões (`darkSurface2`) | — | `#17171A` |
+| borda (`darkBorder`) | — | `#26262B` |
 
 Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
 `logo.svg`, `icon.png`), `flutter/assets/icon.svg` e

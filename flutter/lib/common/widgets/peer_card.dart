@@ -111,7 +111,7 @@ class _PeerCardState extends State<_PeerCard>
       children: [
         Container(
             decoration: BoxDecoration(
-              color: str2color('${peer.id}${peer.platform}', 0x7f),
+              color: MyTheme.color(context).accent,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(_tileRadius),
                 bottomLeft: Radius.circular(_tileRadius),
@@ -201,7 +201,7 @@ class _PeerCardState extends State<_PeerCard>
               children: [
                 Expanded(
                   child: Container(
-                    color: str2color('${peer.id}${peer.platform}', 0x7f),
+                    color: MyTheme.color(context).accent,
                     child: Row(
                       children: [
                         Expanded(

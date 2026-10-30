@@ -531,7 +531,7 @@ class _CmHeaderState extends State<_CmHeader>
       height: 70,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: str2color(client.name),
+        color: MyTheme.color(context).accent,
         borderRadius: BorderRadius.circular(15.0),
       ),
       child: Text(

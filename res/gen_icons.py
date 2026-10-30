@@ -11,8 +11,8 @@ import struct
 import zlib
 
 # Brand colors, kept in sync with MyTheme in flutter/lib/common.dart.
-TOP = (0xEA, 0x58, 0x0C)  # accent (dark theme)
-BOTTOM = (0xC2, 0x41, 0x0C)  # accent (light theme)
+TOP = (0xF9, 0x73, 0x16)  # accent (dark theme)
+BOTTOM = (0xEA, 0x58, 0x0C)  # a step darker, for depth
 WHITE = (0xFF, 0xFF, 0xFF)
 
 # Shapes in a 256x256 box.
@@ -21,9 +21,8 @@ SCREEN_OUTER = (44, 58, 212, 170, 18)
 SCREEN_INNER = (60, 74, 196, 154, 2)
 NECK = (116, 170, 140, 190, 0)
 BASE = (84, 190, 172, 204, 7)
-ARROW_BAR = (96, 108, 160, 120, 0)
-ARROW_LEFT = ((76, 114), (102, 94), (102, 134))
-ARROW_RIGHT = ((180, 114), (154, 94), (154, 134))
+# Mouse pointer on the screen: remote control.
+CURSOR = ((108, 84), (108, 135), (120, 123), (130, 144), (141, 139), (131, 119), (148, 119))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -37,14 +36,13 @@ def in_rounded_rect(x, y, rect):
     return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
 
 
-def in_triangle(x, y, tri):
-    (ax, ay), (bx, by), (cx, cy) = tri
-    d1 = (x - bx) * (ay - by) - (ax - bx) * (y - by)
-    d2 = (x - cx) * (by - cy) - (bx - cx) * (y - cy)
-    d3 = (x - ax) * (cy - ay) - (cx - ax) * (y - ay)
-    neg = d1 < 0 or d2 < 0 or d3 < 0
-    pos = d1 > 0 or d2 > 0 or d3 > 0
-    return not (neg and pos)
+def in_polygon(x, y, poly):
+    inside = False
+    for i in range(len(poly)):
+        (ax, ay), (bx, by) = poly[i], poly[i - 1]
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            inside = not inside
+    return inside
 
 
 def is_white(x, y):
@@ -53,9 +51,7 @@ def is_white(x, y):
     return (
         in_rounded_rect(x, y, NECK)
         or in_rounded_rect(x, y, BASE)
-        or in_rounded_rect(x, y, ARROW_BAR)
-        or in_triangle(x, y, ARROW_LEFT)
-        or in_triangle(x, y, ARROW_RIGHT)
+        or in_polygon(x, y, CURSOR)
     )
 
 
@@ -153,9 +149,7 @@ def svg():
         + '<g fill="#FFFFFF">'
         + rect_svg(NECK)
         + rect_svg(BASE)
-        + rect_svg(ARROW_BAR)
-        + poly(ARROW_LEFT)
-        + poly(ARROW_RIGHT)
+        + poly(CURSOR)
         + "</g></svg>\n"
     )
 

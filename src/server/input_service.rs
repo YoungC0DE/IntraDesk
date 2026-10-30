@@ -1074,9 +1074,6 @@ pub fn handle_key(evt: &KeyEvent) {
 
 fn sim_rdev_rawkey_position(code: KeyCode, keydown: bool) {
     let rawkey = RawKey::ScanCode(code);
-    // // to-do: test android
-    // #[cfg(target_os = "android")]
-    // let rawkey = RawKey::LinuxConsoleKeycode(code);
 
     // map mode(1): Send keycode according to the peer platform.
     record_pressed_key(KeysDown::RdevKey(rawkey), keydown);

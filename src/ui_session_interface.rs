@@ -214,9 +214,8 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn fallback_keyboard_mode(&self) -> String {
         let peer_version = self.get_peer_version();
-        let platform = self.peer_platform();
 
-        let supported_modes = get_supported_keyboard_modes(peer_version, &platform);
+        let supported_modes = get_supported_keyboard_modes(peer_version);
         if let Some(mode) = supported_modes.first() {
             return mode.to_string();
         } else {
@@ -235,11 +234,10 @@ impl<T: InvokeUiSession> Session<T> {
 
         // Note: peer_version is 0 before peer info is received.
         let peer_version = self.get_peer_version();
-        let platform = self.peer_platform();
 
         // Saved keyboard mode still exists in this version.
         if let Ok(mode) = keyboard_mode {
-            if is_keyboard_mode_supported(&mode, peer_version, &platform) {
+            if is_keyboard_mode_supported(&mode, peer_version) {
                 return mode.to_string();
             }
         }
@@ -248,11 +246,7 @@ impl<T: InvokeUiSession> Session<T> {
 
     pub fn is_keyboard_mode_supported(&self, mode: String) -> bool {
         if let Ok(mode) = KeyboardMode::from_str(&mode[..]) {
-            crate::common::is_keyboard_mode_supported(
-                &mode,
-                self.get_peer_version(),
-                &self.peer_platform(),
-            )
+            crate::common::is_keyboard_mode_supported(&mode, self.get_peer_version())
         } else {
             false
         }
@@ -833,7 +827,6 @@ impl<T: InvokeUiSession> Session<T> {
 
         // Compute event type once using MOUSE_TYPE_MASK for reuse
         let event_type = mask & MOUSE_TYPE_MASK;
-        // #[cfg(not(any(target_os = "android", target_os = "ios")))]
         let (alt, ctrl, shift, command) =
             keyboard::client::get_modifiers_state(alt, ctrl, shift, command);
         send_mouse(mask, x, y, alt, ctrl, shift, command, self);

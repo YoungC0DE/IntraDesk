@@ -111,10 +111,8 @@ pub fn match_normalized<'a>(key: &str, mods: &[Modifier], b: &'a Bindings) -> Op
 }
 
 pub fn normalize_modifiers(alt: bool, ctrl: bool, shift: bool, command: bool) -> Vec<Modifier> {
-    // iOS shares Apple's keyboard semantics with macOS — recording dialog
-    // already treats iOS as `_isMac`, so the matcher must too.
     let mut v = Vec::new();
-    if cfg!(any(target_os = "macos", target_os = "ios")) {
+    if cfg!(target_os = "macos") {
         if command { v.push(Modifier::Primary); }
         if ctrl    { v.push(Modifier::Ctrl); }
     } else {
@@ -211,11 +209,11 @@ pub fn event_to_key_name(event: &rdev::Event) -> Option<String> {
 /// written.
 pub fn reload_from_config() {
     let raw = hbb_common::config::LocalConfig::get_option(LOCAL_CONFIG_KEY);
-    reload_from_raw(&raw, std::env::consts::OS);
+    reload_from_raw(&raw);
 }
 
-fn reload_from_raw(raw: &str, platform: &str) {
-    let mut parsed: Bindings = if raw.is_empty() {
+fn reload_from_raw(raw: &str) {
+    let parsed: Bindings = if raw.is_empty() {
         Bindings::default()
     } else {
         match serde_json::from_str(&raw) {
@@ -226,9 +224,6 @@ fn reload_from_raw(raw: &str, platform: &str) {
             }
         }
     };
-    // Match the controller capabilities in ShortcutModel, preserving storage
-    // for a later return to another platform.
-    parsed.bindings.retain(|b| action_available_on_platform(&b.action, platform));
     match CACHE.write() {
         Ok(mut w) => {
             *w = Arc::new(parsed);
@@ -237,17 +232,6 @@ fn reload_from_raw(raw: &str, platform: &str) {
             log::error!("Keyboard shortcut cache write lock is poisoned");
             *poison.into_inner() = Arc::new(parsed);
         }
-    }
-}
-
-fn action_available_on_platform(action: &str, platform: &str) -> bool {
-    let mobile = matches!(platform, "android" | "ios");
-    match action {
-        action_id::TOGGLE_FULLSCREEN | action_id::SWITCH_TAB_NEXT
-        | action_id::SWITCH_TAB_PREV | action_id::CLOSE_TAB
-        | action_id::TOGGLE_TOOLBAR | action_id::PIN_TOOLBAR | action_id::SWITCH_DISPLAY_ALL
-        | action_id::TOGGLE_ENABLE_FILE_COPY_PASTE => !mobile,
-        _ => true,
     }
 }
 
@@ -750,7 +734,7 @@ mod tests {
     fn modifier_normalization_primary_resolves_per_os() {
         // On Win/Linux: pressing Ctrl satisfies Primary
         let mods = normalize_modifiers(/*alt=*/true, /*ctrl=*/true, /*shift=*/true, /*command=*/false);
-        if cfg!(any(target_os = "macos", target_os = "ios")) {
+        if cfg!(target_os = "macos") {
             // On Apple platforms Ctrl is NOT primary
             assert!(!mods.contains(&Modifier::Primary));
             assert!(mods.contains(&Modifier::Ctrl));
@@ -764,7 +748,7 @@ mod tests {
     #[test]
     fn modifier_normalization_command_is_primary_on_apple() {
         let mods = normalize_modifiers(true, false, true, /*command=*/true);
-        if cfg!(any(target_os = "macos", target_os = "ios")) {
+        if cfg!(target_os = "macos") {
             assert!(mods.contains(&Modifier::Primary));
         } else {
             // On Win/Linux Command/Meta is NOT primary
@@ -826,37 +810,15 @@ mod tests {
     fn reload_handles_missing_and_invalid_json() {
         let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // empty (no value set) → defaults
-        reload_from_raw("", "windows");
+        reload_from_raw("");
         let b = current();
         assert!(!b.enabled);
         assert!(b.bindings.is_empty());
 
         // invalid JSON → defaults (no panic)
-        reload_from_raw("not json", "windows");
+        reload_from_raw("not json");
         let b = current();
         assert!(!b.enabled);
-    }
-
-    #[test]
-    fn active_cache_omits_platform_hidden_saved_actions() {
-        let _guard = CACHE_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let actions = [action_id::SWITCH_DISPLAY_ALL, action_id::TOGGLE_ENABLE_FILE_COPY_PASTE,
-            action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL];
-        let saved = Bindings { enabled: true, pass_through: false,
-            bindings: actions.iter().map(|action| Binding {
-                action: (*action).into(), mods: vec![Modifier::Primary], key: "m".into(),
-            }).collect() };
-        let raw = serde_json::to_string(&saved).unwrap();
-        for (platform, expected) in [
-            ("android", vec![action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
-            ("ios", vec![action_id::TOGGLE_MUTE, action_id::SEND_CTRL_ALT_DEL]),
-            ("macos", actions.to_vec()),
-        ] {
-            reload_from_raw(&raw, platform);
-            let active = current();
-            assert_eq!(active.bindings.iter().map(|b| b.action.as_str()).collect::<Vec<_>>(), expected, "{platform}");
-        }
-        assert_eq!(serde_json::from_str::<Bindings>(&raw).unwrap(), saved);
     }
 
     fn make_release(k: rdev::Key) -> rdev::Event {
@@ -1117,9 +1079,8 @@ mod tests {
         for (mode, alt) in ["map", "translate", "legacy"].into_iter()
             .flat_map(|mode| [Key::Alt, Key::AltGr].map(|alt| (mode, alt)))
         {
-             // Mobile does not encode Legacy events.
              // Right Option is filtered.
-            reload_from_raw(r#"{"enabled":true,"bindings":[{"action":"toggle_mute","mods":["alt"],"key":"m"}]}"#, "windows");
+            reload_from_raw(r#"{"enabled":true,"bindings":[{"action":"toggle_mute","mods":["alt"],"key":"m"}]}"#);
             reset_fired_keys();
             clear_session_state(&SID_A);
             let sent = std::cell::RefCell::new(Vec::new());
@@ -1213,7 +1174,7 @@ mod tests {
                 key: "p".into(),
             }],
         });
-        let primary = if cfg!(any(target_os = "macos", target_os = "ios")) {
+        let primary = if cfg!(target_os = "macos") {
             Key::MetaLeft
         } else {
             Key::ControlLeft
@@ -1346,7 +1307,7 @@ mod tests {
         reset_fired_keys();
         clear_session_state(&SID_A);
         clear_session_state(&SID_B);
-        let primary = if cfg!(any(target_os = "macos", target_os = "ios")) {
+        let primary = if cfg!(target_os = "macos") {
             Key::MetaLeft
         } else {
             Key::ControlLeft

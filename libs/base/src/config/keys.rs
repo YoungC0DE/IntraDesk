@@ -7,7 +7,6 @@ pub use hbb_common::config::keys::*;
 
 pub const OPTION_DISABLE_AUDIO: &str = "disable_audio";
 pub const OPTION_DISABLE_CLIPBOARD: &str = "disable_clipboard";
-pub const OPTION_TOUCH_MODE: &str = "touch-mode";
 pub const OPTION_SYNC_INIT_CLIPBOARD: &str = "sync-init-clipboard";
 pub const OPTION_THEME: &str = "theme";
 pub const OPTION_REMOTE_MENUBAR_DRAG_LEFT: &str = "remote-menubar-drag-left";
@@ -52,10 +51,6 @@ pub const OPTION_AV1_TEST: &str = "av1-test";
 /// - If set to 0, a safe built-in default is used (see DEFAULT_MAX_VALIDATED_FILES).
 /// - If unset, negative, or non-integer, no explicit limit is enforced for backward compatibility.
 pub const OPTION_FILE_TRANSFER_MAX_FILES: &str = "file-transfer-max-files";
-pub const OPTION_SHOW_VIRTUAL_MOUSE: &str = "show-virtual-mouse";
-// joystick is the virtual mouse.
-// So `OPTION_SHOW_VIRTUAL_MOUSE` should also be set if `OPTION_SHOW_VIRTUAL_JOYSTICK` is set.
-pub const OPTION_SHOW_VIRTUAL_JOYSTICK: &str = "show-virtual-joystick";
 pub const OPTION_ALLOW_ASK_FOR_NOTE: &str = "allow-ask-for-note";
 
 // built-in options
@@ -90,16 +85,6 @@ pub const OPTION_FLUTTER_PEER_CARD_UI_TYLE: &str = "peer-card-ui-type";
 pub const OPTION_FLUTTER_CURRENT_AB_NAME: &str = "current-ab-name";
 pub const OPTION_ALLOW_REMOTE_CM_MODIFICATION: &str = "allow-remote-cm-modification";
 
-// android floating window options
-pub const OPTION_DISABLE_FLOATING_WINDOW: &str = "disable-floating-window";
-pub const OPTION_FLOATING_WINDOW_SIZE: &str = "floating-window-size";
-pub const OPTION_FLOATING_WINDOW_UNTOUCHABLE: &str = "floating-window-untouchable";
-pub const OPTION_FLOATING_WINDOW_TRANSPARENCY: &str = "floating-window-transparency";
-pub const OPTION_FLOATING_WINDOW_SVG: &str = "floating-window-svg";
-
-// android keep screen on
-pub const OPTION_KEEP_SCREEN_ON: &str = "keep-screen-on";
-
 pub const OPTION_DISABLE_DISCOVERY_PANEL: &str = "disable-discovery-panel";
 pub const OPTION_PRE_ELEVATE_SERVICE: &str = "pre-elevate-service";
 
@@ -108,7 +93,6 @@ pub const KEYS_DISPLAY_SETTINGS: &[&str] = &[
     OPTION_DISABLE_AUDIO,
     OPTION_ENABLE_FILE_COPY_PASTE,
     OPTION_DISABLE_CLIPBOARD,
-    OPTION_TOUCH_MODE,
     OPTION_VIEW_STYLE,
     OPTION_IMAGE_QUALITY,
     OPTION_CUSTOM_IMAGE_QUALITY,
@@ -132,18 +116,9 @@ pub const KEYS_LOCAL_SETTINGS: &[&str] = &[
     OPTION_FLUTTER_PEER_TAB_VISIBLE,
     OPTION_FLUTTER_PEER_CARD_UI_TYLE,
     OPTION_FLUTTER_CURRENT_AB_NAME,
-    OPTION_DISABLE_FLOATING_WINDOW,
-    OPTION_FLOATING_WINDOW_SIZE,
-    OPTION_FLOATING_WINDOW_UNTOUCHABLE,
-    OPTION_FLOATING_WINDOW_TRANSPARENCY,
-    OPTION_FLOATING_WINDOW_SVG,
-    OPTION_KEEP_SCREEN_ON,
     OPTION_DISABLE_DISCOVERY_PANEL,
     OPTION_PRE_ELEVATE_SERVICE,
     OPTION_ALLOW_REMOTE_CM_MODIFICATION,
-    OPTION_TOUCH_MODE,
-    OPTION_SHOW_VIRTUAL_MOUSE,
-    OPTION_SHOW_VIRTUAL_JOYSTICK,
     OPTION_ALLOW_ASK_FOR_NOTE,
 ];
 // DEFAULT_SETTINGS, OVERWRITE_SETTINGS

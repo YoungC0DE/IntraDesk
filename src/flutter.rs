@@ -26,7 +26,7 @@ use std::{
     },
 };
 
-/// tag "main" for [Desktop Main Page] and [Mobile (Client and Server)] (the mobile don't need multiple windows, only one global event stream is needed)
+/// tag "main" for [Desktop Main Page]
 /// tag "cm" only for [Desktop CM Page]
 pub(crate) const APP_TYPE_MAIN: &str = "main";
 pub(crate) const APP_TYPE_CM: &str = "cm";
@@ -929,7 +929,6 @@ pub mod connection_manager {
     impl InvokeUiCM for FlutterHandler {
         fn add_connection(&self, client: &crate::ui_cm_interface::Client) {
             let client_json = serde_json::to_string(&client).unwrap_or("".into());
-            // send to Android service, active notification no matter UI is shown or not.
             // send to UI, refresh widget
             self.push_event("add_connection", &[("client", &client_json)]);
         }

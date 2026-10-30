@@ -97,12 +97,6 @@ const String kOptionDisableUnlockPin = "disable-unlock-pin";
 const kHideUsernameOnCard = "hide-username-on-card";
 const String kOptionAllowDeepLinkPassword = "allow-deep-link-password";
 
-
-
-const String kOptionKeepScreenOn = "keep-screen-on";
-
-
-
 const String kUrlActionClose = "close";
 
 const String kTabLabelHomePage = "Home";

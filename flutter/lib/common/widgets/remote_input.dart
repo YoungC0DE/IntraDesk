@@ -74,7 +74,7 @@ class _RawTouchGestureDetectorRegionState
   double _mouseScrollIntegral = 0; // mouse scroll speed controller
   double _scale = 1;
 
-  // Workaround tap down event when two fingers are used to scale(mobile)
+  // Workaround tap down event when two fingers are used to scale
   TapDownDetails? _lastTapDownDetails;
 
   PointerDeviceKind? lastDeviceKind;
@@ -116,10 +116,6 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    // Filter duplicate touch tap events on iOS (Magic Mouse issue).
-    if (inputModel.shouldIgnoreTouchTap(d.globalPosition)) {
-      return;
-    }
     final isMoved =
         await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
     if (isMoved) {
@@ -144,9 +140,6 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if (ffiModel.touchMode && ffi.cursorModel.lastIsBlocked) {
-      return;
-    }
     if (!ffi.cursorModel.isInRemoteRect(_lastPosOfDoubleTapDown)) {
       return;
     }
@@ -165,11 +158,6 @@ class _RawTouchGestureDetectorRegionState
       return;
     }
     _cacheLongPressPositionTs = DateTime.now().millisecondsSinceEpoch;
-    if (ffiModel.isPeerMobile) {
-      await ffi.cursorModel
-          .move(_cacheLongPressPosition.dx, _cacheLongPressPosition.dy);
-      await inputModel.tapDown(MouseButtons.left);
-    }
   }
 
   onLongPressUp() async {
@@ -179,33 +167,16 @@ class _RawTouchGestureDetectorRegionState
     await inputModel.tapUp(MouseButtons.left);
   }
 
-  // for mobiles
   onLongPress() async {
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if (!ffi.ffiModel.isPeerMobile) {
-      final isMoved = await ffi.cursorModel
-          .move(_cacheLongPressPosition.dx, _cacheLongPressPosition.dy);
-      if (!isMoved) {
-        return;
-      }
-      await inputModel.tap(MouseButtons.right);
-    } else {
-      // It's better to send a message to tell the controlled device that the long press event is triggered.
-      // We're now using a `TimerTask` in `InputService.kt` to decide whether to trigger the long press event.
-      // It's not accurate and it's better to use the same detection logic in the controlling side.
-    }
-  }
-
-  onLongPressMoveUpdate(LongPressMoveUpdateDetails d) async {
-    if (!ffiModel.isPeerMobile || isNotTouchBasedDevice()) {
+    final isMoved = await ffi.cursorModel
+        .move(_cacheLongPressPosition.dx, _cacheLongPressPosition.dy);
+    if (!isMoved) {
       return;
     }
-    if (!ffi.cursorModel.isInRemoteRect(d.localPosition)) {
-      return;
-    }
-    await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
+    await inputModel.tap(MouseButtons.right);
   }
 
   onDoubleFinerTapDown(TapDownDetails d) async {
@@ -241,9 +212,6 @@ class _RawTouchGestureDetectorRegionState
       await ffi.cursorModel.move(lastTapDownDetails.localPosition.dx,
           lastTapDownDetails.localPosition.dy);
     }
-    if (ffi.cursorModel.shouldBlock(d.localPosition.dx, d.localPosition.dy)) {
-      return;
-    }
     if (!ffi.cursorModel.isInRemoteRect(d.localPosition)) {
       return;
     }
@@ -272,9 +240,6 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if (ffi.cursorModel.shouldBlock(d.localPosition.dx, d.localPosition.dy)) {
-      return;
-    }
     if (!_touchModePanStarted) {
       return;
     }
@@ -300,8 +265,7 @@ class _RawTouchGestureDetectorRegionState
 
   // Reset `_touchModePanStarted` if the one-finger pan gesture is cancelled
   // or rejected by the gesture arena. Without this, the flag can remain
-  // stuck in the "started" state and cause issues such as the Magic Mouse
-  // double-click problem on iPad with magic mouse.
+  // stuck in the "started" state.
   onOneFingerPanCancel() {
     _touchModePanStarted = false;
   }
@@ -339,18 +303,16 @@ class _RawTouchGestureDetectorRegionState
     await inputModel.sendMouse('up', MouseButtons.left);
   }
 
-  get onThreeFingerVerticalDragUpdate => ffi.ffiModel.isPeerAndroid
-      ? null
-      : (d) {
-          _mouseScrollIntegral += d.delta.dy / 4;
-          if (_mouseScrollIntegral > 1) {
-            inputModel.scroll(1);
-            _mouseScrollIntegral = 0;
-          } else if (_mouseScrollIntegral < -1) {
-            inputModel.scroll(-1);
-            _mouseScrollIntegral = 0;
-          }
-        };
+  onThreeFingerVerticalDragUpdate(DragUpdateDetails d) {
+    _mouseScrollIntegral += d.delta.dy / 4;
+    if (_mouseScrollIntegral > 1) {
+      inputModel.scroll(1);
+      _mouseScrollIntegral = 0;
+    } else if (_mouseScrollIntegral < -1) {
+      inputModel.scroll(-1);
+      _mouseScrollIntegral = 0;
+    }
+  }
 
   makeGestures(BuildContext context) {
     return <Type, GestureRecognizerFactory>{
@@ -375,8 +337,7 @@ class _RawTouchGestureDetectorRegionState
         instance
           ..onLongPressDown = onLongPressDown
           ..onLongPressUp = onLongPressUp
-          ..onLongPress = onLongPress
-          ..onLongPressMoveUpdate = onLongPressMoveUpdate;
+          ..onLongPress = onLongPress;
       }),
       // Customized
       DoubleFinerTapGestureRecognizer:

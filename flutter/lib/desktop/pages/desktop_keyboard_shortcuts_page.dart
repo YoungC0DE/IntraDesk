@@ -9,13 +9,12 @@
 //   * An AppBar "Reset to defaults" action with a confirmation dialog.
 //
 // All edits write back to LocalConfig under [kShortcutLocalConfigKey] in the
-// canonical {enabled, bindings:[{action,mods,key}]} shape that the Rust and
-// Web matchers consume.
+// canonical {enabled, bindings:[{action,mods,key}]} shape that the Rust
+// matcher consumes.
 //
 // The body — group definitions, JSON I/O, conflict-replace flow,
 // recording-dialog round-trip — lives in
-// `common/widgets/keyboard_shortcuts/page_body.dart` and is shared with the
-// mobile shell at `mobile/pages/mobile_keyboard_shortcuts_page.dart`.
+// `common/widgets/keyboard_shortcuts/page_body.dart`.
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -52,15 +51,7 @@ class _DesktopKeyboardShortcutsPageState
           ).marginOnly(right: 12),
         ],
       ),
-      body: KeyboardShortcutsPageBody(
-        key: _bodyKey,
-        compact: true,
-        // Desktop's General settings tab already exposes the Enable +
-        // Pass-through checkboxes (it's the only entry point to this page),
-        // so we hide the duplicates here. Mobile shells keep the default
-        // (true) because their entry tile doesn't carry the toggles.
-        showMasterToggles: false,
-      ),
+      body: KeyboardShortcutsPageBody(key: _bodyKey),
     );
   }
 }

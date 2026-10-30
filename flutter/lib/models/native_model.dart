@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -22,29 +20,9 @@ final class RgbaFrame extends Struct {
 
 typedef HandleEvent = Future<void> Function(Map<String, dynamic> evt);
 
-/// The Linux bundle keeps the core library at lib/librustdesk.so next to the
-/// executable. Prefer that copy, mirroring flutter/linux/main.cc: the plain
-/// name relies on the loader search path, which repackaged installs may not
-/// cover. https://github.com/rustdesk/rustdesk/discussions/14407
-DynamicLibrary _openLinuxCoreLib() {
-  final bundled =
-      '${File(Platform.resolvedExecutable).parent.path}/lib/librustdesk.so';
-  try {
-    if (File(bundled).existsSync()) {
-      return DynamicLibrary.open(bundled);
-    }
-  } catch (e) {
-    debugPrint("Failed to load '$bundled': $e");
-  }
-  return DynamicLibrary.open('librustdesk.so');
-}
-
 /// FFI wrapper around the native Rust core.
-/// Hides the platform differences.
 class PlatformFFI {
   String _dir = '';
-  // _homeDir is only needed for Android and IOS.
-  String _homeDir = '';
   final _eventHandlers = <String, Map<String, HandleEvent>>{};
   late RustdeskImpl _ffiBind;
   late String _appType;
@@ -53,7 +31,6 @@ class PlatformFFI {
   PlatformFFI._();
 
   static final PlatformFFI instance = PlatformFFI._();
-  final _toAndroidChannel = const MethodChannel('mChannel');
 
   RustdeskImpl get ffiBind => _ffiBind;
   @visibleForTesting
@@ -62,12 +39,6 @@ class PlatformFFI {
   static get localeName => Platform.localeName;
 
   static get isMain => instance._appType == kAppTypeMain;
-
-  static String getByName(String name, [String arg = '']) {
-    return '';
-  }
-
-  static void setByName(String name, [String value = '']) {}
 
   static Future<String> getVersion() async {
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
@@ -121,11 +92,6 @@ class PlatformFFI {
       _ffiBind = RustdeskImpl(dylib);
 
       _startListenEvent(_ffiBind); // global event
-      try {
-        // no need to set home dir
-      } catch (e) {
-        debugPrintStack(label: 'initialize failed: $e');
-      }
       String id = 'NA';
       String name = 'Flutter';
       DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
@@ -147,7 +113,6 @@ class PlatformFFI {
       }
       await _ffiBind.mainDeviceId(id: id);
       await _ffiBind.mainDeviceName(name: name);
-      await _ffiBind.mainSetHomeDir(home: _homeDir);
       await _ffiBind.mainInit(
         appDir: _dir,
         customClientConfig: '',
@@ -199,42 +164,4 @@ class PlatformFFI {
   void setEventCallback(StreamEventHandler fun) async {
     _eventCallback = fun;
   }
-
-  void setRgbaCallback(void Function(int, Uint8List) fun) async {}
-
-  // web only
-  void setCursorDataCallback(
-      void Function(String, int, int, int, int, Uint8List) fun) async {}
-
-  // web only, decoded WebCodecs frames arriving as ready-made images
-  void setVideoFrameCallback(
-      Future<void> Function(int, ui.Image, bool Function()) fun) {}
-
-  void clearVideoFrameCallback() {}
-
-  void startDesktopWebListener() {}
-
-  void stopDesktopWebListener() {}
-
-  void setMethodCallHandler(FMethod callback) {
-    _toAndroidChannel.setMethodCallHandler((call) async {
-      callback(call.method, call.arguments);
-      return null;
-    });
-  }
-
-  invokeMethod(String method, [dynamic arguments]) async {
-    return Future<bool>(() => false);
-  }
-
-  Future<T?> invokeMethodWithResult<T>(String method,
-      [dynamic arguments]) async {
-    return null;
-  }
-
-  void syncAndroidServiceAppDirConfigPath() {
-    invokeMethod(AndroidChannel.kSyncAppDirConfigPath, _dir);
-  }
-
-  void setFullscreenCallback(void Function(bool) fun) {}
 }

@@ -355,7 +355,6 @@ impl Connection {
             control_permissions,
             ..
         } = meta;
-        // Android is not supported yet, so we always set control_permissions to None.
         let _raii_id = raii::ConnectionID::new(id);
         let _raii_control_permissions_id =
             raii::ControlPermissionsID::new(id, &control_permissions);
@@ -703,11 +702,8 @@ impl Connection {
                             conn.retina.set_displays(&_pi.displays);
                         }
                         Some(message::Union::CursorPosition(pos)) => {
-                            #[cfg(not(any(target_os = "android", target_os = "ios")))]
-                            {
-                                if conn.follow_remote_cursor {
-                                    conn.handle_cursor_switch_display(pos.clone()).await;
-                                }
+                            if conn.follow_remote_cursor {
+                                conn.handle_cursor_switch_display(pos.clone()).await;
                             }
                             #[cfg(target_os = "macos")]
                             if let Some(new_msg) = conn.retina.on_cursor_pos(&pos, conn.display_idx) {
@@ -715,7 +711,6 @@ impl Connection {
                             }
                         }
                         Some(message::Union::MultiClipboards(_multi_clipboards)) => {
-                            #[cfg(not(target_os = "ios"))]
                             if let Some(msg_out) = crate::clipboard::get_msg_if_not_support_multi_clip(&conn.lr.version, &conn.lr.my_platform, _multi_clipboards) {
                                 if let Err(err) = conn.stream.send(&msg_out).await {
                                     conn.on_close(&err.to_string(), false).await;
@@ -1685,8 +1680,6 @@ impl Connection {
                 Some(message::Union::Clipboard(cb)) => {
                     if self.should_handle_text_clipboard_message() && self.clipboard_enabled() {
                         update_clipboard(vec![cb], ClipboardSide::Host);
-                        // ios as the controlled side is actually not supported for now.
-                        // The following code is only used to preserve the logic of handling text clipboard on mobile.
                     }
                 }
                 Some(message::Union::MultiClipboards(_mcb)) => {
@@ -1741,8 +1734,6 @@ impl Connection {
                                 return true;
                             }
                         }
-                        // Android is scoped-storage only: reject any peer supplied path that
-                        // escapes the app workspace before it reaches the filesystem.
                         match fa.union {
                             Some(file_action::Union::ReadEmptyDirs(rd)) => {
                                 self.read_empty_dirs(&rd.path, rd.include_hidden);

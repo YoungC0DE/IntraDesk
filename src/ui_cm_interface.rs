@@ -196,7 +196,7 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
         audio: bool,
         file: bool,
         restart: bool,
-        #[cfg(not(any(target_os = "ios")))] tx: mpsc::UnboundedSender<Data>,
+        tx: mpsc::UnboundedSender<Data>,
     ) {
         let client = Client {
             id,
@@ -668,9 +668,6 @@ async fn handle_fs(
     tx_log: Option<&UnboundedSender<String>>,
     _conn_id: i32,
 ) {
-    // Android is scoped-storage only, so every peer supplied path has to stay inside the
-    // app workspace. This is the filesystem boundary, keep it enforced here even though
-    // `Connection` rejects out-of-workspace requests earlier as well.
     match fs {
         ipc::FS::ReadEmptyDirs {
             dir,

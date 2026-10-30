@@ -37,11 +37,6 @@ pub fn change_resolution(name: &str, width: usize, height: usize) -> ResultType<
     change_resolution_directly(name, width, height)
 }
 
-// Android
-
-
-
-
 pub fn get_wakelock(_display: bool) -> WakeLock {
     hbb_common::log::info!("new wakelock, require display on: {_display}");
     // display: keep screen on

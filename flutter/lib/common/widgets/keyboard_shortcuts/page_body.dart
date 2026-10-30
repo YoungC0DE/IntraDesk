@@ -1,25 +1,20 @@
 // flutter/lib/common/widgets/keyboard_shortcuts/page_body.dart
 //
-// Shared body widget for the Keyboard Shortcuts configuration page. Both the
-// desktop (`desktop/pages/desktop_keyboard_shortcuts_page.dart`) and mobile
-// (`mobile/pages/mobile_keyboard_shortcuts_page.dart`) pages render this
-// widget inside their own platform-styled Scaffold + AppBar shell.
+// Body widget for the Keyboard Shortcuts configuration page, rendered by
+// `desktop/pages/desktop_keyboard_shortcuts_page.dart` inside its Scaffold +
+// AppBar shell.
 //
 // The body owns:
-//   * the top-level enable/disable toggle (mirrors the General-tab toggle —
-//     same JSON key, same semantics);
 //   * a grouped list of actions, each with its current binding plus
 //     edit / clear icons;
 //   * the JSON read/write helpers under [kShortcutLocalConfigKey] in the
 //     canonical {enabled, bindings:[{action,mods,key}]} shape;
 //   * the recording-dialog round-trip and conflict-replace bookkeeping;
-//   * "Reset to defaults" (called from the platform AppBar).
+//   * "Reset to defaults" (called from the AppBar, which calls
+//     [KeyboardShortcutsPageBodyState.resetToDefaultsWithConfirm]).
 //
-// Platform shells supply only:
-//   * the AppBar (with a "Reset to defaults" action that calls
-//     [KeyboardShortcutsPageBodyState.resetToDefaultsWithConfirm]);
-//   * surrounding padding / list-tile vs. dense-row visuals via the
-//     [compact] flag.
+// The enable/pass-through toggles live in the General settings tab, the only
+// entry point to this page.
 
 import 'dart:convert';
 
@@ -35,36 +30,9 @@ import 'recording_dialog.dart';
 import 'shortcut_actions.dart';
 import 'shortcut_utils.dart';
 
-/// The shared body widget. Render this inside a platform-styled Scaffold.
-///
-/// [compact] toggles the desktop dense-row layout (`true`) versus the mobile
-/// touch-friendly ListTile layout (`false`).
-///
-/// [editButtonHint] is shown as the tooltip on the Edit icon. Mobile shells
-/// use this to clarify that recording requires a physical keyboard.
-///
-/// [headerBanner] is an optional widget rendered above the toggle. Mobile
-/// uses this to show the "Recording requires a physical keyboard" hint.
+/// The body widget. Render this inside a Scaffold.
 class KeyboardShortcutsPageBody extends StatefulWidget {
-  final bool compact;
-  final String? editButtonHint;
-  final Widget? headerBanner;
-
-  /// Whether to render the master Enable + Pass-through toggles inside the
-  /// body. Desktop shells set this to false because the General settings tab
-  /// already exposes both checkboxes (and is the only entry point to this
-  /// page on desktop). Mobile defaults to true: its entry point is a plain
-  /// nav tile in Settings, so this page is the only place the user can
-  /// flip the master switches.
-  final bool showMasterToggles;
-
-  const KeyboardShortcutsPageBody({
-    Key? key,
-    this.compact = true,
-    this.editButtonHint,
-    this.headerBanner,
-    this.showMasterToggles = true,
-  }) : super(key: key);
+  const KeyboardShortcutsPageBody({Key? key}) : super(key: key);
 
   @override
   State<KeyboardShortcutsPageBody> createState() =>
@@ -92,9 +60,7 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
   Future<void> _writeJson(Map<String, dynamic> json) async {
     await bind.mainSetLocalOption(
         key: kShortcutLocalConfigKey, value: jsonEncode(json));
-    // Refresh the matcher cache so writes take effect immediately. On native
-    // this hits the Rust matcher; on Web the bridge forwards to the JS-side
-    // matcher in flutter/web/js/.
+    // Refresh the Rust matcher cache so writes take effect immediately.
     bind.mainReloadKeyboardShortcuts();
     if (mounted) setState(() {});
   }
@@ -119,16 +85,6 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
     }
     json['bindings'] = list;
     await _writeJson(json);
-  }
-
-  Future<void> _setEnabled(bool v) async {
-    await ShortcutModel.setEnabled(v);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _setPassThrough(bool v) async {
-    await ShortcutModel.setPassThrough(v);
-    if (mounted) setState(() {});
   }
 
   Future<void> _resetToDefaults() async {
@@ -219,23 +175,6 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (widget.headerBanner != null) ...[
-          widget.headerBanner!,
-          const SizedBox(height: 12),
-        ],
-        if (widget.showMasterToggles) ...[
-          _toggleRow(
-            enabled,
-            'Enable keyboard shortcuts in remote session',
-            (v) => _setEnabled(v),
-          ),
-          if (enabled)
-            _toggleRow(
-              ShortcutModel.isPassThrough(),
-              'Pass-through to remote',
-              (v) => _setPassThrough(v),
-            ),
-        ],
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -255,31 +194,6 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
                 _buildGroup(context, group),
             ],
           ),
-      ],
-    );
-  }
-
-  Widget _toggleRow(
-      bool value, String labelKey, Future<void> Function(bool) onChanged,
-      {String? tooltipKey}) {
-    return Row(
-      children: [
-        Checkbox(
-          value: value,
-          onChanged: (v) async {
-            if (v == null) return;
-            await onChanged(v);
-          },
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onChanged(!value),
-            child: Text(translate(labelKey)),
-          ),
-        ),
-        if (tooltipKey != null) InfoTooltipIcon(tipKey: tooltipKey),
       ],
     );
   }
@@ -361,15 +275,8 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
     );
   }
 
+  /// Dense row: label | shortcut | edit | clear, all in one Row.
   Widget _buildEntryRow(
-      BuildContext context, KeyboardShortcutActionEntry entry) {
-    return widget.compact
-        ? _buildCompactRow(context, entry)
-        : _buildTouchRow(context, entry);
-  }
-
-  /// Desktop dense row: label | shortcut | edit | clear, all in one Row.
-  Widget _buildCompactRow(
       BuildContext context, KeyboardShortcutActionEntry entry) {
     final shortcut = ShortcutDisplay.formatFor(entry.id, requireEnabled: false);
     final hasBinding = shortcut != null;
@@ -394,7 +301,7 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
             ),
           ),
           IconButton(
-            tooltip: widget.editButtonHint ?? translate('Edit'),
+            tooltip: translate('Edit'),
             onPressed: () => _onEdit(entry),
             icon: const Icon(Icons.edit_outlined, size: 18),
           ),
@@ -412,49 +319,10 @@ class KeyboardShortcutsPageBodyState extends State<KeyboardShortcutsPageBody> {
       ),
     );
   }
-
-  /// Mobile touch row: ListTile with title + subtitle + trailing icons.
-  Widget _buildTouchRow(
-      BuildContext context, KeyboardShortcutActionEntry entry) {
-    final shortcut = ShortcutDisplay.formatFor(entry.id, requireEnabled: false);
-    final hasBinding = shortcut != null;
-    return ListTile(
-      dense: false,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      title: Text(translate(entry.labelKey)),
-      subtitle: Text(
-        shortcut ?? '—',
-        style: TextStyle(
-          fontFamily: defaultTargetPlatform == TargetPlatform.windows
-              ? 'Consolas'
-              : 'monospace',
-          color: hasBinding ? null : Theme.of(context).hintColor,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: widget.editButtonHint ?? translate('Edit'),
-            onPressed: () => _onEdit(entry),
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          if (hasBinding)
-            IconButton(
-              tooltip: translate('Clear'),
-              onPressed: () => _onClear(entry),
-              icon: const Icon(Icons.close),
-            )
-          else
-            const SizedBox(width: 48),
-        ],
-      ),
-    );
-  }
 }
 
 /// Small help-icon tooltip used for inline explanations next to a checkbox /
-/// row. Triggers on hover (desktop) and tap (mobile). Public so the desktop
+/// row. Triggers on hover and tap. Public so the desktop
 /// General settings tab can reuse it.
 class InfoTooltipIcon extends StatelessWidget {
   final String tipKey;

@@ -139,8 +139,7 @@ List<Map<String, dynamic>> filterDefaultBindingsForPlatform(
     // default ambiguous. Using Backspace also conflicts with Finder's
     // "Empty Trash without confirmation" shortcut on macOS.
     // Leave it unbound; users can still record their own shortcut.
-    if ((defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.iOS) &&
+    if (defaultTargetPlatform == TargetPlatform.macOS &&
         action == kShortcutActionSendCtrlAltDel) {
       continue;
     }

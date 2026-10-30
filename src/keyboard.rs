@@ -21,8 +21,6 @@ const OS_LOWER_WINDOWS: &str = "windows";
 const OS_LOWER_LINUX: &str = "linux";
 #[allow(dead_code)]
 const OS_LOWER_MACOS: &str = "macos";
-#[allow(dead_code)]
-const OS_LOWER_ANDROID: &str = "android";
 
 static KEYBOARD_HOOKED: AtomicBool = AtomicBool::new(false);
 
@@ -1115,7 +1113,6 @@ fn _map_keyboard_mode(_peer: &str, event: &Event, mut key_event: KeyEvent) -> Op
                 rdev::win_scancode_to_macos_code(event.position_code)?
             }
         }
-        OS_LOWER_ANDROID => rdev::win_scancode_to_android_key_code(event.position_code)?,
         _ => rdev::win_scancode_to_linux_code(event.position_code)?,
     };
     key_event.set_chr(keycode as _);

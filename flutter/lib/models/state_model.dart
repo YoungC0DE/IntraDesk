@@ -16,12 +16,6 @@ class StateGlobal {
   final RxBool showRemoteToolBar = false.obs;
   final RxInt videoConnCount = 0.obs;
   final RxBool isFocused = false.obs;
-  // for mobile and web
-  bool isInMainPage = true;
-  bool isWebVisible = true;
-
-  final isPortrait = false.obs;
-
 
   String _inputSource = '';
 
@@ -75,19 +69,6 @@ class StateGlobal {
       _fullscreen.value = v;
       _showTabBar.value = !_fullscreen.value;
       procFullscreenNative(procWnd);
-    }
-  }
-
-  procFullscreenWeb() {
-    final isFullscreen = ffiGetByName('fullscreen') == 'Y';
-    String fullscreenValue = '';
-    if (isFullscreen && _fullscreen.isFalse) {
-      fullscreenValue = 'N';
-    } else if (!isFullscreen && fullscreen.isTrue) {
-      fullscreenValue = 'Y';
-    }
-    if (fullscreenValue.isNotEmpty) {
-      ffiSetByName('fullscreen', fullscreenValue);
     }
   }
 

@@ -8,7 +8,7 @@ import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
 
-/// Base class providing shared custom scale control logic for both mobile and desktop widgets.
+/// Base class providing shared custom scale control logic.
 /// Implementations must provide [ffi] and [onScaleChanged] getters.
 abstract class CustomScaleControls<T extends StatefulWidget> extends State<T> {
   /// FFI instance for session interaction

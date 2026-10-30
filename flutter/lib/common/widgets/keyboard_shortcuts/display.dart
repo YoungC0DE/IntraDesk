@@ -58,8 +58,7 @@ class ShortcutDisplay {
     final keyValue = found['key'];
     if (keyValue is! String) return null;
 
-    final isMac = defaultTargetPlatform == TargetPlatform.macOS ||
-                  defaultTargetPlatform == TargetPlatform.iOS;
+    final isMac = defaultTargetPlatform == TargetPlatform.macOS;
     // `mods` similarly may be malformed; treat a non-list as no modifiers.
     final modsRaw = found['mods'];
     final mods = modsRaw is List

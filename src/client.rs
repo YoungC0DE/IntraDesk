@@ -532,7 +532,6 @@ impl AudioHandler {
         #[allow(unused_mut)]
         let mut config: StreamConfig = config.into();
         {
-            // this makes ios and android audio output not work
             config.buffer_size = cpal::BufferSize::Fixed(64);
         }
 
@@ -1357,18 +1356,14 @@ impl LoginConfigHandler {
             log::debug!("remove password of {}", self.id);
         }
         if config.keyboard_mode.is_empty() {
-            if is_keyboard_mode_supported(
-                &KeyboardMode::Map,
-                get_version_number(&pi.version),
-                &pi.platform,
-            ) {
+            if is_keyboard_mode_supported(&KeyboardMode::Map, get_version_number(&pi.version)) {
                 config.keyboard_mode = KeyboardMode::Map.to_string();
             } else {
                 config.keyboard_mode = KeyboardMode::Legacy.to_string();
             }
         } else {
             let keyboard_modes =
-                crate::get_supported_keyboard_modes(get_version_number(&pi.version), &pi.platform);
+                crate::get_supported_keyboard_modes(get_version_number(&pi.version));
             let current_mode = &KeyboardMode::from_str(&config.keyboard_mode).unwrap_or_default();
             if !keyboard_modes.contains(current_mode) {
                 config.keyboard_mode = KeyboardMode::Legacy.to_string();

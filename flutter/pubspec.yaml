@@ -32,7 +32,6 @@ dependencies:
   flutter_breadcrumb: ^1.0.1
   http: ^1.1.0
   image: ^4.0.17
-  back_button_interceptor: ^6.0.1
   flutter_rust_bridge: "1.80.1"
   window_manager:
     git:
@@ -83,7 +82,6 @@ dependencies:
     git:
       url: https://github.com/rustdesk-org/dynamic_layouts.git
       ref: 24cb88413fa5181d949ddacbb30a65d5c459e7d9
-  pull_down_button: ^0.9.3
   device_info_plus: ^9.1.0
   extended_text: 14.0.0
   vector_math: ^2.1.4

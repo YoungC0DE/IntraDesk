@@ -252,7 +252,6 @@ fn create_broadcast_sockets() -> Vec<UdpSocket> {
     let mut ipv4s = Vec::new();
     // TODO: maybe we should use a better way to get ipv4 addresses.
     // But currently, it's ok to use `[Ipv4Addr::UNSPECIFIED]` for discovery.
-    // `default_net::get_interfaces()` causes undefined symbols error when `flutter build` on iOS simulator x86_64
     for interface in default_net::get_interfaces() {
         for ipv4 in &interface.ipv4 {
             ipv4s.push(ipv4.addr.clone());
@@ -278,13 +277,7 @@ fn send_query() -> ResultType<Vec<UdpSocket>> {
     }
 
     let mut msg_out = Message::new();
-    // We may not be able to get the mac address on mobile platforms.
-    // So we need to use the id to avoid discovering ourselves.
-    // `crate::ui_interface::get_id()` will cause error:
-    // `get_id()` uses async code with `current_thread`, which is not allowed in this context.
-    //
-    // No need to get id for desktop platforms.
-    // We can use the mac address to identify the device.
+    // No id needed: the mac address identifies the device, so we don't discover ourselves.
     let id = "".to_owned();
     let peer = PeerDiscovery {
         cmd: "ping".to_owned(),

@@ -829,10 +829,7 @@ fn handle_one_frame(
         Err(e) => {
             vpx_no_output = e.is::<scrap::VpxNoOutput>();
             *encode_fail_counter += 1;
-            // Encoding errors are not frequent except on Android
-            if !cfg!(target_os = "android") {
-                log::error!("encode fail: {e:?}, times: {}", *encode_fail_counter,);
-            }
+            log::error!("encode fail: {e:?}, times: {}", *encode_fail_counter,);
             if encoder.is_hardware() {
                 *encode_fail_counter = 0;
                 encoder.disable();

@@ -1108,8 +1108,6 @@ impl<T: InvokeUiSession> Remote<T> {
                             {
                                 self.start_initial_clipboard_sync();
                             }
-                            // to-do: Android, is `sync_init_clipboard` really needed?
-                            // https://github.com/rustdesk/rustdesk/discussions/9010
                         }
 
                         if self.handler.is_file_transfer() {

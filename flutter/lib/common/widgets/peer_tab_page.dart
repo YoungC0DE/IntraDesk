@@ -107,7 +107,7 @@ class _PeerTabPageState extends State<PeerTabPage>
                   k: kOptionPeerTabIndex, v: t.toString());
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
@@ -119,11 +119,12 @@ class _PeerTabPageState extends State<PeerTabPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(model.tabIcon(t), color: color, size: 18),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     model.tabTooltip(t),
                     style: TextStyle(
                         color: color,
+                        fontSize: 13,
                         fontWeight:
                             selected ? FontWeight.w600 : FontWeight.normal),
                   ),

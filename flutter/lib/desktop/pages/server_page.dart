@@ -181,7 +181,8 @@ class ConnectionManagerState extends State<ConnectionManager>
             onWindowCloseButton: handleWindowCloseButton,
             controller: serverModel.tabController,
             selectedBorderColor: MyTheme.color(context).accent,
-            maxLabelWidth: 100,
+            // Two tabs only fit the 300px window with shorter labels.
+            maxLabelWidth: serverModel.clients.length > 1 ? 45 : 100,
             tail: null, //buildScrollJumper(),
             tabBuilder: (key, icon, label, themeConf) {
               final client = serverModel.clients

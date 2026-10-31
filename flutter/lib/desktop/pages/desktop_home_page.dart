@@ -25,7 +25,7 @@ class DesktopHomePage extends StatefulWidget {
 
 class _DesktopHomePageState extends State<DesktopHomePage>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
-  static const double _leftPaneWidth = 260.0;
+  static const double _leftPaneWidth = 290.0;
 
   final _leftPaneScrollController = ScrollController();
 

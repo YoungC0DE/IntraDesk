@@ -117,6 +117,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     required this.accentHover,
     required this.accentSoft,
     required this.onAccent,
+    required this.peerTile,
   });
 
   final Color? border;
@@ -134,6 +135,8 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   final Color accentHover;
   final Color accentSoft;
   final Color onAccent;
+  // Background of the platform logo on peer cards.
+  final Color peerTile;
 
   static final light = ColorThemeExtension(
     border: Color(0xFFCCCCCC),
@@ -151,6 +154,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     accentHover: MyTheme.accentHoverLight,
     accentSoft: MyTheme.accentSoftLight,
     onAccent: MyTheme.onAccent,
+    peerTile: MyTheme.accentLight,
   );
 
   static final dark = ColorThemeExtension(
@@ -169,6 +173,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     accentHover: MyTheme.accentHoverDark,
     accentSoft: MyTheme.accentSoftDark,
     onAccent: MyTheme.onAccent,
+    peerTile: MyTheme.darkSurface2,
   );
 
   @override
@@ -188,6 +193,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
     Color? accentHover,
     Color? accentSoft,
     Color? onAccent,
+    Color? peerTile,
   }) {
     return ColorThemeExtension(
       border: border ?? this.border,
@@ -205,6 +211,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
       accentHover: accentHover ?? this.accentHover,
       accentSoft: accentSoft ?? this.accentSoft,
       onAccent: onAccent ?? this.onAccent,
+      peerTile: peerTile ?? this.peerTile,
     );
   }
 
@@ -232,6 +239,7 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
       accentSoft:
           Color.lerp(accentSoft, other.accentSoft, t) ?? other.accentSoft,
       onAccent: Color.lerp(onAccent, other.onAccent, t) ?? other.onAccent,
+      peerTile: Color.lerp(peerTile, other.peerTile, t) ?? other.peerTile,
     );
   }
 }
@@ -258,6 +266,8 @@ class MyTheme {
   static const Color darkBorder = Color(0xFF26262B);
   static const Color darkHover = Color(0xFF1C1C20);
   static const String fontFamily = 'Montserrat';
+  static const TextStyle buttonTextStyle =
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
   static const Color canvasColor = Color(0xFF212121);
   static const Color border = Color(0xFFCCCCCC);
   static const Color darkGray = Color.fromARGB(255, 148, 148, 148);
@@ -290,21 +300,6 @@ class MyTheme {
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.all(
         Radius.circular(5),
-      ),
-    ),
-  );
-
-  // TextButton
-  // Value is used to calculate "dialog.actionsPadding"
-  static const double mobileTextButtonPaddingLR = 20;
-
-  // TextButton on mobile needs a fixed padding, otherwise small buttons
-  // like "OK" has a larger left/right padding.
-  static TextButtonThemeData mobileTextButtonTheme = TextButtonThemeData(
-    style: TextButton.styleFrom(
-      padding: EdgeInsets.symmetric(horizontal: mobileTextButtonPaddingLR),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8.0),
       ),
     ),
   );
@@ -426,6 +421,7 @@ class MyTheme {
       style: ElevatedButton.styleFrom(
         backgroundColor: accentLight,
         foregroundColor: onAccent,
+        textStyle: buttonTextStyle,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),
@@ -435,6 +431,7 @@ class MyTheme {
       style: OutlinedButton.styleFrom(
         backgroundColor: grayBg,
         foregroundColor: Colors.black87,
+        textStyle: buttonTextStyle,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),
@@ -501,14 +498,6 @@ class MyTheme {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: darkBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: accentDark),
-            ),
           ),
     textTheme: const TextTheme(
       titleLarge: TextStyle(fontSize: 19),
@@ -546,6 +535,7 @@ class MyTheme {
         foregroundColor: onAccent,
         disabledForegroundColor: Colors.white70,
         disabledBackgroundColor: Colors.white10,
+        textStyle: buttonTextStyle,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),
@@ -557,6 +547,7 @@ class MyTheme {
         side: BorderSide(color: darkBorder),
         disabledForegroundColor: Colors.white70,
         foregroundColor: Colors.white70,
+        textStyle: buttonTextStyle,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),
@@ -1377,14 +1368,7 @@ Widget getPlatformImage(String platform, {double size = 50}) {
   if (platform.isEmpty) {
     return Container(width: size, height: size);
   }
-  if (platform == kPeerPlatformMacOS) {
-    platform = 'mac';
-  } else if (platform != kPeerPlatformLinux) {
-    platform = 'win';
-  } else {
-    platform = platform.toLowerCase();
-  }
-  return SvgPicture.asset('assets/$platform.svg', height: size, width: size);
+  return SvgPicture.asset('assets/win.svg', height: size, width: size);
 }
 
 class LastWindowPosition {

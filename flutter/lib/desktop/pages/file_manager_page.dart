@@ -849,7 +849,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                               : EdgeInsets.only(right: 10)),
                       backgroundColor: MaterialStateProperty.all(
                         selectedItems.items.isEmpty
-                            ? MyTheme.color(context).accentHover
+                            ? MyTheme.color(context).accent.withOpacity(0.5)
                             : MyTheme.color(context).accent,
                       ),
                     ),

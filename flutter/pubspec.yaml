@@ -131,9 +131,6 @@ flutter:
           weight: 600
         - asset: assets/fonts/Montserrat-Bold.ttf
           weight: 700
-    - family: GestureIcons
-      fonts:
-        - asset: assets/gestures.ttf
     - family: Tabbar
       fonts:
         - asset: assets/tabbar.ttf

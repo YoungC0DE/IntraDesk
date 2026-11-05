@@ -350,7 +350,7 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T6.1, T7.6 · Área: `.github/workflows/build-windows.yml`, `README.md`, `flutter/pubspec.yaml`, tela Sobre · @dono: claude
   Ficou: o FFI `main_get_version` não é mais usado pelo Dart.
 
-- [~] **T6.7** Warnings do CI: atualizar ações que ainda usam Node.js 20 (`actions/checkout`) e trocar o cache binário `x-gha` do vcpkg (usa a API de cache antiga, desligada pelo GitHub: "Failed to save/restore" em todo build, ou seja, o vcpkg recompila tudo sempre) por `files` + `actions/cache`. Remove o passo `actions/github-script` que só existia para o `x-gha`.
+- [x] **T6.7** Warnings do CI: atualizar ações que ainda usam Node.js 20 (`actions/checkout`) e trocar o cache binário `x-gha` do vcpkg (usa a API de cache antiga, desligada pelo GitHub: "Failed to save/restore" em todo build, ou seja, o vcpkg recompila tudo sempre) por `files` + `actions/cache`. Remove o passo `actions/github-script` que só existia para o `x-gha`.
   dep: T6.6 · Área: `.github/workflows/build-windows.yml`, `.github/workflows/bridge.yml` · @dono: claude
   Ficou: `KyleMayes/install-llvm-action` não tem versão em Node.js 24 (v2.0.9 é a mais recente); o aviso dela continua até sair uma. Os avisos "vcpkg_replace_string made no changes" (portfile do ffmpeg) e "Use MSVC to compile libyuv" vêm das portas herdadas do RustDesk e não afetam o build; compilar o libyuv com clang-cl (mais rápido em conversão de cor) seria uma tarefa à parte, com medição.
 

@@ -917,12 +917,11 @@ class _AboutState extends State<_About> {
   @override
   Widget build(BuildContext context) {
     return futureBuilder(future: () async {
-      final version = await bind.mainGetVersion();
       final buildDate = await bind.mainGetBuildDate();
       final fingerprint = await bind.mainGetFingerprint();
       final myId = await bind.mainGetMyId();
       return {
-        'version': version,
+        'version': version, // product version from pubspec.yaml, not the protocol one
         'buildDate': buildDate,
         'fingerprint': fingerprint,
         'myId': myId

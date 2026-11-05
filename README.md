@@ -3,7 +3,15 @@
 Acesso remoto para computadores Windows **na mesma rede local**, sem internet,
 sem servidor e sem instalação.
 
-> **Status:** em desenvolvimento. O plano de trabalho está em [`todo.md`](todo.md).
+[![Release](https://img.shields.io/github/v/release/YoungC0DE/IntraDesk)](https://github.com/YoungC0DE/IntraDesk/releases/latest)
+[![Licença](https://img.shields.io/github/license/YoungC0DE/IntraDesk)](LICENCE)
+
+## Download
+
+[**⬇ Baixar IntraDesk.exe (última versão)**](https://github.com/YoungC0DE/IntraDesk/releases/latest/download/IntraDesk.exe)
+
+É um executável único e portátil: baixe e abra, sem instalar. Versões
+anteriores ficam em [Releases](https://github.com/YoungC0DE/IntraDesk/releases).
 
 ## Como funciona
 
@@ -30,12 +38,26 @@ os dois computadores. Nenhum dado sai da rede local.
 
 ## Recursos da sessão remota
 
+- Controle de mouse e teclado
 - Tela cheia
 - Área de transferência compartilhada
+- Transferência de arquivos
 - Ativar/desativar áudio
-- Escala da imagem
-- Qualidade da imagem
-- Resolução da tela remota
+- Escala, qualidade e resolução da imagem
+- Troca de monitor
+- Ctrl+Alt+Del, bloquear e reiniciar o computador remoto
+
+## Segurança
+
+- Toda conexão exige senha. A senha temporária muda a cada execução, e é
+  possível definir uma senha fixa.
+- A sessão é sempre criptografada. Na primeira conexão, o IntraDesk guarda a
+  chave do computador remoto e avisa se ela mudar depois.
+- Muitas senhas erradas bloqueiam novas tentativas temporariamente.
+- Enquanto alguém está conectado, a janela "sendo acessado" fica sempre
+  visível, com o botão para desconectar.
+- O app não acessa a internet: sem telemetria, atualização automática ou
+  servidores externos.
 
 ## Compilando (Windows)
 
@@ -44,6 +66,24 @@ os dois computadores. Nenhum dado sai da rede local.
 Cada push na `master` (ou em branches `t*`) roda o workflow
 `.github/workflows/build-windows.yml`. Ele compila, roda os testes e publica na
 aba **Actions** o artefato `IntraDesk-windows-x64` com o `.exe` portátil.
+
+### Publicando uma versão
+
+A versão do produto fica em `flutter/pubspec.yaml` (`version: 1.0.0+1`). A do
+`Cargo.toml` é a versão de protocolo herdada do RustDesk, usada entre os
+computadores para saber quais recursos o outro lado tem: não a altere.
+
+Para publicar, atualize a versão no `pubspec.yaml`, faça o commit e crie a tag
+correspondente:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+O CI compila, roda os testes e cria a release com o `IntraDesk.exe` e o seu
+SHA-256. É ela que o link de [Download](#download) entrega. Se a tag não bater
+com a versão do `pubspec.yaml`, a publicação falha.
 
 ### Na sua máquina
 

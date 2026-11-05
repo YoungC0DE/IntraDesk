@@ -346,6 +346,9 @@ Decisões de escopo já tomadas. Nova dúvida de escopo: adicione aqui como D10,
   dep: T6.1 · Área: `res/manifest.xml`, `flutter/windows/runner/runner.exe.manifest` · @dono: claude
   Feito. Os dois manifestos listam só o Windows 10 (o GUID vale também para o 11). Runner: per-monitor v2 (como já era) e `asInvoker` vindo do linker (`/MANIFESTUAC`, conferido com `mt -inputresource`). Empacotador (`res/manifest.xml`): `asInvoker` explícito e **sem** DPI awareness no próprio arquivo (o CI e o `build.ps1` apagavam as linhas `dpiAware` na hora do build; o splash de extração é um bitmap fixo) — os remendos saíram.
   Checagem: `cargo build` do `libs/portable` ok e manifesto embutido conferido com `mt`.
+- [x] **T6.6** Release automática: uma tag `v*` gera o build e, com os testes verdes, publica a release com `IntraDesk.exe` (nome fixo) e `IntraDesk.exe.sha256`, marcada como a mais recente; o README aponta para `releases/latest/download/IntraDesk.exe`. A tag precisa bater com a versão do `flutter/pubspec.yaml`. Versões separadas: o produto começa em **1.0.0** (`pubspec.yaml`: tela Sobre, propriedades do .exe, tags); o `Cargo.toml` fica em 1.5.1 porque é a versão de protocolo enviada aos peers, e o código liga recursos por ela (multi-clipboard, modos de teclado, retomar transferência, detecção de sobrescrita).
+  dep: T6.1, T7.6 · Área: `.github/workflows/build-windows.yml`, `README.md`, `flutter/pubspec.yaml`, tela Sobre · @dono: claude
+  Ficou: o FFI `main_get_version` não é mais usado pelo Dart.
 
 ## Fase 7 — Testes
 

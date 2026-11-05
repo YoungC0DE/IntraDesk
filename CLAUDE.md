@@ -164,6 +164,11 @@ Nome exibido: **IntraDesk**. Ícones em `res/` (`icon.ico`, `tray-icon.ico`,
   bridge). Roda em push na `master` e em branches `t*`; o .exe sai no artefato
   `IntraDesk-windows-x64`.
 - Testes: `cargo test --lib --features flutter` e `cd flutter && flutter test`.
+- Versões: a do produto fica em `flutter/pubspec.yaml` (tela Sobre, .exe,
+  releases). A do `Cargo.toml` (1.5.1) é a versão de protocolo enviada aos
+  peers e libera recursos por comparação: não a reduza.
+- Release: push de uma tag `vX.Y.Z` igual à versão do `pubspec.yaml`; o CI
+  publica o `IntraDesk.exe` em Releases.
 
 ## Regras de Rust
 

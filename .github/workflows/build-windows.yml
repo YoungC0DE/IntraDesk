@@ -1,9 +1,11 @@
 # Builds IntraDesk for Windows x64, uploads the portable .exe and runs the tests.
+# Pushing a tag vX.Y.Z (matching flutter/pubspec.yaml) also publishes a GitHub release.
 name: Build IntraDesk (Windows)
 
 on:
   push:
     branches: ["master", "t*"]
+    tags: ["v*"]
     paths-ignore: ["**.md"]
   pull_request:
     paths-ignore: ["**.md"]
@@ -155,3 +157,41 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: flutter
         run: flutter test --timeout 60s
+
+  # A green build of a v* tag becomes the latest release, so the README link
+  # releases/latest/download/IntraDesk.exe always points at it.
+  release:
+    needs: [build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          sparse-checkout: flutter/pubspec.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Download portable executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: IntraDesk-windows-x64
+          path: ./dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # The product version lives in pubspec.yaml; Cargo.toml keeps the protocol version.
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' flutter/pubspec.yaml)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pubspec.yaml version $version"
+            exit 1
+          fi
+          # A fixed asset name keeps the "latest" download URL stable.
+          mv ./dist/IntraDesk-*.exe ./dist/IntraDesk.exe
+          (cd ./dist && sha256sum IntraDesk.exe > IntraDesk.exe.sha256)
+          gh release create "$GITHUB_REF_NAME" ./dist/IntraDesk.exe ./dist/IntraDesk.exe.sha256             --verify-tag             --title "IntraDesk $version"             --generate-notes             --latest
